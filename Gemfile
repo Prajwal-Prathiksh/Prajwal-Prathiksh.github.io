@@ -11,4 +11,6 @@ group :jekyll_plugins do
     gem 'jemoji'
     gem 'unicode_utils'
     gem 'webrick'
+    gem 'wdm'
+    gem "tzinfo-data", platforms: [:mingw, :mswin, :x64_mingw, :jruby]
 end

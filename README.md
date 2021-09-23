@@ -7,5 +7,5 @@ The Personal Website of K T Prajwal Prathiksh
 *In the mean time, here's some food for thought!*
 
 <p align="center">
-  <img src="https://cdn.quotesgram.com/img/58/48/1693387607-calvinHobbes.jpg" width="350" title="https://cdn.quotesgram.com/img/58/48/1693387607-calvinHobbes.jpg">
+  <img src="https://cdn.quotesgram.com/img/58/48/1693387607-calvinHobbes.jpg" width="650" title="https://cdn.quotesgram.com/img/58/48/1693387607-calvinHobbes.jpg">
 </p>

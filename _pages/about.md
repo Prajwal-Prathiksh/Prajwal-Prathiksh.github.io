@@ -16,8 +16,10 @@ selected_papers: true # includes a list of papers marked as "selected={true}"
 social: true  # includes social icons at the bottom of the page
 ---
 
-Hello World!
-
+<br>
+Hey there! <br>
 I'm Prajwal, a Dual-Degree (B Tech + M Tech) student in the Department of Aerospace Engineering, IIT Bombay.
 I am currently in my fourth-year of study.
+
+> **Note:** *The webiste is still under development and will be updated soon.* 😇
 

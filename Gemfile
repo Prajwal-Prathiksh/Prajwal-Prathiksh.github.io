@@ -13,4 +13,5 @@ group :jekyll_plugins do
     gem 'webrick'
     gem 'wdm'
     gem "tzinfo-data", platforms: [:mingw, :mswin, :x64_mingw, :jruby]
+    gem 'jekyll-include-cache'
 end

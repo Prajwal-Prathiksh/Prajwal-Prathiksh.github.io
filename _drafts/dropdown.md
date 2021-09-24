@@ -1,3 +1,4 @@
+# Should go to the `_pages` folder
 ---
 layout: page
 title: submenus

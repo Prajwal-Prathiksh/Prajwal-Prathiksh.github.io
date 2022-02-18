@@ -171,15 +171,48 @@
       <div class="post">
     
   <article>
-    <blockquote>
-  <h1 id="resume">Resume</h1>
-  <p align="left"> <a href="\assets\pdf\resume_2_pg.pdf"> <img src="\assets\img\pdf_icon.svg" width="55" title="Click Me!" /> </a> </p>
-</blockquote>
+    <div class="container flex-parent jc-center btn-group">
+    <button class="b1" onclick="myFunction()" title="Resume (2 Page)">
+        Resume (2 Page)
+    </button>
+    <button class="b2" onclick="myFunction2()" title="Curriculum Vitae">
+        Curriculum Vitae
+    </button>
+</div>
 
-<blockquote>
-  <h1 id="curriculum-vitae">Curriculum Vitae</h1>
-  <p align="left"> <a href="\assets\pdf\curriculum_vitae.pdf"> <img src="\assets\img\pdf_icon.svg" width="55" title="Click Me!" /> </a> </p>
-</blockquote>
+<div class="flex-parent jc-center content">
+    <div id="first" style="display:none;">
+        <object data="\assets\pdf\K-T-Prajwal-Prathiksh--Resume--(2-Page).pdf" type="application/pdf" width="900px" height="900px">
+            <embed src="\assets\pdf\K-T-Prajwal-Prathiksh--Resume--(2-Page).pdf" type="application/pdf" /> 
+                <p>
+                    This browser does not support PDFs. Please download the PDF to view it: <a href="\assets\pdf\K-T-Prajwal-Prathiksh--Resume--(2-Page).pdf">Download PDF</a>.
+                </p>
+            &lt;/embed&gt;
+        </object>
+    </div>
+    <div id="second" style="display:none;">
+        <object data="\assets\pdf\K-T-Prajwal-Prathiksh--Curriculum-Vitae.pdf" type="application/pdf" width="900px" height="900px">
+            <embed src="\assets\pdf\K-T-Prajwal-Prathiksh--Curriculum-Vitae.pdf" type="application/pdf" /> 
+                <p>
+                    This browser does not support PDFs. Please download the PDF to view it: <a href="\assets\pdf\K-T-Prajwal-Prathiksh--Curriculum-Vitae.pdf">Download PDF</a>.
+                </p>
+            &lt;/embed&gt;
+        </object>
+    </div>
+</div>
+
+<script>
+    const myFunction = () => {
+        document.getElementById("first").style.display ='block';
+        document.getElementById("second").style.display ='none'
+    }
+
+    const myFunction2 = () => {
+        document.getElementById("second").style.display ='block'
+        document.getElementById("first").style.display ='none'
+    }
+</script>
+
 
   </article>
 
@@ -192,12 +225,12 @@
     
 <footer class="fixed-bottom">
   <div class="container mt-0">
-    &copy; Copyright 2021 K T Prajwal  Prathiksh.
+    &copy; Copyright 2022 K T Prajwal  Prathiksh.
     <br>Powered by <a href="http://jekyllrb.com/" target="_blank">Jekyll</a> with <a href="https://github.com/alshedivat/al-folio">al-folio</a> theme. Hosted by <a href="https://pages.github.com/" target="_blank">GitHub Pages</a>.
 
     
     
-    Last updated: September 24, 2021.
+    Last updated: February 18, 2022.
     
   </div>
 </footer>

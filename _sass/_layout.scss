@@ -32,6 +32,51 @@
 // TODO: redefine content layout.
 
 
+/*****************************************************************************
+* Resume
+*****************************************************************************/
+
+.flex-parent {
+  display: flex;
+}
+
+.jc-center {
+  justify-content: center;
+}
+
+.btn-group button {
+  background-color: var(--global-button-bg-color); /* Green background */
+  border: none; /* Green border */
+  color: var(--global-text-color); /* White text */
+  cursor: hand; /* Pointer/hand icon */
+  float: none; /* Float the buttons side by side */
+  padding: 20px; /* Some padding */
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 20px;
+  margin: 4px 2px;
+  border-radius: 2px;
+}
+
+.btn-group button {
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+/* Clear floats (clearfix hack) */
+.btn-group:after {
+  content: "";
+  clear: both;
+  display: table;
+}
+
+/* Add a background color on hover */
+.btn-group button:hover {
+  background-color: #04AA6D;
+}
+
+
 /******************************************************************************
  * Publications
  ******************************************************************************/

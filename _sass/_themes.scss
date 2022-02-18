@@ -13,6 +13,7 @@
   --global-footer-text-color: #{$grey-color-light};
   --global-footer-link-color: #{$white-color};
   --global-distill-app-color: #{$grey-color};
+  --global-button-bg-color: #{$light-purple-color};
 
   .fa-sun {
     display : none;
@@ -35,6 +36,7 @@ html[data-theme='dark'] {
   --global-footer-text-color: #{$grey-color-dark};
   --global-footer-link-color: #{$black-color};
   --global-distill-app-color: #{$grey-color-light};
+  --global-button-bg-color: #{$light-cyan-color};
 
   .fa-sun {
     padding-left: 10px;

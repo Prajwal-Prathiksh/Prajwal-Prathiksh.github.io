@@ -368,7 +368,7 @@ I am currently in my fourth-year of study.</p>
     
     <div class="social">
       <div class="contact-icons">
-        <a href="mailto:%70%72%61%6A%77%61%6C.%70%72%61%74%68%69%6B%73%68@%67%6D%61%69%6C.%63%6F%6D"><i class="fas fa-envelope"></i></a>
+        <a href="mailto:%70%72%61%6A%77%61%6C.%70%72%61%74%68%69%6B%73%68@%67%6D%61%69%6C.%63%6F%6D" onclick="copyEmail('prajwal.prathiksh@gmail.com',this)"><i class="fas fa-envelope"></i></a>
 
 <a href="https://scholar.google.com/citations?user=ND3Lt20AAAAJ" target="_blank" title="Google Scholar"><i class="ai ai-google-scholar"></i></a>
 
@@ -385,6 +385,16 @@ I am currently in my fourth-year of study.</p>
 
 
 
+
+<script>
+    var copyEmail = function(value,object) {
+        /* Copy the text inside the text field */
+        navigator.clipboard.writeText(value);
+
+        /* Alert the copied text */
+        alert("Copied the text: " + value);
+    };
+</script>
 
       </div>
       <div class="contact-note">Conact me through e-mail for a quick response :)
@@ -407,7 +417,7 @@ I am currently in my fourth-year of study.</p>
 
     
     
-    Last updated: February 18, 2022.
+    Last updated: April 17, 2022.
     
   </div>
 </footer>

@@ -1,0 +1,849 @@
+---
+import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
+
+// Board geometry in a 900x900 view: holes sit on a 7x7 grid, 100 units apart
+// (centres at 150..750). The inlaid outline stands 55 units off the holes.
+const englishField =
+  '295,95 605,95 605,295 805,295 805,605 605,605 605,805 295,805 295,605 95,605 95,295 295,295';
+const europeanField =
+  '295,95 605,95 605,195 705,195 705,295 805,295 805,605 705,605 705,705 605,705 605,805 295,805 ' +
+  '295,705 195,705 195,605 95,605 95,295 195,295 195,195 295,195';
+const octagon = (radius: number) =>
+  Array.from({ length: 8 }, (_, k) => {
+    const a = ((22.5 + 45 * k) * Math.PI) / 180;
+    return `${450 + radius * Math.cos(a)},${450 + radius * Math.sin(a)}`;
+  }).join(' ');
+const octagonCorners = Array.from({ length: 8 }, (_, k) => {
+  const a = ((22.5 + 45 * k) * Math.PI) / 180;
+  return [450 + 392 * Math.cos(a), 450 + 392 * Math.sin(a), 22.5 + 45 * k];
+});
+const rosettes = [
+  [190, 190], [710, 190], [190, 710], [710, 710],
+];
+---
+
+<Base title="Peg Solitaire" description="Peg solitaire on the English or European board, the puzzle from the court of Louis XIV.">
+  <p class="back"><a href="/play/">← All games</a></p>
+  <h1>Peg Solitaire</h1>
+  <p class="muted intro">Solo noble · the puzzle of Louis XIV's court, first described in 1697.</p>
+
+  <div class="game-area" data-zen>
+    <div class="controls">
+      <div class="chips" role="radiogroup" aria-label="Board">
+        <label class="chip"><input type="radio" name="kind" value="english" checked />English · 33</label>
+        <label class="chip"><input type="radio" name="kind" value="european" />European · 37</label>
+      </div>
+      <div class="buttons">
+        <button type="button" class="btn" id="hint">Hint</button>
+        <button type="button" class="btn" id="undo" disabled>Undo</button>
+        <button type="button" class="btn" id="restart">Restart</button>
+        <button type="button" class="btn" id="gap">Choose starting gap</button>
+        <ZenToggle />
+      </div>
+    </div>
+
+    <div class="stage" id="stage" data-kind="english">
+      <svg class="board english" viewBox="0 0 900 900" aria-hidden="true">
+        <defs>
+          <radialGradient id="mahogany" cx="40%" cy="32%" r="78%">
+            <stop offset="0" stop-color="#a5502e"></stop>
+            <stop offset="0.5" stop-color="#6f2a16"></stop>
+            <stop offset="1" stop-color="#3a1208"></stop>
+          </radialGradient>
+          <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fbe9a6"></stop>
+            <stop offset="0.35" stop-color="#c9a24a"></stop>
+            <stop offset="0.65" stop-color="#8a6420"></stop>
+            <stop offset="1" stop-color="#ecd07a"></stop>
+          </linearGradient>
+          <filter id="grain-h" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.0035 0.07" numOctaves="4" seed="11" result="n"></feTurbulence>
+            <feColorMatrix in="n" values="0 0 0 0 0.12  0 0 0 0 0.03  0 0 0 0 0.01  1.3 0 0 0 -0.55"></feColorMatrix>
+          </filter>
+          <clipPath id="round"><circle cx="450" cy="450" r="430"></circle></clipPath>
+          <radialGradient id="lacquer" cx="38%" cy="26%" r="60%">
+            <stop offset="0" stop-color="#fff" stop-opacity="0.22"></stop>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+          </radialGradient>
+        </defs>
+        <circle cx="450" cy="458" r="440" fill="#000" opacity="0.35"></circle>
+        <circle cx="450" cy="450" r="440" fill="#2b0d05"></circle>
+        <circle cx="450" cy="450" r="430" fill="url(#mahogany)"></circle>
+        <rect width="900" height="900" clip-path="url(#round)" filter="url(#grain-h)"></rect>
+        <circle cx="450" cy="450" r="430" fill="url(#lacquer)"></circle>
+        <circle cx="450" cy="450" r="414" fill="none" stroke="url(#brass)" stroke-width="7"></circle>
+        <circle cx="450" cy="450" r="400" fill="none" stroke="url(#brass)" stroke-width="1.8"></circle>
+        <polygon points={englishField} fill="rgb(255 210 170 / 0.05)" stroke="url(#brass)" stroke-width="3" stroke-linejoin="round"></polygon>
+        {
+          rosettes.map(([x, y]) => (
+            <g transform={`translate(${x} ${y})`} fill="url(#brass)">
+              {[0, 90, 180, 270].map((a) => <ellipse cx="0" cy="-14" rx="6" ry="12" transform={`rotate(${a + 45})`} />)}
+              <circle r="7" />
+            </g>
+          ))
+        }
+      </svg>
+
+      <svg class="board european" viewBox="0 0 900 900" aria-hidden="true">
+        <defs>
+          <radialGradient id="ebony" cx="40%" cy="30%" r="80%">
+            <stop offset="0" stop-color="#4a342a"></stop>
+            <stop offset="0.55" stop-color="#241712"></stop>
+            <stop offset="1" stop-color="#100906"></stop>
+          </radialGradient>
+          <linearGradient id="gilt" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff2b8"></stop>
+            <stop offset="0.3" stop-color="#e2b94f"></stop>
+            <stop offset="0.6" stop-color="#9a6e1c"></stop>
+            <stop offset="1" stop-color="#f3d77c"></stop>
+          </linearGradient>
+          <filter id="grain-e" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.004 0.09" numOctaves="4" seed="3" result="n"></feTurbulence>
+            <feColorMatrix in="n" values="0 0 0 0 0.35  0 0 0 0 0.22  0 0 0 0 0.14  1.2 0 0 0 -0.62"></feColorMatrix>
+          </filter>
+          <clipPath id="oct"><polygon points={octagon(462)}></polygon></clipPath>
+          <radialGradient id="sheen" cx="36%" cy="24%" r="60%">
+            <stop offset="0" stop-color="#fff" stop-opacity="0.16"></stop>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+          </radialGradient>
+        </defs>
+        <polygon points={octagon(470)} fill="#000" opacity="0.35" transform="translate(0 8)"></polygon>
+        <polygon points={octagon(470)} fill="#0b0604"></polygon>
+        <polygon points={octagon(462)} fill="url(#ebony)"></polygon>
+        <rect width="900" height="900" clip-path="url(#oct)" filter="url(#grain-e)"></rect>
+        <polygon points={octagon(462)} fill="url(#sheen)"></polygon>
+        <polygon points={octagon(440)} fill="none" stroke="url(#gilt)" stroke-width="6"></polygon>
+        <polygon points={octagon(424)} fill="none" stroke="url(#gilt)" stroke-width="1.6"></polygon>
+        {
+          octagonCorners.map(([x, y, a]) => (
+            <g transform={`translate(${x} ${y}) rotate(${a})`} fill="url(#gilt)">
+              <path d="M-16 0L0 -9L16 0L0 9Z" />
+              <circle cx="-24" r="3.2" />
+            </g>
+          ))
+        }
+        <polygon points={europeanField} fill="rgb(255 225 150 / 0.04)" stroke="url(#gilt)" stroke-width="3" stroke-linejoin="round"></polygon>
+      </svg>
+
+      <div id="holes" class="layer"></div>
+      <div id="pegs" class="layer"></div>
+    </div>
+
+    <p id="status" class="status" aria-live="polite"></p>
+    <p id="last" class="muted last"></p>
+  </div>
+
+  <dl id="stats" class="stats"></dl>
+
+  <details>
+    <summary>How to play</summary>
+    <p>
+      Jump a peg straight over a neighbouring peg into the empty hole just beyond it. The peg you
+      jump over comes off the board. No diagonal jumps. Tap a peg and then a glowing hole, or drag
+      the peg onto the hole.
+    </p>
+    <p>
+      The aim is to leave a single peg, and the finest finish leaves it in the centre. The English
+      board starts with the centre empty. The European board can't be solved from a centre gap, so
+      it starts with the gap one hole in from the top edge. Use <em>Choose starting gap</em> to set
+      your own. Stuck? <em>Hint</em> searches for a way through to one peg from where you are.
+    </p>
+  </details>
+
+  <p class="muted note">Best results are saved on this device only.</p>
+</Base>
+
+<script>
+  import { CENTRE, DEFAULT_GAP, allJumps, holes, jumpsFrom, type Cell, type Jump, type Kind } from '../../scripts/pegSolitaire';
+  import { loadScores, saveScores } from '../../scripts/scores';
+  import type { Order, SolveResult } from '../../scripts/pegSolver';
+
+  interface Record {
+    best: number | null; // fewest pegs left at the end
+    perfect: number; // finishes with one peg in the centre
+    finished: number;
+  }
+  const EMPTY: Record = { best: null, perfect: 0, finished: 0 };
+
+  // Jewel-coloured glass marbles for the European board: [light, mid, dark].
+  const GLASS: [string, string, string][] = [
+    ['#b8d4ff', '#1f55b8', '#081d4d'],
+    ['#b7f5cf', '#18804a', '#05361b'],
+    ['#ffc2c8', '#b3162f', '#47040f'],
+    ['#ffe6a8', '#d98b10', '#653600'],
+    ['#e6ccff', '#6d2fb5', '#2a0a4d'],
+  ];
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const stage = $('stage');
+  const holesEl = $('holes');
+  const pegsEl = $('pegs');
+  const statusEl = $('status');
+  const lastEl = $('last');
+  const statsEl = $('stats');
+  const undoEl = $<HTMLButtonElement>('undo');
+  const hintEl = $<HTMLButtonElement>('hint');
+  const HINT_BUDGET_MS = 6000;
+
+  let kind: Kind = 'english';
+  let pegs = new Set<Cell>();
+  let history: Jump[] = [];
+  let selected: Cell | null = null;
+  let picking = false; // choosing the starting gap
+  let over = false;
+  let hint: Jump | null = null; // the jump currently suggested
+  let plan: [Cell, Cell][] = []; // the rest of the last solution found, to reuse while followed
+  let hintsUsed = 0;
+  const ORDERS: Order[] = ['grid', 'outward'];
+  let solvers: Worker[] = [];
+  let request = 0;
+  const pegAt = new Map<Cell, HTMLButtonElement>(); // live pegs by the cell they sit in
+  const holeEls = new Map<Cell, HTMLButtonElement>();
+
+  const pos = (cell: Cell) => [((cell % 7) + 1.5) / 9, (Math.floor(cell / 7) + 1.5) / 9];
+  const place = (el: HTMLElement, cell: Cell) => {
+    const [x, y] = pos(cell);
+    el.style.left = `${x * 100}%`;
+    el.style.top = `${y * 100}%`;
+  };
+  const recordKey = () => `peg-solitaire-${kind}`;
+  const label = (cell: Cell) => `row ${Math.floor(cell / 7) + 1}, column ${(cell % 7) + 1}`;
+
+  function build() {
+    holesEl.innerHTML = '';
+    pegsEl.innerHTML = '';
+    pegAt.clear();
+    holeEls.clear();
+    stage.dataset.kind = kind;
+    for (const cell of holes(kind)) {
+      const hole = document.createElement('button');
+      hole.type = 'button';
+      hole.className = 'hole';
+      hole.tabIndex = -1;
+      place(hole, cell);
+      hole.addEventListener('click', () => onHole(cell));
+      holesEl.append(hole);
+      holeEls.set(cell, hole);
+
+      const peg = document.createElement('button');
+      peg.type = 'button';
+      peg.className = 'peg';
+      const [l, m, d] = GLASS[(cell * 7 + Math.floor(cell / 3)) % GLASS.length];
+      peg.style.setProperty('--l', l);
+      peg.style.setProperty('--m', m);
+      peg.style.setProperty('--d', d);
+      place(peg, cell);
+      pegsEl.append(peg);
+      pegAt.set(cell, peg);
+      attachPeg(peg);
+    }
+  }
+
+  function newGame(gap: Cell | null) {
+    over = false;
+    history = [];
+    selected = null;
+    clearHint();
+    plan = [];
+    hintsUsed = 0;
+    build();
+    pegs = new Set(holes(kind));
+    picking = gap === null;
+    if (gap !== null) removePeg(gap, false);
+    lastEl.textContent = '';
+    render();
+  }
+
+  function removePeg(cell: Cell, animate: boolean) {
+    pegs.delete(cell);
+    const el = pegAt.get(cell);
+    if (!el) return;
+    pegAt.delete(cell);
+    el.dataset.gone = String(cell);
+    el.classList.add(animate ? 'taken' : 'gone');
+    el.disabled = true;
+  }
+
+  function render() {
+    const targets = selected === null ? [] : jumpsFrom(kind, pegs, selected).map((j) => j.to);
+    const movable = new Set(allJumps(kind, pegs).map((j) => j.from));
+    holeEls.forEach((el, cell) => {
+      el.classList.toggle('target', targets.includes(cell));
+      el.classList.toggle('hinted', hint?.to === cell && selected === hint.from);
+      el.tabIndex = targets.includes(cell) ? 0 : -1;
+      el.setAttribute('aria-label', `${pegs.has(cell) ? 'Peg' : 'Empty hole'} at ${label(cell)}`);
+    });
+    pegAt.forEach((el, cell) => {
+      el.classList.toggle('picked', selected === cell);
+      el.classList.toggle('can', !over && !picking && movable.has(cell));
+      el.disabled = over;
+      el.setAttribute('aria-label', `Peg at ${label(cell)}${selected === cell ? ', selected' : ''}`);
+    });
+    undoEl.disabled = history.length === 0;
+    hintEl.disabled = over || picking || request > 0;
+
+    const left = pegs.size;
+    if (picking) statusEl.textContent = 'Tap the peg to take out first. Its hole becomes the starting gap.';
+    else if (over) statusEl.textContent = verdict(left);
+    else
+      statusEl.textContent =
+        `${left} pegs left · ${history.length} ${history.length === 1 ? 'jump' : 'jumps'}` +
+        (hintsUsed ? ` · ${hintsUsed} ${hintsUsed === 1 ? 'hint' : 'hints'}` : '');
+    renderStats();
+  }
+
+  const verdict = (left: number) =>
+    left === 1
+      ? pegs.has(CENTRE)
+        ? 'One peg left, in the centre. A perfect game!'
+        : 'One peg left. Brilliant!'
+      : left === 2
+        ? 'No jumps left. Two pegs: very good.'
+        : left <= 4
+          ? `No jumps left. ${left} pegs: a good game.`
+          : `No jumps left. ${left} pegs remain.`;
+
+  function renderStats() {
+    const r = loadScores<Record>(recordKey(), EMPTY);
+    statsEl.innerHTML = [
+      ['Best finish', r.best === null ? '–' : `${r.best} ${r.best === 1 ? 'peg' : 'pegs'}`],
+      ['Perfect games', r.perfect],
+      ['Games finished', r.finished],
+    ]
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+      .join('');
+  }
+
+  function checkEnd() {
+    if (allJumps(kind, pegs).length) return;
+    over = true;
+    selected = null;
+    const r = loadScores<Record>(recordKey(), EMPTY);
+    r.finished++;
+    if (r.best === null || pegs.size < r.best) r.best = pegs.size;
+    if (pegs.size === 1 && pegs.has(CENTRE)) r.perfect++;
+    saveScores(recordKey(), r);
+  }
+
+  function jump(j: Jump) {
+    const el = pegAt.get(j.from)!;
+    pegAt.delete(j.from);
+    pegs.delete(j.from);
+    pegs.add(j.to);
+    pegAt.set(j.to, el);
+    el.classList.remove('hop');
+    void el.offsetWidth;
+    el.classList.add('hop');
+    place(el, j.to);
+    removePeg(j.over, true);
+    history.push(j);
+    selected = null;
+    // Keep the saved solution while the player follows it.
+    if (plan.length && plan[0][0] === j.from && plan[0][1] === j.to) plan.shift();
+    else plan = [];
+    clearHint();
+    lastEl.textContent = '';
+    checkEnd();
+    render();
+  }
+
+  function undo() {
+    const j = history.pop();
+    if (!j) return;
+    over = false;
+    plan = [];
+    clearHint();
+    const el = pegAt.get(j.to)!;
+    pegAt.delete(j.to);
+    pegs.delete(j.to);
+    pegs.add(j.from);
+    pegAt.set(j.from, el);
+    place(el, j.from);
+    // Bring the jumped peg back.
+    const back = pegsEl.querySelector<HTMLButtonElement>(`.peg[data-gone="${j.over}"]`)!;
+    back.classList.remove('gone', 'taken');
+    delete back.dataset.gone;
+    back.disabled = false;
+    pegs.add(j.over);
+    pegAt.set(j.over, back);
+    selected = null;
+    render();
+  }
+
+  // ---- Hints ----
+
+  function clearHint() {
+    hint = null;
+    if (request) {
+      // A newer position makes a pending search pointless.
+      solvers.forEach((w) => w.terminate());
+      solvers = [];
+      request = 0;
+      hintEl.textContent = 'Hint';
+    }
+  }
+
+  function showHint(from: Cell, to: Cell, note: string) {
+    hint = jumpsFrom(kind, pegs, from).find((m) => m.to === to) ?? null;
+    if (!hint) return;
+    selected = from;
+    hintsUsed++;
+    lastEl.textContent = note;
+    render();
+  }
+
+  function askHint() {
+    if (over || picking || request) return;
+    if (plan.length) return showHint(plan[0][0], plan[0][1], `Jump the glowing peg to the ringed hole.`);
+    if (!solvers.length) {
+      solvers = ORDERS.map(
+        () => new Worker(new URL('../../scripts/pegSolver.worker.ts', import.meta.url), { type: 'module' }),
+      );
+    }
+    const id = ++request;
+    const results: SolveResult[] = [];
+    hintEl.textContent = 'Thinking…';
+    lastEl.textContent = '';
+    render();
+    const settle = (r: SolveResult) => {
+      if (r.id !== request) return;
+      results.push(r);
+      // Take the first way through found; otherwise wait for both searches.
+      if (r.status !== 'found' && results.length < solvers.length) return;
+      request = 0;
+      hintEl.textContent = 'Hint';
+      if (r.status === 'found') {
+        plan = r.path;
+        const where = r.centre ? 'ending in the centre' : 'leaving one peg';
+        showHint(plan[0][0], plan[0][1], `Jump the glowing peg to the ringed hole. There's a way through from here, ${where}.`);
+      } else {
+        lastEl.textContent = !results.some((x) => x.status === 'none')
+          ? "Couldn't find a way through in time. Try again after a jump or two."
+          : history.length
+            ? "One peg isn't possible from here any more. Try undoing a few jumps."
+            : "This starting gap can't be solved down to one peg. Try another.";
+        render();
+      }
+    };
+    solvers.forEach((w, i) => {
+      w.onmessage = (e: MessageEvent<SolveResult>) => settle(e.data);
+      w.postMessage({ id, kind, order: ORDERS[i], pegs: [...pegs], budgetMs: HINT_BUDGET_MS });
+    });
+  }
+
+  function onPeg(cell: Cell) {
+    if (over) return;
+    if (picking) {
+      picking = false;
+      removePeg(cell, true);
+      render();
+      return;
+    }
+    if (selected === cell) {
+      selected = null;
+    } else if (jumpsFrom(kind, pegs, cell).length) {
+      selected = cell;
+    } else {
+      selected = null;
+      lastEl.textContent = "That peg can't jump right now.";
+      const el = pegAt.get(cell)!;
+      el.classList.remove('nope');
+      void el.offsetWidth;
+      el.classList.add('nope');
+    }
+    render();
+  }
+
+  function onHole(cell: Cell) {
+    if (selected === null) return;
+    const j = jumpsFrom(kind, pegs, selected).find((m) => m.to === cell);
+    if (j) jump(j);
+  }
+
+  // Tap, or drag a peg onto a glowing hole.
+  function attachPeg(el: HTMLButtonElement) {
+    let start: { x: number; y: number; id: number; cell: Cell } | null = null;
+    let dragging = false;
+    let suppressClick = false;
+    const cellOf = () => [...pegAt.entries()].find(([, e]) => e === el)?.[0];
+
+    el.addEventListener('click', () => {
+      if (suppressClick) return;
+      const cell = cellOf();
+      if (cell !== undefined) onPeg(cell);
+    });
+
+    el.addEventListener('pointerdown', (e) => {
+      const cell = cellOf();
+      if (cell === undefined || over || picking || !jumpsFrom(kind, pegs, cell).length) return;
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId, cell };
+      dragging = false;
+      suppressClick = false;
+      el.setPointerCapture(e.pointerId);
+    });
+
+    el.addEventListener('pointermove', (e) => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (!dragging && Math.hypot(dx, dy) < 8) return;
+      if (!dragging) {
+        dragging = true;
+        selected = start.cell;
+        render();
+        el.classList.add('dragging');
+      }
+      el.style.translate = `calc(-50% + ${dx}px) calc(-50% + ${dy}px)`;
+      const over = targetUnder(e.clientX, e.clientY, start.cell);
+      holeEls.forEach((h, c) => h.classList.toggle('over', c === over));
+    });
+
+    const end = (e: PointerEvent, commit: boolean) => {
+      if (!start || e.pointerId !== start.id) return;
+      const from = start.cell;
+      start = null;
+      el.classList.remove('dragging');
+      el.style.translate = '';
+      holeEls.forEach((h) => h.classList.remove('over'));
+      if (!dragging) return;
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false));
+      const to = commit ? targetUnder(e.clientX, e.clientY, from) : null;
+      const j = to === null ? undefined : jumpsFrom(kind, pegs, from).find((m) => m.to === to);
+      if (j) jump(j);
+      else {
+        selected = null;
+        render();
+      }
+    };
+    el.addEventListener('pointerup', (e) => end(e, true));
+    el.addEventListener('pointercancel', (e) => end(e, false));
+  }
+
+  // The valid landing hole nearest the pointer, if the pointer is close enough.
+  function targetUnder(x: number, y: number, from: Cell): Cell | null {
+    const rect = stage.getBoundingClientRect();
+    const unit = rect.width / 9;
+    let best: Cell | null = null;
+    let bestDist = unit * 0.75;
+    for (const j of jumpsFrom(kind, pegs, from)) {
+      const [px, py] = pos(j.to);
+      const d = Math.hypot(rect.left + px * rect.width - x, rect.top + py * rect.height - y);
+      if (d < bestDist) [best, bestDist] = [j.to, d];
+    }
+    return best;
+  }
+
+  document.querySelectorAll<HTMLInputElement>('input[name=kind]').forEach((input) =>
+    input.addEventListener('change', () => {
+      kind = input.value as Kind;
+      newGame(DEFAULT_GAP[kind]);
+    }),
+  );
+  undoEl.addEventListener('click', undo);
+  hintEl.addEventListener('click', askHint);
+  $('restart').addEventListener('click', () => newGame(DEFAULT_GAP[kind]));
+  $('gap').addEventListener('click', () => newGame(null));
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      undo();
+    }
+  });
+
+  newGame(DEFAULT_GAP[kind]);
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  h1 {
+    margin-bottom: 0.25rem;
+  }
+
+  .intro {
+    margin-top: 0;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1.25rem 0 1rem;
+  }
+
+  .chips,
+  .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .chip {
+    position: relative;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chip:has(input:checked) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    font-weight: 600;
+  }
+
+  .chip:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* ---- Board ---- */
+
+  .stage {
+    position: relative;
+    width: min(100%, 36rem);
+    aspect-ratio: 1;
+    margin-inline: auto;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .board {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 14px 22px rgb(0 0 0 / 0.35));
+  }
+
+  .stage[data-kind='english'] .board.european,
+  .stage[data-kind='european'] .board.english {
+    display: none;
+  }
+
+  .stage[data-kind='english'] {
+    --rim: #caa24c;
+    --rim-dark: #6a4a14;
+  }
+
+  .stage[data-kind='european'] {
+    --rim: #e2b94f;
+    --rim-dark: #6e4d10;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+  }
+
+  .layer :global(.hole),
+  .layer :global(.peg) {
+    position: absolute;
+    translate: -50% -50%;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A carved dimple with a metal rim. */
+  .layer :global(.hole) {
+    width: 6.6%;
+    aspect-ratio: 1;
+    background: radial-gradient(circle at 50% 42%, #0d0402 0%, #1d0b05 55%, #3a1a0d 100%);
+    box-shadow:
+      inset 0 3px 6px rgb(0 0 0 / 0.8),
+      0 0 0 2px var(--rim),
+      0 0 0 3px var(--rim-dark),
+      0 1px 2px 3px rgb(0 0 0 / 0.25);
+    cursor: default;
+  }
+
+  .layer :global(.hole.target) {
+    cursor: pointer;
+    box-shadow:
+      inset 0 3px 6px rgb(0 0 0 / 0.8),
+      0 0 0 2px #fff4c6,
+      0 0 14px 4px rgb(255 226 140 / 0.75);
+    animation: glow 1.3s ease-in-out infinite;
+  }
+
+  .layer :global(.hole.hinted) {
+    box-shadow:
+      inset 0 3px 6px rgb(0 0 0 / 0.8),
+      0 0 0 3px #ffd766,
+      0 0 0 6px rgb(255 215 102 / 0.35),
+      0 0 22px 8px rgb(255 215 102 / 0.8);
+  }
+
+  .layer :global(.hole.over) {
+    box-shadow:
+      inset 0 3px 6px rgb(0 0 0 / 0.8),
+      0 0 0 3px #fff,
+      0 0 20px 7px rgb(255 236 170 / 0.95);
+  }
+
+  @keyframes glow {
+    50% {
+      box-shadow:
+        inset 0 3px 6px rgb(0 0 0 / 0.8),
+        0 0 0 2px #fff4c6,
+        0 0 6px 1px rgb(255 226 140 / 0.4);
+    }
+  }
+
+  .layer :global(.peg) {
+    width: 8.4%;
+    aspect-ratio: 1;
+    z-index: 1;
+    cursor: pointer;
+    transition:
+      left 0.28s cubic-bezier(0.3, 0.7, 0.3, 1),
+      top 0.28s cubic-bezier(0.3, 0.7, 0.3, 1),
+      opacity 0.3s ease,
+      scale 0.3s ease;
+    touch-action: none;
+  }
+
+  /* English: turned ivory pegs, seen from above. */
+  .stage[data-kind='english'] .layer :global(.peg) {
+    background:
+      radial-gradient(circle at 36% 30%, rgb(255 255 255 / 0.95) 0 9%, transparent 22%),
+      radial-gradient(circle, transparent 50%, rgb(120 88 40 / 0.28) 54%, transparent 60%),
+      radial-gradient(circle at 44% 38%, #fffdf4 0%, #efe3c4 45%, #c5ad7c 80%, #8a7244 100%);
+    box-shadow:
+      0 4px 5px rgb(20 5 0 / 0.55),
+      inset 0 -2px 3px rgb(90 60 20 / 0.35);
+  }
+
+  /* European: glass marbles in jewel colours. */
+  .stage[data-kind='european'] .layer :global(.peg) {
+    background:
+      radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.95) 0 8%, transparent 20%),
+      radial-gradient(ellipse at 64% 72%, rgb(255 255 255 / 0.28), transparent 38%),
+      radial-gradient(circle at 42% 38%, var(--l) 0%, var(--m) 52%, var(--d) 100%);
+    box-shadow:
+      0 5px 6px rgb(0 0 0 / 0.6),
+      inset 0 -3px 5px rgb(0 0 0 / 0.35);
+  }
+
+  .layer :global(.peg:disabled) {
+    cursor: default;
+  }
+
+  .layer :global(.peg.can:hover),
+  .layer :global(.peg.can:focus-visible) {
+    outline: none;
+    scale: 1.06;
+  }
+
+  .layer :global(.peg.picked) {
+    z-index: 3;
+    scale: 1.14;
+    box-shadow:
+      0 0 0 3px #fff4c6,
+      0 0 18px 5px rgb(255 226 140 / 0.8),
+      0 8px 10px rgb(0 0 0 / 0.5) !important;
+  }
+
+  .layer :global(.peg.dragging) {
+    z-index: 4;
+    transition: none;
+    scale: 1.2;
+    cursor: grabbing;
+  }
+
+  .layer :global(.peg.hop) {
+    z-index: 3;
+    animation: hop 0.3s ease;
+  }
+
+  .layer :global(.peg.taken) {
+    opacity: 0;
+    scale: 0.3;
+    pointer-events: none;
+    transition-delay: 0.12s;
+  }
+
+  .layer :global(.peg.gone) {
+    display: none;
+  }
+
+  .layer :global(.peg.nope) {
+    animation: nope 0.3s ease;
+  }
+
+  @keyframes hop {
+    50% {
+      scale: 1.35;
+    }
+  }
+
+  @keyframes nope {
+    25% {
+      translate: calc(-50% - 4px) -50%;
+    }
+    75% {
+      translate: calc(-50% + 4px) -50%;
+    }
+  }
+
+  .status {
+    min-height: 1.6em;
+    margin: 1rem 0 0.25rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .last {
+    min-height: 1.6em;
+    margin: 0;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  /* ---- Full screen ---- */
+
+  .game-area:global(.zen-on) .stage {
+    width: min(100%, calc(100dvh - 12rem));
+  }
+
+  .game-area:global(.zen-on) .controls {
+    width: min(100%, 44rem);
+    margin: 0;
+  }
+
+  details {
+    margin-top: 2rem;
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+</style>

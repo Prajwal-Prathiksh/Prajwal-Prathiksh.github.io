@@ -24,4 +24,9 @@ export const games = [
     name: 'Chowka Bhara',
     blurb: 'The cowrie-shell race game, chalked on a red-oxide floor. You against up to three computer players.',
   },
+  {
+    slug: 'peg-solitaire',
+    name: 'Peg Solitaire',
+    blurb: 'The 17th-century puzzle on an English mahogany or a French ebony board. Leave one peg.',
+  },
 ];

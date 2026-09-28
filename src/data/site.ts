@@ -1,7 +1,7 @@
 export const person = {
   name: 'Prajwal Prathiksh',
   role: 'Scientific computing and ML · MS CSEM at UT Austin',
-  email: 'prajwal.prathiksh@gmail.com',
+  email: 'prajwal.prathiksh@my.utexas.edu',
   photoCredit: 'Vibha Kurpad',
 };
 

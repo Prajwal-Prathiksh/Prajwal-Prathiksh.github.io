@@ -1,0 +1,254 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Tic-tac-toe" description="Tic-tac-toe against the computer or a friend.">
+  <p class="back"><a href="/play/">← All games</a></p>
+  <h1>Tic-tac-toe</h1>
+
+  <div class="controls">
+    <label>
+      Mode
+      <select id="mode">
+        <option value="easy">vs computer (easy)</option>
+        <option value="hard">vs computer (hard)</option>
+        <option value="pvp">2 players</option>
+      </select>
+    </label>
+    <button class="btn" type="button" id="reset">New game</button>
+  </div>
+
+  <p id="status" class="status" aria-live="polite"></p>
+
+  <div id="board" class="board" role="grid" aria-label="Tic-tac-toe board">
+    {
+      Array.from({ length: 9 }, (_, i) => (
+        <button type="button" class="cell" data-i={i} aria-label={`Square ${i + 1}`} />
+      ))
+    }
+  </div>
+
+  <dl id="stats" class="stats"></dl>
+  <p class="muted note">Scores against the computer are saved on this device only.</p>
+</Base>
+
+<script>
+  import { loadScores, saveScores } from '../../scripts/scores';
+
+  type Mark = 'X' | 'O' | null;
+  type Mode = 'easy' | 'hard' | 'pvp';
+  type Record = { wins: number; losses: number; draws: number; streak: number; bestStreak: number };
+
+  const LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6],
+  ];
+  const EMPTY: Record = { wins: 0, losses: 0, draws: 0, streak: 0, bestStreak: 0 };
+
+  const cells = [...document.querySelectorAll<HTMLButtonElement>('.cell')];
+  const statusEl = document.getElementById('status')!;
+  const statsEl = document.getElementById('stats')!;
+  const modeEl = document.getElementById('mode') as HTMLSelectElement;
+
+  let board: Mark[] = Array(9).fill(null);
+  let turn: 'X' | 'O' = 'X';
+  let over = false;
+
+  const winner = (b: Mark[]) => {
+    for (const line of LINES) {
+      const [a, c, d] = line;
+      if (b[a] && b[a] === b[c] && b[a] === b[d]) return { mark: b[a], line };
+    }
+    return b.every(Boolean) ? { mark: null, line: [] as number[] } : undefined;
+  };
+
+  // Minimax with depth, so the computer prefers faster wins and slower losses.
+  const minimax = (b: Mark[], player: 'X' | 'O', depth: number): number => {
+    const result = winner(b);
+    if (result) return result.mark === 'O' ? 10 - depth : result.mark === 'X' ? depth - 10 : 0;
+    const scores = b.flatMap((m, i) => {
+      if (m) return [];
+      b[i] = player;
+      const s = minimax(b, player === 'O' ? 'X' : 'O', depth + 1);
+      b[i] = null;
+      return [s];
+    });
+    return player === 'O' ? Math.max(...scores) : Math.min(...scores);
+  };
+
+  const computerMove = (mode: Mode) => {
+    const open = board.flatMap((m, i) => (m ? [] : [i]));
+    if (mode === 'easy' && Math.random() < 0.6) return open[Math.floor(Math.random() * open.length)];
+    let best = open[0];
+    let bestScore = -Infinity;
+    for (const i of open) {
+      board[i] = 'O';
+      const s = minimax(board, 'X', 1);
+      board[i] = null;
+      if (s > bestScore) [best, bestScore] = [i, s];
+    }
+    return best;
+  };
+
+  const mode = () => modeEl.value as Mode;
+
+  const renderStats = () => {
+    if (mode() === 'pvp') {
+      statsEl.innerHTML = '';
+      return;
+    }
+    const r = loadScores<Record>(`tic-tac-toe-${mode()}`, EMPTY);
+    statsEl.innerHTML = [
+      ['Wins', r.wins], ['Losses', r.losses], ['Draws', r.draws], ['Best streak', r.bestStreak],
+    ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  };
+
+  const record = (mark: Mark) => {
+    if (mode() === 'pvp') return;
+    const key = `tic-tac-toe-${mode()}`;
+    const r = loadScores<Record>(key, EMPTY);
+    if (mark === 'X') {
+      r.wins++;
+      r.streak++;
+      r.bestStreak = Math.max(r.bestStreak, r.streak);
+    } else if (mark === 'O') {
+      r.losses++;
+      r.streak = 0;
+    } else {
+      r.draws++;
+    }
+    saveScores(key, r);
+  };
+
+  const render = () => {
+    const result = winner(board);
+    cells.forEach((cell, i) => {
+      cell.textContent = board[i] ?? '';
+      cell.disabled = over || Boolean(board[i]);
+      cell.classList.toggle('win', Boolean(result?.line.includes(i)));
+    });
+    if (result) {
+      const vsCpu = mode() !== 'pvp';
+      statusEl.textContent = !result.mark
+        ? 'Draw.'
+        : vsCpu
+          ? result.mark === 'X' ? 'You win.' : 'Computer wins.'
+          : `${result.mark} wins.`;
+    } else {
+      statusEl.textContent = mode() === 'pvp' ? `${turn} to move.` : 'Your move (X).';
+    }
+    renderStats();
+  };
+
+  const play = (i: number) => {
+    if (over || board[i]) return;
+    board[i] = turn;
+    turn = turn === 'X' ? 'O' : 'X';
+    const result = winner(board);
+    if (result) {
+      over = true;
+      record(result.mark);
+    } else if (mode() !== 'pvp' && turn === 'O') {
+      play(computerMove(mode()));
+      return;
+    }
+    render();
+  };
+
+  const reset = () => {
+    board = Array(9).fill(null);
+    turn = 'X';
+    over = false;
+    render();
+  };
+
+  cells.forEach((cell) => cell.addEventListener('click', () => play(Number(cell.dataset.i))));
+  document.getElementById('reset')!.addEventListener('click', reset);
+  modeEl.addEventListener('change', reset);
+  reset();
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+  }
+
+  select {
+    font: inherit;
+    margin-left: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  .status {
+    min-height: 1.6em;
+    font-weight: 600;
+  }
+
+  .board {
+    display: grid;
+    grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+    gap: 0.5rem;
+    width: min(100%, 22rem);
+    aspect-ratio: 1;
+    touch-action: manipulation;
+  }
+
+  .cell {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: clamp(2rem, 10vw, 3.25rem);
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .cell:not(:disabled):hover {
+    border-color: var(--accent);
+  }
+
+  .cell:disabled {
+    cursor: default;
+    color: var(--fg);
+  }
+
+  .cell.win {
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+    border-color: var(--accent);
+  }
+
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin: 1.5rem 0 0;
+  }
+
+  .stats :global(dt) {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .stats :global(dd) {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+</style>

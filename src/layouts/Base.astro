@@ -1,0 +1,93 @@
+---
+import '../styles/global.css';
+import { person } from '../data/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = `${person.name}: ${person.role}. Scientific ML, GPU computing, and numerical methods.`,
+} = Astro.props;
+const pageTitle = title ? `${title} · ${person.name}` : person.name;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const path = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121417" media="(prefers-color-scheme: dark)" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body>
+    <header class="wrap site-header">
+      <a href="/" class="brand">{person.name}</a>
+      <nav aria-label="Main">
+        <a href="/" aria-current={path === '/' ? 'page' : undefined}>About</a>
+        <a href="/play/" aria-current={path.startsWith('/play') ? 'page' : undefined}>Play</a>
+      </nav>
+    </header>
+    <main class="wrap">
+      <slot />
+    </main>
+    <footer class="wrap site-footer muted">
+      <p>© {new Date().getFullYear()} {person.name}. No cookies, no analytics.</p>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 1.5rem;
+  }
+
+  .brand {
+    color: var(--fg);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  nav a:hover,
+  nav a[aria-current='page'] {
+    color: var(--fg);
+  }
+
+  main {
+    padding-bottom: 3rem;
+  }
+
+  .site-footer {
+    border-top: 1px solid var(--line);
+    padding-block: 1.5rem 2.5rem;
+    font-size: 0.85rem;
+  }
+</style>

@@ -1,34 +1,52 @@
-# Prajwal-Prathiksh.github.io
-The Personal Website of K T Prajwal Prathiksh
+# prajwal-prathiksh.github.io
 
-> **Note:** The website is currently under development! 🙂
+Source for my personal site, <https://prajwal-prathiksh.github.io>. It is built with [Astro](https://astro.build) as plain static HTML and CSS, with a little TypeScript for the games. GitHub Actions builds and deploys it to GitHub Pages.
 
+## Local workflow
 
-*In the mean time, here's some food for thought!*
+Needs Node 22.12 or newer.
 
-<p align="center">
-  <img src="https://cdn.quotesgram.com/img/58/48/1693387607-calvinHobbes.jpg" width="650" title="https://cdn.quotesgram.com/img/58/48/1693387607-calvinHobbes.jpg">
-</p>
-
-## Building & Deploying the Website 
-
-### Branch Structure of the Repository
-* `main` : This is the main branch of the repository from which the website is deployed using **GitHub Actions** *(Contains only those files necessary for the website)*
-* `gh_pages_src`: This branch contains all of the markdown, CSS and HTML files using which the website is built locally. The files which are built locally, are stored in the `_site` folder. All of these files constitute the `main` branch, from which the website is built.
-
-### Deploying Locally (For Testing)
-1. From the `gh_pages_src` branch, run the following command from `\root`:
-```
-$ bundle exec jekyll serve
+```sh
+npm install        # once, or after pulling dependency updates
+npm run dev        # live-reloading preview at http://localhost:4321
 ```
 
-### Building Locally (Pre-Deployment)
-1. From the `gh_pages_src` branch, run the following command from `\root`:
-```
-$ bundle exec jekyll build
+Before pushing, check that the production build works and looks right:
+
+```sh
+npm run check      # type and template errors
+npm run build      # writes the static site to dist/
+npm run preview    # serves dist/ at http://localhost:4321
 ```
 
-### Deploying Online
-1. Copy all of the files in the `_site` folder to the `main` branch.
-2. Push the changes to the `main` branch
+Push to `main` and the [Deploy workflow](.github/workflows/deploy.yml) builds and publishes the site in about a minute. Pull requests run the same build without deploying.
 
+## Where things live
+
+| What | Where |
+| --- | --- |
+| Bio, links, experience, publications | `src/data/site.ts`, `src/pages/index.astro` |
+| CV and resume PDFs | `public/documents/` (replace the files, keep the names) |
+| Photo | `src/assets/prajwal.jpg` (Astro makes resized AVIF/WebP copies) |
+| Colors, fonts, spacing | `src/styles/global.css` |
+| Games | `src/pages/play/`, listed in `src/data/games.ts` |
+
+Links from the old Jekyll site (`/publications/`, `/resume/`, `/assets/pdf/*.pdf`) still resolve. See `redirects` in `astro.config.mjs` and `src/pages/assets/pdf/[file].ts`.
+
+## Adding a game
+
+1. Create `src/pages/play/<name>.astro`, using `tic-tac-toe.astro` as a template. Game logic goes in a `<script>` tag and runs only in the browser.
+2. Add an entry to `src/data/games.ts`.
+3. Save high scores with `loadScores` and `saveScores` from `src/scripts/scores.ts`.
+
+Scores stay in the visitor's `localStorage` under keys prefixed `pp-games:`. They never leave the device, and the site uses no cookies, analytics, or third-party requests. `/play/` has a button that clears them.
+
+A game built with another tool (plain JS, a canvas engine, WebAssembly) can also go in `public/play/<name>/` as static files. Astro copies that folder into the site unchanged.
+
+GitHub Pages only serves static files. Anything that runs in the browser works. Server code, databases, and online leaderboards do not. The limits are 1 GB per site and 100 MB per file.
+
+## Updates
+
+Dependabot opens a monthly pull request for npm packages and one for GitHub Actions. If the build passes, merge it.
+
+The old Jekyll source is preserved at the `archive/jekyll-src` tag.

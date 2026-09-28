@@ -1,4 +1,0 @@
-User-agent: *
-Disallow:
-
-Sitemap: https://prajwal-prathiksh.github.io//sitemap.xml

@@ -1,0 +1,216 @@
+---
+import { Picture } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import photo from '../assets/prajwal.jpg';
+import { person, links, experience, education, publications } from '../data/site';
+---
+
+<Base>
+  <section class="intro">
+    <figure>
+      <Picture
+        src={photo}
+        alt="Prajwal Prathiksh smiling at a restaurant table"
+        width={480}
+        widths={[240, 360, 480]}
+        sizes="(min-width: 40rem) 12rem, 9rem"
+        formats={['avif', 'webp']}
+        loading="eager"
+        fetchpriority="high"
+      />
+      <figcaption class="muted">Photo: {person.photoCredit}</figcaption>
+    </figure>
+    <div>
+      <h1>{person.name}</h1>
+      <p class="role muted">{person.role}</p>
+    </div>
+  </section>
+
+  <p class="bio">
+    I'm a master's student in Computational Science, Engineering, and Mathematics at the Oden
+    Institute, UT Austin. I work on scientific machine learning and GPU computing. With Prof. George
+    Biros, I build physics-informed neural networks and the CUDA kernels that run them 150× faster
+    than CPU baselines. At KLA, I train vision transformers to find and outline wafer defects in
+    electron microscope images, without hand-labeled masks. Before UT, I spent two years at AB InBev
+    as a data scientist, building LLM and OCR pipelines for payment reconciliation. I studied
+    aerospace engineering at IIT Bombay, where my thesis on turbulence models for smoothed particle
+    hydrodynamics won the Aeronautical Society of India's best master's thesis award.
+  </p>
+
+  <ul class="links" aria-label="Contact and profiles">
+    <li>
+      <a href={`mailto:${person.email}`}>{person.email}</a>
+      <button class="btn copy" type="button" data-copy={person.email}>Copy</button>
+    </li>
+    {links.map((l) => <li><a href={l.href}>{l.label}</a></li>)}
+  </ul>
+
+  <h2>Experience</h2>
+  <ul class="entries">
+    {
+      experience.map((e) => (
+        <li>
+          <span>
+            {e.title}
+            <span class="muted"> · {e.org}</span>
+          </span>
+          <span class="when muted">{e.when}</span>
+        </li>
+      ))
+    }
+  </ul>
+
+  <h2>Education</h2>
+  <ul class="entries">
+    {
+      education.map((e) => (
+        <li>
+          <span>
+            {e.title}
+            <span class="muted"> · {e.org}</span>
+          </span>
+          <span class="when muted">{e.when}</span>
+        </li>
+      ))
+    }
+  </ul>
+
+  <h2 id="publications">Publications</h2>
+  <ol class="pubs">
+    {
+      publications.map((p) => (
+        <li>
+          {p.href ? <a href={p.href}>{p.title}</a> : <span class="title">{p.title}</span>}
+          <span class="muted">{p.authors}</span>
+          <span class="muted">
+            {p.venue}, {p.year}
+          </span>
+        </li>
+      ))
+    }
+  </ol>
+</Base>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('button[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy ?? '');
+        btn.textContent = 'Copied';
+      } catch {
+        btn.textContent = 'Copy failed';
+      }
+      setTimeout(() => (btn.textContent = 'Copy'), 1500);
+    });
+  });
+</script>
+
+<style>
+  .intro {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  figure {
+    margin: 0;
+    flex: 0 0 9rem;
+  }
+
+  figure :global(img) {
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    object-position: 50% 30%;
+    border-radius: var(--radius);
+  }
+
+  figcaption {
+    font-size: 0.75rem;
+    margin-top: 0.4rem;
+  }
+
+  h1 {
+    font-size: clamp(1.75rem, 1.3rem + 2vw, 2.5rem);
+    margin: 0 0 0.35rem;
+  }
+
+  .role {
+    margin: 0 0 1.6rem;
+  }
+
+  .bio {
+    margin-top: 2rem;
+  }
+
+  .links {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.25rem;
+    align-items: center;
+  }
+
+  .links li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .copy {
+    padding: 0.1rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .entries,
+  .pubs {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .entries li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.55rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .when {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+  }
+
+  .pubs li {
+    display: grid;
+    gap: 0.15rem;
+    padding-block: 0.75rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pubs .muted {
+    font-size: 0.9rem;
+  }
+
+  @media (min-width: 40rem) {
+    figure {
+      flex-basis: 12rem;
+    }
+  }
+
+  @media (max-width: 30rem) {
+    .intro {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .entries li {
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+  }
+</style>

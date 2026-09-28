@@ -434,8 +434,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         const key = `${i}-${j}`;
         if (pos === WAITING) spots.set(key, yardSpot(p.seat, j));
         else if (pos === HOME) {
-          const [x, y] = forSeat(p.seat, [3.5 + (j - 1.5) * 0.17, 3.5 + 0.27]);
-          spots.set(key, [x, y]);
+          // Each player has a quarter of the centre square, turned towards their side,
+          // with room for all four pawns in a 2x2 block that never overlaps another.
+          const [dx, dy] = [(j % 2 ? 0.12 : -0.12), (j < 2 ? -0.12 : 0.12)];
+          spots.set(key, forSeat(p.seat, [3.75 + dx, 3.75 + dy]));
         } else {
           const sq = square(p.seat, pos).join();
           if (!bySquare.has(sq)) bySquare.set(sq, []);
@@ -583,14 +585,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     playersEl.innerHTML = seated
       .map((p, i) => {
         const pl = state.players[i];
-        const waiting = pl.pawns.filter((x) => x === WAITING).length;
-        const home = pl.pawns.filter((x) => x === HOME).length;
         const tag = p.level ? (p.level === 'easy' ? 'Easy' : 'Hard') : '';
         const place = placings.indexOf(i);
         return `<li class="${i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
           <span class="pname">${p.name}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
-          <span class="pinfo">${home}/4 in centre · ${waiting} waiting${pl.hasHit ? ' · <b title="Has hit, inner ring open">hit ✓</b>' : ''}</span>
+          <span class="pinfo">${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}</span>
         </li>`;
       })
       .join('');
@@ -1200,7 +1200,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   .pawns :global(.pawn.home) {
-    width: 4.8%;
+    width: 3.3%;
   }
 
   .pawns :global(.pawn.movable) {

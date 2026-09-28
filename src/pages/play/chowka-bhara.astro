@@ -51,26 +51,25 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   <div class="game-area" data-zen>
     <form id="setup" class="setup">
       <fieldset>
-        <legend>Computer players</legend>
+        <legend>Human players</legend>
         <div class="chips">
-          {[1, 2, 3].map((n, i) => (
-            <label class="chip"><input type="radio" name="opponents" value={n} checked={i === 2} />{n}</label>
+          {[1, 2, 3, 4].map((n, i) => (
+            <label class="chip"><input type="radio" name="humans" value={n} checked={i === 0} />{n}</label>
           ))}
         </div>
       </fieldset>
       <fieldset>
-        <legend>Your colour</legend>
+        <legend>Computer players</legend>
         <div class="chips">
-          {
-            COLOURS.map((c, i) => (
-              <label class="chip swatch">
-                <input type="radio" name="colour" value={c.id} checked={i === 0} />
-                <svg viewBox="0 0 40 40" aria-hidden="true"><use href={`#pawn-${c.id}`} /></svg>
-                {c.name}
-              </label>
-            ))
-          }
+          {[0, 1, 2, 3].map((n) => (
+            <label class="chip"><input type="radio" name="opponents" value={n} checked={n === 3} />{n}</label>
+          ))}
         </div>
+        <p class="hint muted">Two to four players in all. Humans take turns on this device.</p>
+      </fieldset>
+      <fieldset>
+        <legend id="colour-legend">Your colour</legend>
+        <div id="human-rows" class="opponent-rows"></div>
       </fieldset>
       <fieldset>
         <legend>Entering the board</legend>
@@ -80,7 +79,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         </div>
         <p class="hint muted">Waiting pawns come in only on a thrown 4 or 8. Or start all four in play.</p>
       </fieldset>
-      <fieldset>
+      <fieldset id="levels-set">
         <legend>Computer players' levels</legend>
         <div id="opponent-rows" class="opponent-rows"></div>
       </fieldset>
@@ -317,34 +316,94 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const readLevels = () =>
     [...rowsEl.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value as Level);
 
-  const renderSetupRows = () => {
+  let humanColours: string[] = ['red'];
+
+  const setupCounts = () => {
     const f = new FormData(setupEl);
-    const n = Number(f.get('opponents'));
-    const mine = String(f.get('colour'));
+    return { humans: Number(f.get('humans')), computers: Number(f.get('opponents')) };
+  };
+
+  const chips = (name: string, options: [string, string][], checked: string, small = false) =>
+    options
+      .map(
+        ([value, label]) =>
+          `<label class="chip${small ? ' small' : ''}"><input type="radio" name="${name}" value="${value}" ${value === checked ? 'checked' : ''}/>${label}</label>`,
+      )
+      .join('');
+
+  const pawnIcon = (id: string) => `<svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${id}"/></svg>`;
+
+  const renderSetupRows = () => {
     const previous = readLevels();
-    const others = COLOURS.filter((c) => c.id !== mine).slice(0, n);
+    let { humans, computers } = setupCounts();
+
+    // Keep the total between two and four players.
+    const lo = Math.max(0, 2 - humans);
+    const hi = 4 - humans;
+    setupEl.querySelectorAll<HTMLInputElement>('input[name=opponents]').forEach((input) => {
+      input.disabled = Number(input.value) < lo || Number(input.value) > hi;
+    });
+    if (computers < lo || computers > hi) {
+      computers = Math.min(hi, Math.max(lo, computers));
+      setupEl.querySelector<HTMLInputElement>(`input[name=opponents][value="${computers}"]`)!.checked = true;
+    }
+
+    // Every human gets a different colour.
+    const fixed: string[] = [];
+    for (let i = 0; i < humans; i++) {
+      const wanted = humanColours[i];
+      fixed.push(wanted && !fixed.includes(wanted) ? wanted : COLOURS.find((c) => !fixed.includes(c.id))!.id);
+    }
+    humanColours = fixed;
+    $('colour-legend').textContent = humans === 1 ? 'Your colour' : 'Colours';
+    $('human-rows').innerHTML = humanColours
+      .map(
+        (colour, i) => `<div class="opponent-row">
+          <span class="who">${humans === 1 ? 'You' : `Player ${i + 1}`}</span>
+          <div class="chips">${COLOURS.map((c) => `<label class="chip swatch small"><input type="radio" name="colour-${i}" value="${c.id}" ${c.id === colour ? 'checked' : ''}/>${pawnIcon(c.id)}${c.name}</label>`).join('')}</div>
+        </div>`,
+      )
+      .join('');
+
+    const others = COLOURS.filter((c) => !humanColours.includes(c.id)).slice(0, computers);
+    $('levels-set').hidden = others.length === 0;
     const pickForEl = document.getElementById('pick-for') as HTMLSelectElement;
     const chosen = pickForEl.value;
     pickForEl.innerHTML =
       '<option value="">no computer</option>' +
-      others.map((c, i) => `<option value="${i + 1}"${chosen === String(i + 1) ? ' selected' : ''}>${c.name}</option>`).join('');
+      others
+        .map((c, i) => `<option value="${humans + i}"${chosen === String(humans + i) ? ' selected' : ''}>${c.name}</option>`)
+        .join('');
     rowsEl.innerHTML = others
-      .map((c, i) => {
-        const lvl = previous[i] ?? 'easy';
-        return `<div class="opponent-row">
-          <span class="who"><svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${c.id}"/></svg>${c.name}</span>
-          <div class="chips">
-            ${(['easy', 'hard'] as const)
-              .map(
-                (l) =>
-                  `<label class="chip small"><input type="radio" name="level-${i}" value="${l}" ${l === lvl ? 'checked' : ''}/>${l === 'easy' ? 'Easy' : 'Hard'}</label>`,
-              )
-              .join('')}
-          </div>
-        </div>`;
-      })
+      .map(
+        (c, i) => `<div class="opponent-row">
+          <span class="who">${pawnIcon(c.id)}${c.name}</span>
+          <div class="chips">${chips(`level-${i}`, [['easy', 'Easy'], ['hard', 'Hard']], previous[i] ?? 'easy', true)}</div>
+        </div>`,
+      )
       .join('');
   };
+
+  // Humans first (in seat order), then the computers in the colours left over.
+  const buildSeated = (): Seated[] => {
+    const { humans, computers } = setupCounts();
+    const levels = readLevels();
+    const byId = (id: string) => COLOURS.find((c) => c.id === id)!;
+    const people = humanColours.slice(0, humans).map((id, i) => ({
+      name: humans === 1 ? 'You' : `Player ${i + 1}`,
+      colour: id,
+      colourName: byId(id).name,
+      level: null,
+    }));
+    const others = COLOURS.filter((c) => !humanColours.includes(c.id))
+      .slice(0, computers)
+      .map((c, i) => ({ name: c.name, colour: c.id, colourName: c.name, level: levels[i] ?? ('easy' as Level) }));
+    return [...people, ...others];
+  };
+
+  const humanCount = () => seated.filter((p) => p.level === null).length;
+  const soloHuman = () => humanCount() === 1;
+  const isYou = (i: number) => soloHuman() && seated[i].level === null;
 
   // ---- Board geometry, in 7x7 board units ----
 
@@ -592,7 +651,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '. The rest are stuck for good.';
       } else {
         statusEl.textContent = "Draw: no one can move any more, so the game can't go on.";
-        recordResult(RECORD_KEY, 'draw');
+        if (soloHuman()) recordResult(RECORD_KEY, 'draw');
       }
       render();
       return;
@@ -629,10 +688,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         selectedValue = moves[0] ?? null;
         selectedPawn = null;
       }
-      statusEl.textContent = !turn.bank.length
+      const prompt = !turn.bank.length
         ? turn.owed > 1 || lastEl.textContent.includes('Bonus')
           ? 'Throw again.'
-          : 'Your turn. Throw the cowries.'
+          : soloHuman()
+            ? 'Your turn. Throw the cowries.'
+            : 'Throw the cowries.'
         : risky()
           ? 'Two 4/8s held: a third would lose the turn. Spend one, throw, or skip.'
           : turn.owed > 0
@@ -640,6 +701,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
               ? 'Move a pawn, or throw again first.'
               : 'Nothing can move yet. Throw again.'
             : 'Pick a throw, then tap a pawn to move.';
+      statusEl.textContent = soloHuman() || prompt.startsWith('Your') ? prompt : `${me.name} (${me.colourName}): ${prompt}`;
       render();
       return;
     }
@@ -695,7 +757,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     watching = true;
     phase = 'busy'; // the game is running again
     watchEl.hidden = true;
-    statusEl.textContent = 'Watching the computers play for the other places.';
+    statusEl.textContent = seated.some((p, i) => p.level === null && !placings.includes(i))
+      ? 'Playing on for the other places.'
+      : 'Watching the computers play for the other places.';
     do current = (current + 1) % seated.length;
     while (placings.includes(current));
     startTurn();
@@ -767,7 +831,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     if (move.from === WAITING) lastEl.textContent = `${who.name} brought a pawn in.`;
     else if (hits.length) {
       const names = [...new Set(hits.map((h) => seated[h.player].name))].join(' and ');
-      const verb = who.level === null ? 'You hit' : `${who.name} hit`;
+      const verb = isYou(move.player) ? 'You hit' : `${who.name} hit`;
       lastEl.textContent = `${verb} ${names === 'You' ? 'you' : names}!${firstHit ? ' The inner ring is open.' : ''} Bonus throw.`;
       hits.forEach((h) => pawnEls[h.player][h.pawn].classList.add('knocked'));
       setTimeout(() => document.querySelectorAll('.pawn.knocked').forEach((el) => el.classList.remove('knocked')), 700);
@@ -781,10 +845,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const left = seated.map((_, i) => i).filter((i) => !placings.includes(i));
       if (!watching) {
         phase = 'over';
-        const youWon = who.level === null;
-        statusEl.textContent = youWon ? 'You win! All four pawns are in the centre.' : `${who.name} wins.`;
-        recordResult(RECORD_KEY, youWon ? 'win' : 'loss');
-        watchEl.hidden = !(youWon && left.length >= 2);
+        const human = who.level === null;
+        statusEl.textContent = isYou(move.player)
+          ? 'You win! All four pawns are in the centre.'
+          : `${who.name} wins${human ? '! All four pawns are in the centre.' : '.'}`;
+        if (soloHuman()) recordResult(RECORD_KEY, human ? 'win' : 'loss');
+        // Play on for the other places if someone is left to watch or play.
+        const humansLeft = left.some((i) => seated[i].level === null);
+        watchEl.hidden = !(left.length >= 2 && (human || humansLeft));
+        watchEl.textContent = humansLeft ? 'Play on for the other places' : 'Watch the rest';
       } else if (left.length <= 1) {
         placings.push(...left);
         phase = 'over';
@@ -801,15 +870,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   function startGame() {
     const f = new FormData(setupEl);
-    const n = Number(f.get('opponents'));
-    const mine = String(f.get('colour'));
-    const levels = readLevels();
-    const others = COLOURS.filter((c) => c.id !== mine).slice(0, n);
-    const you = COLOURS.find((c) => c.id === mine)!;
-    seated = [
-      { name: 'You', colour: you.id, colourName: you.name, level: null },
-      ...others.map((c, i) => ({ name: c.name, colour: c.id, colourName: c.name, level: levels[i] ?? 'easy' })),
-    ];
+    seated = buildSeated();
     gameId++;
     state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
     current = 0;
@@ -845,22 +906,23 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     renderSetupRows();
     // Preview the table with the chosen seats.
     const f = new FormData(setupEl);
-    const n = Number(f.get('opponents'));
-    const mine = String(f.get('colour'));
-    const others = COLOURS.filter((c) => c.id !== mine).slice(0, n);
-    const you = COLOURS.find((c) => c.id === mine)!;
-    seated = [
-      { name: 'You', colour: you.id, colourName: you.name, level: null },
-      ...others.map((c) => ({ name: c.name, colour: c.id, colourName: c.name, level: 'easy' as Level })),
-    ];
+    seated = buildSeated();
     state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
     buildPawns();
     render();
   }
 
   setupEl.addEventListener('change', (e) => {
-    const name = (e.target as HTMLInputElement).name;
-    if (name === 'opponents' || name === 'colour' || name === 'entry') showSetup();
+    const input = e.target as HTMLInputElement;
+    const name = input.name;
+    if (name.startsWith('colour-')) {
+      // Taking another player's colour swaps the two.
+      const i = Number(name.slice(7));
+      const j = humanColours.indexOf(input.value);
+      if (j >= 0 && j !== i) humanColours[j] = humanColours[i];
+      humanColours[i] = input.value;
+      showSetup();
+    } else if (name === 'humans' || name === 'opponents' || name === 'entry') showSetup();
   });
   setupEl.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1326,6 +1388,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-size: 0.95rem;
   }
 
+  #levels-set[hidden],
   #debug-row[hidden] {
     display: none;
   }

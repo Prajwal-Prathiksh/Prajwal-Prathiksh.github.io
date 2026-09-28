@@ -25,6 +25,12 @@ const path = Astro.url.pathname;
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Playroom" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#121417" media="(prefers-color-scheme: dark)" />
@@ -39,19 +45,52 @@ const path = Astro.url.pathname;
       <a href="/" class="brand">{person.name}</a>
       <nav aria-label="Main">
         <a href="/" aria-current={path === '/' ? 'page' : undefined}>About</a>
-        <a href="/play/" aria-current={path.startsWith('/play') ? 'page' : undefined}>Play</a>
+        <a href="/playroom/" aria-current={path.startsWith('/playroom') ? 'page' : undefined}>Playroom</a>
       </nav>
     </header>
     <main class="wrap">
       <slot />
     </main>
     <footer class="wrap site-footer muted">
-      <p>© {new Date().getFullYear()} {person.name}. No cookies, no analytics.</p>
+      <p>© {new Date().getFullYear()} {person.name}. No cookies, no analytics. Works offline once installed.</p>
     </footer>
+    <div id="update-notice" class="update-notice" role="status" hidden>
+      <span>A new version is ready.</span>
+      <button type="button" class="btn" id="update-reload">Refresh</button>
+    </div>
+    {
+      import.meta.env.PROD && (
+        <script>
+          import { registerServiceWorker } from '../scripts/pwa';
+          registerServiceWorker();
+        </script>
+      )
+    }
   </body>
 </html>
 
 <style>
+  .update-notice {
+    position: fixed;
+    left: 50%;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.6rem 0.5rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+    font-size: 0.9rem;
+    translate: -50% 0;
+  }
+
+  .update-notice[hidden] {
+    display: none;
+  }
+
   .site-header {
     display: flex;
     align-items: center;

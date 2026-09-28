@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Playroom · Prajwal Prathiksh",
+  "short_name": "Playroom",
+  "description": "Prajwal Prathiksh's site and games: Chowka Bhara, Ali Guli Mane, Peg Solitaire, Wordling, Chopsticks and Tic-tac-toe. Works offline once installed.",
+  "start_url": "/playroom/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121417",
+  "theme_color": "#121417",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Playroom", "url": "/playroom/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

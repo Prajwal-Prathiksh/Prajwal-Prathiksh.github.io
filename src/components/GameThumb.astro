@@ -1,0 +1,209 @@
+---
+// A small illustration of each game for the Playroom cards, drawn to match the
+// game's own board. The Ali Guli Mane and Chowka Bhara pictures use the cowrie
+// shells from <CowrieSprite />, which the page includes once.
+interface Props {
+  slug: string;
+}
+const { slug } = Astro.props;
+const id = (name: string) => `${slug}-${name}`;
+const pebbles = [
+  ['#f39a7e', '#c23b2a', '#6e170e'],
+  ['#fff0a8', '#e2a41c', '#7c4f03'],
+  ['#b5e3a6', '#3d8a4a', '#173f1f'],
+  ['#a9c6f2', '#2c5aa0', '#10284f'],
+];
+---
+
+<svg class="thumb" viewBox="0 0 320 200" role="img" aria-hidden="true">
+  {
+    slug === 'tic-tac-toe' && (
+      <g>
+        <rect width="320" height="200" fill="#1c2127" />
+        <g stroke="#e9e5dc" stroke-width="5" stroke-linecap="round" opacity="0.85">
+          <path d="M127 38v124M193 38v124M94 83h132M94 125h132" />
+        </g>
+        <g stroke="#7cb7e0" stroke-width="7" stroke-linecap="round">
+          <path d="M104 50l16 20M120 50l-16 20" />
+          <path d="M170 92l16 20M186 92l-16 20" />
+          <path d="M203 134l16 20M219 134l-16 20" />
+        </g>
+        <g fill="none" stroke="#e8b44d" stroke-width="7">
+          <circle cx="160" cy="60" r="11" />
+          <circle cx="112" cy="144" r="11" />
+        </g>
+      </g>
+    )
+  }
+  {
+    slug === 'chopsticks' && (
+      <g>
+        <rect width="320" height="200" fill="#232830" />
+        <g fill="#2f353e" stroke="#aeb6c0" stroke-width="3" stroke-linejoin="round">
+          {/* Two hands facing each other: two fingers against one. */}
+          <g transform="translate(70 36)">
+            <rect x="18" y="0" width="13" height="56" rx="6.5" fill="#3c4b5c" />
+            <rect x="33" y="-6" width="13" height="62" rx="6.5" fill="#3c4b5c" />
+            <rect x="48" y="30" width="13" height="26" rx="6.5" />
+            <rect x="63" y="38" width="13" height="20" rx="6.5" />
+            <rect x="14" y="44" width="64" height="52" rx="20" />
+            <rect x="4" y="54" width="16" height="34" rx="8" transform="rotate(-22 12 70)" />
+          </g>
+          <g transform="translate(250 164) rotate(180)">
+            <rect x="18" y="0" width="13" height="56" rx="6.5" fill="#3c4b5c" />
+            <rect x="33" y="30" width="13" height="26" rx="6.5" />
+            <rect x="48" y="32" width="13" height="24" rx="6.5" />
+            <rect x="63" y="38" width="13" height="20" rx="6.5" />
+            <rect x="14" y="44" width="64" height="52" rx="20" />
+            <rect x="4" y="54" width="16" height="34" rx="8" transform="rotate(-22 12 70)" />
+          </g>
+        </g>
+      </g>
+    )
+  }
+  {
+    slug === 'wordling' && (
+      <g font-family="ui-sans-serif, system-ui, sans-serif" font-weight="700" font-size="28" text-anchor="middle">
+        <rect width="320" height="200" fill="#16191d" />
+        {['W', 'O', 'R', 'D', 'S'].map((ch, i) => {
+          const state = ['absent', 'present', 'correct', 'absent', 'correct'][i];
+          const fill = state === 'correct' ? '#7cb7e0' : state === 'present' ? '#d9a441' : '#22262b';
+          return (
+            <g transform={`translate(${46 + i * 48} 52)`}>
+              <rect width="42" height="42" rx="6" fill={fill} />
+              {state === 'present' && <circle cx="35" cy="7" r="3" fill="#121417" />}
+              <text x="21" y="31" fill={state === 'absent' ? '#6b727b' : '#121417'}>{ch}</text>
+            </g>
+          );
+        })}
+        {['P', 'L', 'A', 'Y'].map((ch, i) => (
+          <g transform={`translate(${46 + i * 48} 104)`}>
+            <rect width="42" height="42" rx="6" fill="none" stroke="#8b9097" stroke-width="2" />
+            <text x="21" y="31" fill="#e6e4e0">{ch}</text>
+          </g>
+        ))}
+        <g transform="translate(238 104)">
+          <rect width="42" height="42" rx="6" fill="none" stroke="#2a2e34" stroke-width="2" />
+        </g>
+      </g>
+    )
+  }
+  {
+    slug === 'ali-guli-mane' && (
+      <g>
+        <defs>
+          <linearGradient id={id('wood')} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#d3a273" />
+            <stop offset="1" stop-color="#9f6a3e" />
+          </linearGradient>
+          <radialGradient id={id('hole')} cx="50%" cy="38%" r="60%">
+            <stop offset="0" stop-color="#7c4c2c" />
+            <stop offset="0.6" stop-color="#8d5a35" />
+            <stop offset="1" stop-color="#b27b4f" />
+          </radialGradient>
+        </defs>
+        <rect width="320" height="200" fill="#2a1a10" />
+        {[40, 108].map((y) => (
+          <g>
+            <path d={`M26 ${y}h268l10 10v38l-10 10H26l-10-10v-38z`} fill={`url(#${id('wood')})`} />
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <circle cx={50 + i * 37} cy={y + 29} r="15" fill={`url(#${id('hole')})`} stroke="#6b3f20" stroke-width="1" />
+            ))}
+          </g>
+        ))}
+        <rect x="100" y="97" width="16" height="7" rx="2" fill="#cfd5d9" />
+        <rect x="204" y="97" width="16" height="7" rx="2" fill="#cfd5d9" />
+        {[
+          [50, 69, 20], [44, 64, 110], [57, 64, 60], [124, 69, 150], [118, 64, 20], [161, 69, 80], [235, 69, 30], [241, 65, 140],
+          [87, 137, 40], [93, 132, 120], [198, 137, 70], [204, 132, 10], [192, 132, 160], [272, 137, 100],
+        ].map(([x, y, r], i) => (
+          <use href={i % 3 ? '#cowrie-back' : '#cowrie-mouth'} x={x - 6} y={y - 8} width="12" height="16" transform={`rotate(${r} ${x} ${y})`} />
+        ))}
+      </g>
+    )
+  }
+  {
+    slug === 'chowka-bhara' && (
+      <g>
+        <defs>
+          {pebbles.map(([l, m, d], i) => (
+            <radialGradient id={id(`p${i}`)} cx="36%" cy="30%" r="75%">
+              <stop offset="0" stop-color={l} />
+              <stop offset="0.45" stop-color={m} />
+              <stop offset="1" stop-color={d} />
+            </radialGradient>
+          ))}
+          <radialGradient id={id('floor')} cx="40%" cy="30%" r="90%">
+            <stop offset="0" stop-color="#a44a33" />
+            <stop offset="1" stop-color="#6e2a1c" />
+          </radialGradient>
+        </defs>
+        <rect width="320" height="200" fill={`url(#${id('floor')})`} />
+        <g fill="none" stroke="#f4eee3" stroke-width="2.4" stroke-linecap="round" opacity="0.85" stroke-dasharray="7 1.5">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <>
+              <path d={`M${85 + i * 30} 25v150`} />
+              <path d={`M85 ${25 + i * 30}h150`} />
+            </>
+          ))}
+          <path d="M149 29l22 22M171 29l-22 22M149 149l22 22M171 149l-22 22M89 89l22 22M111 89l-22 22M209 89l22 22M231 89l-22 22" />
+          <circle cx="160" cy="100" r="9" />
+          {[0, 45, 90, 135].map((a) => (
+            <ellipse cx="160" cy="100" rx="3.5" ry="11" transform={`rotate(${a} 160 100)`} />
+          ))}
+        </g>
+        {[[130, 70, 0], [190, 130, 1], [220, 70, 2], [100, 160, 3], [196, 132, 1]].map(([x, y, i]) => (
+          <circle cx={x} cy={y} r="9" fill={`url(#${id(`p${i}`)})`} />
+        ))}
+        {[[34, 90, 20], [52, 104, 150], [270, 86, 70], [286, 110, 110]].map(([x, y, r], i) => (
+          <use href={i % 2 ? '#cowrie-back' : '#cowrie-mouth'} x={x - 8} y={y - 11} width="16" height="22" transform={`rotate(${r} ${x} ${y})`} />
+        ))}
+      </g>
+    )
+  }
+  {
+    slug === 'peg-solitaire' && (
+      <g>
+        <defs>
+          <radialGradient id={id('mahogany')} cx="40%" cy="32%" r="78%">
+            <stop offset="0" stop-color="#a5502e" />
+            <stop offset="0.55" stop-color="#6f2a16" />
+            <stop offset="1" stop-color="#3a1208" />
+          </radialGradient>
+          <linearGradient id={id('brass')} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fbe9a6" />
+            <stop offset="0.5" stop-color="#b08a36" />
+            <stop offset="1" stop-color="#ecd07a" />
+          </linearGradient>
+          <radialGradient id={id('ivory')} cx="42%" cy="36%" r="70%">
+            <stop offset="0" stop-color="#fffdf4" />
+            <stop offset="0.6" stop-color="#e6d8b4" />
+            <stop offset="1" stop-color="#9e8756" />
+          </radialGradient>
+        </defs>
+        <rect width="320" height="200" fill="#1a0c07" />
+        <circle cx="160" cy="100" r="92" fill={`url(#${id('mahogany')})`} />
+        <circle cx="160" cy="100" r="86" fill="none" stroke={`url(#${id('brass')})`} stroke-width="3" />
+        {Array.from({ length: 49 }, (_, n) => [n % 7, Math.floor(n / 7)])
+          .filter(([c, r]) => (r >= 2 && r <= 4) || (c >= 2 && c <= 4))
+          .map(([c, r]) => {
+            const [x, y] = [160 + (c - 3) * 21, 100 + (r - 3) * 21];
+            const empty = (c === 3 && r === 3) || (c === 3 && r === 1) || (c === 4 && r === 3);
+            return empty ? (
+              <circle cx={x} cy={y} r="6.5" fill="#150603" stroke="#c9a24a" stroke-width="1.2" />
+            ) : (
+              <circle cx={x} cy={y} r="8" fill={`url(#${id('ivory')})`} />
+            );
+          })}
+      </g>
+    )
+  }
+</svg>
+
+<style>
+  .thumb {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+</style>

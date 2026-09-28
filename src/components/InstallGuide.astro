@@ -1,0 +1,235 @@
+---
+// "Play offline": works out the visitor's device and browser and shows only
+// the steps for installing the site as an app there. Where the browser offers
+// its own install prompt (Chrome and Edge), a single button does it.
+---
+
+<section class="install" aria-labelledby="install-title">
+  <h2 id="install-title">Play offline</h2>
+  <p class="lead">
+    Install the Playroom as an app. It gets its own icon, opens full screen, and every game works
+    without internet.
+  </p>
+  <p id="install-device" class="device muted"></p>
+  <button type="button" class="btn primary" id="install-now" hidden>Install the Playroom</button>
+  <p id="install-or" class="muted or" hidden>Or do it yourself:</p>
+  <ol id="install-steps" class="steps"></ol>
+  <p id="install-note" class="muted note"></p>
+  <noscript><p>Look for "Install app" or "Add to Home Screen" in your browser's menu.</p></noscript>
+</section>
+
+<script>
+  type Guide = { device: string; steps: string[]; note?: string };
+
+  const ua = navigator.userAgent;
+  // iPadOS reports itself as a Mac, but Macs have no touch screen.
+  const iOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const android = /Android/.test(ua);
+  const samsung = /SamsungBrowser/.test(ua);
+  const edge = /Edg(e|A|iOS)?\//.test(ua);
+  const firefox = /Firefox|FxiOS/.test(ua);
+  const opera = /OPR\/|OPiOS/.test(ua);
+  const chrome = /Chrome|CriOS/.test(ua) && !edge && !samsung && !opera;
+  const safari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|OPiOS|Android/.test(ua);
+  const standalone =
+    matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
+
+  const offlineNote = 'After that it opens like any other app, even with no internet.';
+
+  function guide(): Guide {
+    if (standalone) {
+      return { device: "You're already using the installed app.", steps: [], note: 'Every game here works offline.' };
+    }
+    if (iOS) {
+      const where = /iPad/.test(ua) || !/iPhone|iPod/.test(ua) ? 'at the top' : 'at the bottom';
+      if (safari) {
+        return {
+          device: `On this ${/iPhone|iPod/.test(ua) ? 'iPhone' : 'iPad'} in Safari:`,
+          steps: [
+            `Tap the Share button (a square with an arrow pointing up) ${where} of the screen.`,
+            'Scroll down and tap "Add to Home Screen".',
+            'Tap "Add". The Playroom icon appears on your home screen.',
+          ],
+          note: offlineNote,
+        };
+      }
+      return {
+        device: `On this ${/iPhone|iPod/.test(ua) ? 'iPhone' : 'iPad'}:`,
+        steps: [
+          'Tap the Share button (a square with an arrow pointing up) in the address bar or menu.',
+          'Tap "Add to Home Screen", then "Add".',
+        ],
+        note: `Can't find it? Open this page in Safari and do the same there. ${offlineNote}`,
+      };
+    }
+    if (android) {
+      if (samsung) {
+        return {
+          device: 'On this phone in Samsung Internet:',
+          steps: ['Tap the menu button (three lines) at the bottom.', 'Tap "Add page to", then "Home screen".'],
+          note: offlineNote,
+        };
+      }
+      if (firefox) {
+        return {
+          device: 'On this phone in Firefox:',
+          steps: ['Tap the menu button (three dots).', 'Tap "Install" or "Add to Home screen".'],
+          note: offlineNote,
+        };
+      }
+      if (edge) {
+        return {
+          device: 'On this phone in Edge:',
+          steps: ['Tap the menu button (three dots) at the bottom.', 'Tap "Add to phone".'],
+          note: offlineNote,
+        };
+      }
+      return {
+        device: 'On this phone:',
+        steps: ['Tap the menu button (three dots) at the top right.', 'Tap "Install app" or "Add to Home screen".'],
+        note: offlineNote,
+      };
+    }
+    // Computers.
+    const os = /Windows/.test(ua) ? 'Windows PC' : /Macintosh/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : 'computer';
+    if (edge) {
+      return {
+        device: `On this ${os} in Edge:`,
+        steps: ['Click the menu button (three dots) at the top right.', 'Choose "Apps", then "Install this site as an app".'],
+        note: offlineNote,
+      };
+    }
+    if (chrome || opera) {
+      return {
+        device: `On this ${os} in ${opera ? 'Opera' : 'Chrome'}:`,
+        steps: ['Click the install icon at the right end of the address bar (a screen with a small arrow).', 'Click "Install".'],
+        note: `No icon? Open the menu (three dots), choose "Cast, save, and share", then "Install page as app". ${offlineNote}`,
+      };
+    }
+    if (safari) {
+      return {
+        device: 'On this Mac in Safari:',
+        steps: ['In the menu bar at the top, choose File, then "Add to Dock".', 'Click "Add".'],
+        note: offlineNote,
+      };
+    }
+    if (firefox) {
+      return {
+        device: `On this ${os} in Firefox:`,
+        steps: [],
+        note: "Firefox on computers can't install web apps, but the games you've opened keep working offline here. For an app with its own icon, open this page in Chrome or Edge.",
+      };
+    }
+    return {
+      device: '',
+      steps: ['Look in your browser\'s menu for "Install app" or "Add to Home Screen".'],
+      note: offlineNote,
+    };
+  }
+
+  const g = guide();
+  const deviceEl = document.getElementById('install-device')!;
+  const stepsEl = document.getElementById('install-steps')!;
+  const noteEl = document.getElementById('install-note')!;
+  const button = document.getElementById('install-now') as HTMLButtonElement;
+  deviceEl.textContent = g.device;
+  stepsEl.innerHTML = g.steps.map((s) => `<li>${s}</li>`).join('');
+  stepsEl.hidden = !g.steps.length;
+  noteEl.textContent = g.note ?? '';
+
+  // Chrome and Edge can show their own install dialog: one tap instead of steps.
+  interface InstallPrompt extends Event {
+    prompt(): Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+  }
+  let deferred: InstallPrompt | null = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferred = e as InstallPrompt;
+    button.hidden = false;
+    document.getElementById('install-or')!.hidden = !g.steps.length;
+  });
+  button.addEventListener('click', async () => {
+    if (!deferred) return;
+    await deferred.prompt();
+    const { outcome } = await deferred.userChoice;
+    if (outcome === 'accepted') {
+      button.hidden = true;
+      document.getElementById('install-or')!.hidden = true;
+    }
+    deferred = null;
+  });
+  window.addEventListener('appinstalled', () => {
+    button.hidden = true;
+    deviceEl.textContent = 'Installed. Look for the Playroom icon with your other apps.';
+    stepsEl.hidden = true;
+    noteEl.textContent = 'Every game works offline.';
+  });
+</script>
+
+<style>
+  .install {
+    margin-top: 3rem;
+    padding: 1.25rem 1.25rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  }
+
+  .install h2 {
+    margin-top: 0;
+  }
+
+  .lead {
+    margin-top: 0;
+  }
+
+  .device {
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  .device:empty {
+    display: none;
+  }
+
+  .or {
+    margin: 0.2rem 0 0;
+    font-size: 0.9rem;
+  }
+
+  .or[hidden] {
+    display: none;
+  }
+
+  .steps {
+    margin: 0.25rem 0 0.5rem;
+    padding-left: 1.3rem;
+  }
+
+  .steps li + li {
+    margin-top: 0.3rem;
+  }
+
+  .steps[hidden] {
+    display: none;
+  }
+
+  .btn.primary {
+    margin: 0.25rem 0 0.5rem;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .btn[hidden] {
+    display: none;
+  }
+
+  .note {
+    margin: 0.4rem 0 0;
+    font-size: 0.9rem;
+  }
+</style>

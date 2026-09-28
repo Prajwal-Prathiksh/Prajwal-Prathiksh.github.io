@@ -358,6 +358,7 @@ export function recordSpend(t: Turn, value: number, hit: boolean): void {
 }
 
 export const usable = (s: State, player: number, t: Turn) => t.bank.filter((v) => legalMoves(s, player, v).length);
+export const stranded = (s: State, player: number, t: Turn) => t.bank.length > 0 && usable(s, player, t).length === 0;
 export const turnOver = (s: State, player: number, t: Turn) => t.owed === 0 && usable(s, player, t).length === 0;
 
 // A throw may carry a chosen value (for testing); otherwise the shells decide.

@@ -196,6 +196,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       Spend each throw on one pawn, in any order. A waiting pawn comes onto the board, on your home
       square (the crossed square on your edge), only by spending a 4 or an 8. Once in, it stays in.
       If you choose to start on the home square in setup, all four pawns begin in play instead.
+      If none of your remaining throws can move a pawn, your moves from that turn are undone.
     </p>
     <p>
       Pawns race anticlockwise round the outer ring. Landing on an opponent's pawn sends it back
@@ -239,6 +240,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     recordSpend,
     recordThrow,
     square,
+    stranded,
     throwShells,
     turnOver,
     usable,
@@ -298,6 +300,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let state: State = newGame([0, 2]);
   let current = 0;
   let turn: Turn = newTurn();
+  let turnStartState: State = state;
   let selectedValue: number | null = null;
   let selectedPawn: number | null = null;
   let phase: 'setup' | 'act' | 'pick' | 'busy' | 'over' = 'setup';
@@ -657,6 +660,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       return;
     }
     turn = newTurn();
+    // apply() creates a new board for every move, so this remains the turn's original board.
+    turnStartState = state;
     selectedValue = null;
     selectedPawn = null;
     thrownEl.textContent = '';
@@ -667,10 +672,18 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   async function next() {
     const id = gameId;
     if (gameOver()) return;
+    if (stranded(state, current, turn)) {
+      const values = turn.bank.join(' + ');
+      state = turnStartState;
+      turn = endedTurn();
+      selectedValue = null;
+      selectedPawn = null;
+      lastEl.textContent = `No move possible for ${values}. Moves from this turn were undone.`;
+    }
     if (turnOver(state, current, turn)) {
-      if (turn.bank.length) {
-        lastEl.textContent = `No move possible for ${turn.bank.join(' + ')}.`;
-        turn.bank = [];
+      if (finished(state, current)) {
+        finishPlayer(current);
+        if (gameOver()) return;
       }
       phase = 'busy';
       render();
@@ -697,9 +710,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         : risky()
           ? 'Two 4/8s held: a third would lose the turn. Spend one, throw, or skip.'
           : turn.owed > 0
-            ? moves.length
-              ? 'Move a pawn, or throw again first.'
-              : 'Nothing can move yet. Throw again.'
+            ? 'Move a pawn, or throw again first.'
             : 'Pick a throw, then tap a pawn to move.';
       statusEl.textContent = soloHuman() || prompt.startsWith('Your') ? prompt : `${me.name} (${me.colourName}): ${prompt}`;
       render();
@@ -839,31 +850,33 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     else lastEl.textContent = `${who.name} moved ${move.steps}${move.pawns.length === 2 ? ' as a pair' : ''}.`;
     render();
 
-    if (finished(state, move.player)) {
-      placings.push(move.player);
-      turn = endedTurn(); // a finished player's turn ends here
-      const left = seated.map((_, i) => i).filter((i) => !placings.includes(i));
-      if (!watching) {
-        phase = 'over';
-        const human = who.level === null;
-        statusEl.textContent = isYou(move.player)
-          ? 'You win! All four pawns are in the centre.'
-          : `${who.name} wins${human ? '! All four pawns are in the centre.' : '.'}`;
-        if (soloHuman()) recordResult(RECORD_KEY, human ? 'win' : 'loss');
-        // Play on for the other places if someone is left to watch or play.
-        const humansLeft = left.some((i) => seated[i].level === null);
-        watchEl.hidden = !(left.length >= 2 && (human || humansLeft));
-        watchEl.textContent = humansLeft ? 'Play on for the other places' : 'Watch the rest';
-      } else if (left.length <= 1) {
-        placings.push(...left);
-        phase = 'over';
-        watching = false;
-        statusEl.textContent = 'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '.';
-      } else {
-        lastEl.textContent = `${who.name} finishes ${ordinal(placings.length)}.`;
-      }
-      render();
+  }
+
+  function finishPlayer(player: number) {
+    const who = seated[player];
+    placings.push(player);
+    turn = endedTurn();
+    const left = seated.map((_, i) => i).filter((i) => !placings.includes(i));
+    if (!watching) {
+      phase = 'over';
+      const human = who.level === null;
+      statusEl.textContent = isYou(player)
+        ? 'You win! All four pawns are in the centre.'
+        : `${who.name} wins${human ? '! All four pawns are in the centre.' : '.'}`;
+      if (soloHuman()) recordResult(RECORD_KEY, human ? 'win' : 'loss');
+      // Play on for the other places if someone is left to watch or play.
+      const humansLeft = left.some((i) => seated[i].level === null);
+      watchEl.hidden = !(left.length >= 2 && (human || humansLeft));
+      watchEl.textContent = humansLeft ? 'Play on for the other places' : 'Watch the rest';
+    } else if (left.length <= 1) {
+      placings.push(...left);
+      phase = 'over';
+      watching = false;
+      statusEl.textContent = 'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '.';
+    } else {
+      lastEl.textContent = `${who.name} finishes ${ordinal(placings.length)}.`;
     }
+    render();
   }
 
   // ---- Game setup ----

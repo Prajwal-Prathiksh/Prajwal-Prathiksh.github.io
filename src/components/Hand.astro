@@ -1,0 +1,70 @@
+---
+// A hand seen from the back, fingers up, thumb on the left. Fingers are
+// ordered index to pinky; the page script adds `.up` to the raised ones.
+interface Props {
+  mirrored?: boolean;
+}
+
+const { mirrored = false } = Astro.props;
+
+const PALM_TOP = 56;
+const FINGER_BASE = 66;
+// A folded finger slides down behind the palm until only the knuckle shows.
+const KNUCKLE_TOP = 50;
+const fingers = [
+  { name: 'index', x: 25, top: 20 },
+  { name: 'middle', x: 40, top: 12 },
+  { name: 'ring', x: 55, top: 18 },
+  { name: 'pinky', x: 70, top: 30 },
+];
+---
+
+<svg class="hand-svg" viewBox="0 0 100 124" aria-hidden="true">
+  <g transform={mirrored ? 'translate(100 0) scale(-1 1)' : undefined}>
+    <rect class="wrist" x="34" y="98" width="40" height="26" rx="6"></rect>
+    {
+      fingers.map((f) => (
+        <rect
+          class="finger"
+          data-finger={f.name}
+          x={f.x}
+          y={f.top}
+          width="13"
+          height={FINGER_BASE - f.top}
+          rx="6.5"
+          style={`--fold: ${KNUCKLE_TOP - f.top}px`}
+        />
+      ))
+    }
+    <rect class="palm" x="23" y={PALM_TOP} width="62" height="48" rx="18"></rect>
+    <rect class="thumb" x="15" y="66" width="15" height="32" rx="7.5" transform="rotate(24 22 82)"></rect>
+  </g>
+</svg>
+
+<style>
+  .hand-svg {
+    width: 100%;
+    max-width: 7.5rem;
+    height: auto;
+    overflow: visible;
+  }
+
+  rect {
+    fill: var(--hand-fill);
+    stroke: var(--hand-line);
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+  }
+
+  .finger {
+    transform: translateY(var(--fold));
+    transition:
+      transform 0.25s ease,
+      fill 0.25s ease;
+  }
+
+  .finger:global(.up) {
+    transform: none;
+    fill: var(--hand-up);
+  }
+</style>

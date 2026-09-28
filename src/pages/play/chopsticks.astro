@@ -1,0 +1,377 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const sides = [
+  { player: 1, id: 'top-name' },
+  { player: 0, id: 'bottom-name' },
+];
+---
+
+<Base title="Chopsticks" description="The finger-counting game Chopsticks, against the computer or a friend.">
+  <p class="back"><a href="/play/">← All games</a></p>
+  <h1>Chopsticks</h1>
+
+  <div class="controls">
+    <label>
+      Mode
+      <select id="mode">
+        <option value="easy">vs computer (easy)</option>
+        <option value="hard">vs computer (hard)</option>
+        <option value="pvp">2 players</option>
+      </select>
+    </label>
+    <button class="btn" type="button" id="reset">New game</button>
+  </div>
+
+  <div class="table">
+    {
+      sides.map(({ player, id }) => (
+        <div class="side" data-side={player}>
+          <p class="name" id={id} />
+          <div class="hands">
+            {[0, 1].map((i) => (
+              <button type="button" class="hand" data-player={player} data-i={i} />
+            ))}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
+  <p id="status" class="status" aria-live="polite"></p>
+  <p id="last" class="muted last"></p>
+  <div id="splits" class="splits"></div>
+
+  <dl id="stats" class="stats"></dl>
+
+  <details>
+    <summary>How to play</summary>
+    <p>
+      Each player starts with one finger up on each hand. On your turn, either attack or split.
+    </p>
+    <p>
+      To attack, tap one of your hands, then one of your opponent's. Their hand gains as many
+      fingers as yours shows. A hand that reaches exactly 5 is out. Past 5 it wraps around, so 4 + 3
+      leaves 2.
+    </p>
+    <p>
+      To split, move fingers between your own hands, for example 1 · 3 into 2 · 2. You can bring a
+      dead hand back this way. If your total is 5 or more, you may drop five fingers, so 4 · 4 can
+      become 0 · 3. Just swapping your hands doesn't count as a move.
+    </p>
+    <p>
+      You lose when both your hands are out. If the same position comes up a third time, the game
+      is a draw. With perfect play from the start, nobody can force a win.
+    </p>
+  </details>
+
+  <p class="muted note">Scores against the computer are saved on this device only.</p>
+</Base>
+
+<script>
+  import { apply, bestMove, isDead, key, legalMoves, type Hands, type Move } from '../../scripts/chopsticks';
+  import { recordResult, renderRecord } from '../../scripts/scores';
+
+  type Mode = 'easy' | 'hard' | 'pvp';
+  type Player = 0 | 1;
+
+  const COMPUTER: Player = 1;
+  const DELAY_MS = 700;
+
+  const modeEl = document.getElementById('mode') as HTMLSelectElement;
+  const statusEl = document.getElementById('status')!;
+  const lastEl = document.getElementById('last')!;
+  const splitsEl = document.getElementById('splits')!;
+  const statsEl = document.getElementById('stats')!;
+  const nameEls = [document.getElementById('bottom-name')!, document.getElementById('top-name')!];
+  const handEls = [...document.querySelectorAll<HTMLButtonElement>('.hand')];
+
+  let hands: [Hands, Hands];
+  let turn: Player;
+  let selected: 0 | 1 | null;
+  let over: boolean;
+  let seen: Map<string, number>;
+  let gameId = 0;
+
+  const mode = () => modeEl.value as Mode;
+  const vsComputer = () => mode() !== 'pvp';
+  const names = () => (vsComputer() ? ['You', 'Computer'] : ['Player 1', 'Player 2']);
+  const recordKey = () => (vsComputer() ? `chopsticks-${mode()}` : null);
+  const humanTurn = () => !over && !(vsComputer() && turn === COMPUTER);
+
+  const describe = (player: Player, move: Move) => {
+    const who = names()[player];
+    if (move.kind === 'split') return `${who} split into ${move.into.join(' · ')}.`;
+    const other = names()[1 - player];
+    const target = hands[1 - player][move.to];
+    const self = hands[player][move.from];
+    return vsComputer()
+      ? player === COMPUTER
+        ? `Computer hit your ${target} with its ${self}.`
+        : `You hit the computer's ${target} with your ${self}.`
+      : `${who} hit ${other}'s ${target} with a ${self}.`;
+  };
+
+  const render = () => {
+    const [n0, n1] = names();
+    nameEls[0].textContent = n0;
+    nameEls[1].textContent = n1;
+
+    handEls.forEach((el) => {
+      const p = Number(el.dataset.player) as Player;
+      const i = Number(el.dataset.i) as 0 | 1;
+      const value = hands[p][i];
+      const own = p === turn;
+      const clickable =
+        humanTurn() && value > 0 && (own || (selected !== null && !own));
+      el.disabled = !clickable;
+      el.classList.toggle('dead', value === 0);
+      el.classList.toggle('selected', own && selected === i && !over);
+      el.classList.toggle('target', !own && selected !== null && value > 0 && humanTurn());
+      el.innerHTML =
+        `<span class="count">${value}</span>` +
+        `<span class="pips" aria-hidden="true">${[1, 2, 3, 4]
+          .map((n) => `<i class="${n <= value ? 'on' : ''}"></i>`)
+          .join('')}</span>`;
+      el.setAttribute('aria-label', `${names()[p]}, ${i ? 'right' : 'left'} hand: ${value || 'out'}`);
+      el.setAttribute('aria-pressed', String(own && selected === i));
+    });
+
+    document.querySelectorAll<HTMLElement>('.side').forEach((side) => {
+      side.classList.toggle('active', !over && Number(side.dataset.side) === turn);
+    });
+
+    splitsEl.innerHTML = '';
+    if (humanTurn()) {
+      for (const move of legalMoves(hands[turn], hands[1 - turn])) {
+        if (move.kind !== 'split') continue;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn';
+        btn.textContent = `Split ${move.into.join(' · ')}`;
+        btn.addEventListener('click', () => play(move));
+        splitsEl.append(btn);
+      }
+    }
+
+    if (!over) {
+      const who = names()[turn];
+      statusEl.textContent = !humanTurn()
+        ? 'Computer is thinking…'
+        : selected === null
+          ? `${vsComputer() ? 'Your' : `${who}'s`} turn. Pick a hand to attack with, or split.`
+          : 'Now pick a hand to hit.';
+    }
+    renderRecord(statsEl, recordKey());
+  };
+
+  const finish = (text: string, result: 'win' | 'loss' | 'draw' | null) => {
+    over = true;
+    statusEl.textContent = text;
+    const game = recordKey();
+    if (game && result) recordResult(game, result);
+  };
+
+  function play(move: Move) {
+    lastEl.textContent = describe(turn, move);
+    const [mine, theirs] = apply(hands[turn], hands[1 - turn], move);
+    hands[turn] = mine;
+    hands[1 - turn] = theirs;
+    selected = null;
+
+    if (isDead(theirs)) {
+      const winner = names()[turn];
+      finish(
+        vsComputer() ? (turn === COMPUTER ? 'Computer wins.' : 'You win.') : `${winner} wins.`,
+        turn === COMPUTER ? 'loss' : 'win',
+      );
+      render();
+      return;
+    }
+
+    turn = (1 - turn) as Player;
+    const position = `${turn}:${key(hands[turn], hands[1 - turn])}`;
+    const count = (seen.get(position) ?? 0) + 1;
+    seen.set(position, count);
+    if (count >= 3) finish('Draw: the same position came up three times.', 'draw');
+
+    render();
+    if (!over && vsComputer() && turn === COMPUTER) {
+      const id = gameId;
+      setTimeout(() => {
+        if (id !== gameId) return;
+        play(bestMove(hands[COMPUTER], hands[1 - COMPUTER], mode() === 'easy' ? 0.5 : 0));
+      }, DELAY_MS);
+    }
+  }
+
+  handEls.forEach((el) =>
+    el.addEventListener('click', () => {
+      const p = Number(el.dataset.player) as Player;
+      const i = Number(el.dataset.i) as 0 | 1;
+      if (p === turn) {
+        selected = selected === i ? null : i;
+        render();
+      } else if (selected !== null) {
+        play({ kind: 'attack', from: selected, to: i });
+      }
+    }),
+  );
+
+  const reset = () => {
+    gameId++;
+    hands = [
+      [1, 1],
+      [1, 1],
+    ];
+    turn = 0;
+    selected = null;
+    over = false;
+    seen = new Map([[`0:${key(hands[0], hands[1])}`, 1]]);
+    lastEl.textContent = '';
+    render();
+  };
+
+  document.getElementById('reset')!.addEventListener('click', reset);
+  modeEl.addEventListener('change', reset);
+  reset();
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+  }
+
+  select {
+    font: inherit;
+    margin-left: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  .table {
+    display: grid;
+    gap: 1rem;
+    width: min(100%, 22rem);
+    margin-top: 1.5rem;
+  }
+
+  .side {
+    padding: 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    opacity: 0.75;
+  }
+
+  .side.active {
+    opacity: 1;
+    border-color: var(--accent);
+  }
+
+  .name {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .hands {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .hand {
+    display: grid;
+    justify-items: center;
+    gap: 0.4rem;
+    padding: 0.9rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    touch-action: manipulation;
+  }
+
+  .hand:disabled {
+    cursor: default;
+    color: var(--fg);
+  }
+
+  .hand:not(:disabled):hover,
+  .hand.target {
+    border-color: var(--accent);
+  }
+
+  .hand.selected {
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+    border-color: var(--accent);
+  }
+
+  .hand.dead {
+    opacity: 0.4;
+    border-style: dashed;
+  }
+
+  .hand :global(.count) {
+    font-size: clamp(2rem, 9vw, 2.75rem);
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .hand :global(.pips) {
+    display: flex;
+    gap: 4px;
+  }
+
+  .hand :global(.pips i) {
+    width: 8px;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--line);
+  }
+
+  .hand :global(.pips i.on) {
+    background: var(--accent);
+  }
+
+  .status {
+    min-height: 1.6em;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .last {
+    min-height: 1.6em;
+    margin-top: 0;
+    font-size: 0.9rem;
+  }
+
+  .splits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  details {
+    margin-top: 2rem;
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+</style>

@@ -33,18 +33,16 @@ import Base from '../../layouts/Base.astro';
 </Base>
 
 <script>
-  import { loadScores, saveScores } from '../../scripts/scores';
+  import { recordResult, renderRecord } from '../../scripts/scores';
 
   type Mark = 'X' | 'O' | null;
   type Mode = 'easy' | 'hard' | 'pvp';
-  type Record = { wins: number; losses: number; draws: number; streak: number; bestStreak: number };
 
   const LINES = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8],
     [0, 3, 6], [1, 4, 7], [2, 5, 8],
     [0, 4, 8], [2, 4, 6],
   ];
-  const EMPTY: Record = { wins: 0, losses: 0, draws: 0, streak: 0, bestStreak: 0 };
 
   const cells = [...document.querySelectorAll<HTMLButtonElement>('.cell')];
   const statusEl = document.getElementById('status')!;
@@ -93,32 +91,11 @@ import Base from '../../layouts/Base.astro';
 
   const mode = () => modeEl.value as Mode;
 
-  const renderStats = () => {
-    if (mode() === 'pvp') {
-      statsEl.innerHTML = '';
-      return;
-    }
-    const r = loadScores<Record>(`tic-tac-toe-${mode()}`, EMPTY);
-    statsEl.innerHTML = [
-      ['Wins', r.wins], ['Losses', r.losses], ['Draws', r.draws], ['Best streak', r.bestStreak],
-    ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
-  };
+  const recordKey = () => (mode() === 'pvp' ? null : `tic-tac-toe-${mode()}`);
 
   const record = (mark: Mark) => {
-    if (mode() === 'pvp') return;
-    const key = `tic-tac-toe-${mode()}`;
-    const r = loadScores<Record>(key, EMPTY);
-    if (mark === 'X') {
-      r.wins++;
-      r.streak++;
-      r.bestStreak = Math.max(r.bestStreak, r.streak);
-    } else if (mark === 'O') {
-      r.losses++;
-      r.streak = 0;
-    } else {
-      r.draws++;
-    }
-    saveScores(key, r);
+    const game = recordKey();
+    if (game) recordResult(game, mark === 'X' ? 'win' : mark === 'O' ? 'loss' : 'draw');
   };
 
   const render = () => {
@@ -138,7 +115,7 @@ import Base from '../../layouts/Base.astro';
     } else {
       statusEl.textContent = mode() === 'pvp' ? `${turn} to move.` : 'Your move (X).';
     }
-    renderStats();
+    renderRecord(statsEl, recordKey());
   };
 
   const play = (i: number) => {
@@ -227,25 +204,6 @@ import Base from '../../layouts/Base.astro';
   .cell.win {
     background: color-mix(in srgb, var(--accent) 18%, var(--surface));
     border-color: var(--accent);
-  }
-
-  .stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    margin: 1.5rem 0 0;
-  }
-
-  .stats :global(dt) {
-    font-size: 0.8rem;
-    color: var(--muted);
-  }
-
-  .stats :global(dd) {
-    margin: 0;
-    font-size: 1.4rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
   }
 
   .note {

@@ -9,7 +9,8 @@
 // and 24 means it has reached the centre.
 //
 // A pawn may share a square with its own side only on a safe square or, two at
-// most, in the inner ring. Two pawns meeting on their first inner square may
+// most, in the inner ring unless a committed pair joins friendly singles.
+// Two pawns meeting on their first inner square may
 // move off together as a pair; until then they are still vulnerable singles and
 // may split. Once they leave together they stay a pair for good. Two meeting on
 // any other inner square just sit together, and
@@ -26,6 +27,7 @@ export const HOME = 24;
 export const LAST_OUTER = 15;
 export const PAIR_SQUARE = 16; // the first inner square, the only place pairs form
 export const WAITING = -1;
+export type EntryMode = 'home' | 'all' | 'each';
 const SOLO = -1;
 
 export interface PlayerState {
@@ -37,11 +39,12 @@ export interface PlayerState {
 
 export interface State {
   players: PlayerState[];
+  entry: EntryMode;
 }
 
 export interface Move {
   player: number;
-  pawns: number[]; // one pawn, or a pair moving together
+  pawns: number[]; // one pawn, a pair, or all waiting pawns entering together
   value: number; // the throw spent
   steps: number; // squares moved: the throw, or half of it for a pair
   from: number;
@@ -78,11 +81,11 @@ export const keyOf = ([r, c]: Square) => r * 5 + c;
 const SAFE = new Set([keyOf([4, 2]), keyOf([2, 4]), keyOf([0, 2]), keyOf([2, 0]), keyOf([2, 2])]);
 export const isSafe = (sq: Square) => SAFE.has(keyOf(sq));
 
-// By default pawns wait off the board until a 4 or 8 brings them in;
-// with startOnHome they all begin in play on the home square.
-export function newGame(seats: Seat[], startOnHome = false): State {
-  const start = startOnHome ? 0 : WAITING;
+// A 4 or 8 is spent to enter either one pawn or all four, depending on setup.
+export function newGame(seats: Seat[], entry: EntryMode = 'each'): State {
+  const start = entry === 'home' ? 0 : WAITING;
   return {
+    entry,
     players: seats.map((seat) => ({
       seat,
       pawns: [start, start, start, start],
@@ -93,6 +96,7 @@ export function newGame(seats: Seat[], startOnHome = false): State {
 }
 
 const clone = (s: State): State => ({
+  entry: s.entry,
   players: s.players.map((p) => ({ ...p, pawns: [...p.pawns], partner: [...p.partner] })),
 });
 
@@ -127,7 +131,9 @@ function tryMove(s: State, occ: Map<number, Occupant[]>, player: number, pawns: 
   const from = p.pawns[pawns[0]];
   if (from === HOME) return null;
   if (from === WAITING) {
-    return pawns.length === 1 && (value === 4 || value === 8) ? { player, pawns, value, steps: 0, from, to: 0 } : null;
+    return pawns.length === 1 && (value === 4 || value === 8)
+      ? { player, pawns: s.entry === 'all' ? [0, 1, 2, 3] : pawns, value, steps: 0, from, to: 0 }
+      : null;
   }
   const pair = pawns.length === 2;
   if (pair && value % 2) return null; // a pair needs an even throw
@@ -139,11 +145,14 @@ function tryMove(s: State, occ: Map<number, Occupant[]>, player: number, pawns: 
   if (!p.hasHit && to > LAST_OUTER) return null; // the inner ring opens after a first hit
 
   // Own pawns may share safe squares or an inner square two at a time.
-  // Singles can also share a committed pair's square without a limit.
+  // Singles may join a friendly pair; a pair may join friendly singles.
   if (to !== HOME) {
     const sq = square(p.seat, to);
     const mine = (occ.get(keyOf(sq)) ?? []).filter((o) => o.player === player && !pawns.includes(o.pawn));
-    if (mine.length && !isSafe(sq) && !(to >= PAIR_SQUARE && !pair && (mine.length === 1 || mine.some((o) => o.paired)))) return null;
+    const friendlyShare = to >= PAIR_SQUARE && (pair
+      ? mine.every((o) => !o.paired)
+      : mine.length === 1 || mine.some((o) => o.paired));
+    if (mine.length && !isSafe(sq) && !friendlyShare) return null;
   }
 
   if (!pair) {

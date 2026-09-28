@@ -65,6 +65,7 @@ const planks = [
       <select id="speed">
         <option value="1">Normal</option>
         <option value="0.35">Fast</option>
+        <option value="0.175">Very fast</option>
       </select>
     </label>
     <button type="button" class="btn" id="newmatch">New match</button>
@@ -411,7 +412,7 @@ const planks = [
       statusEl.textContent = 'The computer goes first this round.';
       render();
       const id = gameId;
-      setTimeout(() => id === gameId && turn(COMPUTER, ai()), DELAY.think * 1.5);
+      setTimeout(() => id === gameId && turn(COMPUTER, ai()), DELAY.think * 1.5 * Number(speedEl.value));
     }
   };
 

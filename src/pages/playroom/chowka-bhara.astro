@@ -4,10 +4,10 @@ import ZenToggle from '../../components/ZenToggle.astro';
 import CowrieSprite from '../../components/CowrieSprite.astro';
 
 const COLOURS = [
+  { id: 'blue', name: 'Blue', light: '#a9c6f2', mid: '#2c5aa0', dark: '#10284f' },
   { id: 'red', name: 'Red', light: '#f39a7e', mid: '#c23b2a', dark: '#6e170e' },
   { id: 'yellow', name: 'Yellow', light: '#fff0a8', mid: '#e2a41c', dark: '#7c4f03' },
   { id: 'green', name: 'Green', light: '#b5e3a6', mid: '#3d8a4a', dark: '#173f1f' },
-  { id: 'blue', name: 'Blue', light: '#a9c6f2', mid: '#2c5aa0', dark: '#10284f' },
 ];
 
 // Board squares in 7x7 units: the 5x5 grid sits inside a one-unit margin
@@ -74,10 +74,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       <fieldset>
         <legend>Entering the board</legend>
         <div class="chips">
-          <label class="chip"><input type="radio" name="entry" value="wait" checked />Wait for a 4 or 8</label>
-          <label class="chip"><input type="radio" name="entry" value="home" />Start on the home square</label>
+          <label class="chip"><input type="radio" name="entry" value="home" checked />Start on home squares</label>
+          <label class="chip"><input type="radio" name="entry" value="all" />Enter all with one 4 or 8</label>
+          <label class="chip"><input type="radio" name="entry" value="each" />Enter each with a 4 or 8</label>
         </div>
-        <p class="hint muted">Waiting pawns come in only on a thrown 4 or 8. Or start all four in play.</p>
+        <p id="entry-hint" class="hint muted">All four pawns begin on your home square.</p>
       </fieldset>
       <fieldset id="levels-set">
         <legend>
@@ -116,6 +117,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         <select id="speed">
           <option value="1">Normal</option>
           <option value="0.4">Fast</option>
+          <option value="0.2">Very fast</option>
         </select>
       </label>
       <button type="button" class="btn" id="newgame">New game</button>
@@ -184,6 +186,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
       <div class="side">
         <p id="status" class="status" aria-live="polite"></p>
+        <div id="social-offer" class="social-offer" hidden>
+          <span id="social-offer-text"></span>
+          <div><button type="button" id="social-accept" class="btn primary">Accept</button><button type="button" id="social-decline" class="btn">Decline</button></div>
+        </div>
+        <p id="social-notice" class="social-notice" aria-live="polite"></p>
         <div id="history-controls" class="history-controls" hidden>
           <button type="button" id="history-back" class="icon-btn" aria-label="Previous board position" title="Previous position">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6M5 12h15" /></svg>
@@ -196,6 +203,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 6 6 6-6 6M18 12H4M19 5v14" /></svg>
           </button>
         </div>
+        <p id="history-description" class="history-description" aria-live="polite" hidden></p>
         <button type="button" id="hint-button" class="btn hint-button" hidden>Hint</button>
         <p id="hint-text" class="hint-text muted" aria-live="polite"></p>
         <p id="last" class="muted last"></p>
@@ -220,9 +228,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       and play what you have.
     </p>
     <p>
-      Spend each throw on one pawn, in any order. A waiting pawn comes onto the board, on your home
-      square (the crossed square on your edge), only by spending a 4 or an 8. Once in, it stays in.
-      If you choose to start on the home square in setup, all four pawns begin in play instead.
+      Spend each throw on a pawn or pair, in any order. You can start all four pawns on your home
+      square (the crossed square on your edge), or spend a 4 or 8 to enter all four waiting pawns
+      together or one at a time, depending on the setup choice. Once in, a pawn stays in.
       If none of your remaining throws can move a pawn, your moves from that turn are undone.
     </p>
     <p>
@@ -240,10 +248,16 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       Move one alone to split them, or move them together to commit the pair and make the circle
       solid. A committed pair always moves together at half the throw (2, 4 and 8 move it 1, 2
       and 4 squares). An opponent's single must land exactly on the committed pair's square
-      before moving past it. Your own singles can land there or move past freely. Only a pair
-      can hit a pair; a pair landing on lone pawns
+      before moving past it. Your own singles can land there or move past freely, and your pair
+      can land on your own singles. Only a pair can hit a pair; a pair landing on lone pawns
       just shares the square with them. First to bring all four pawns
       to the centre wins. In the rare case that nobody can move at all, the game is a draw.
+    </p>
+    <p>
+      In games with three or four players, you can offer a short truce against a clear leader.
+      Allies try to avoid hitting each other, but may break their word. A hit on an ally can be
+      part of a relay when its bonus throw has a real chance to hit the leader. Recent betrayals
+      make another truce less likely.
     </p>
   </details>
 
@@ -277,8 +291,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     type Turn,
     type Seat,
     type State,
+    type EntryMode,
   } from '../../scripts/chowkaBhara';
   import { chooseAction, type Level, type Style } from '../../scripts/chowkaBharaAI';
+  import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
   import { recordResult, renderRecord } from '../../scripts/scores';
 
   interface Seated {
@@ -290,10 +306,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   const COLOURS = [
+    { id: 'blue', name: 'Blue' },
     { id: 'red', name: 'Red' },
     { id: 'yellow', name: 'Yellow' },
     { id: 'green', name: 'Green' },
-    { id: 'blue', name: 'Blue' },
   ];
   const STYLES: { id: Style; name: string }[] = [
     { id: 'balanced', name: 'Balanced' },
@@ -327,6 +343,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const bankEl = $('bank');
   const choicesEl = $('choices');
   const statusEl = $('status');
+  const socialOfferEl = $('social-offer');
+  const socialOfferTextEl = $('social-offer-text');
+  const socialNoticeEl = $('social-notice');
   const hintEl = $<HTMLButtonElement>('hint-button');
   const hintTextEl = $('hint-text');
   const historyEl = $('history-controls');
@@ -334,6 +353,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const historyForwardEl = $<HTMLButtonElement>('history-forward');
   const historyCurrentEl = $<HTMLButtonElement>('history-current');
   const historyPositionEl = $('history-position');
+  const historyDescriptionEl = $('history-description');
   const lastEl = $('last');
   const playersEl = $('players');
   const statsEl = $('stats');
@@ -347,6 +367,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let turn: Turn = newTurn();
   let turnStartState: State = state;
   let positions: State[] = [state];
+  let historyDescriptions: string[] = ['Game started.'];
   let historyIndex: number | null = null;
   let selectedValue: number | null = null;
   let selectedPawn: number | null = null;
@@ -355,12 +376,24 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let placings: number[] = []; // players in the order they finished
   let watching = false; // after you win, the computers can play on for the other places
   let gameId = 0;
+  let social: SocialState = newSocial(2);
+  let pendingOffers: { from: number; to: number; target: number }[] = [];
   const pawnEls: HTMLButtonElement[][] = [];
   const hopping = new Map<string, [number, number]>(); // pawn key -> board point during a hop
 
   // A move can end the game while a caller awaits it, so re-read the phase.
   const gameOver = () => phase === 'over';
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * Number(speedEl.value)));
+
+  function recordHistory(description: string) {
+    positions.push(state);
+    historyDescriptions.push(description);
+  }
+
+  function announceSocial(description: string) {
+    socialNoticeEl.textContent = description;
+    recordHistory(description);
+  }
 
   // ---- Setup ----
 
@@ -369,7 +402,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const readStyles = () =>
     [...rowsEl.querySelectorAll<HTMLSelectElement>('select[name^="style-"]')].map((s) => s.value as Style);
 
-  let humanColours: string[] = ['red'];
+  let humanColours: string[] = ['blue'];
 
   const setupCounts = () => {
     const f = new FormData(setupEl);
@@ -605,7 +638,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     choicesEl.innerHTML = '';
     if (human && selectedPawn !== null && selectedValue !== null) {
       const options = movesFor(current, selectedPawn, selectedValue);
-      const single = options.find((m) => m.pawns.length === 1);
+      const single = options.find((m) => m.pawns.length === 1 || (m.from === WAITING && m.pawns.length === 4));
       const pair = options.find((m) => m.pawns.length === 2);
       const shown = options.find((m) => hintedMove && sameMove(m, hintedMove)) ?? single ?? pair;
       if (shown) {
@@ -613,7 +646,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         const [x, y] = shown.to === HOME ? [3.5, 3.5] : centreOf(square(seat, shown.to));
         marksEl.innerHTML = `<circle class="target" cx="${x * 100}" cy="${y * 100}" r="40"/>`;
       }
-      if (single) choicesEl.append(choiceButton(single.from === WAITING ? 'Bring in' : `Move ${selectedValue}`, single));
+      if (single) choicesEl.append(choiceButton(single.from === WAITING ? single.pawns.length === 4 ? 'Bring all in' : 'Bring in' : `Move ${selectedValue}`, single));
       if (pair) choicesEl.append(choiceButton(`Move pair ${pair.steps}`, pair));
     }
 
@@ -651,19 +684,39 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     historyBackEl.disabled = reviewing && historyIndex === 0;
     historyForwardEl.hidden = !reviewing;
     historyCurrentEl.hidden = !reviewing;
-    historyPositionEl.textContent = reviewing ? `Move ${historyIndex} / ${positions.length - 1}` : '';
+    historyPositionEl.textContent = reviewing ? `Step ${historyIndex} / ${positions.length - 1}` : '';
+    historyDescriptionEl.hidden = !reviewing;
+    historyDescriptionEl.textContent = historyIndex === null ? '' : historyDescriptions[historyIndex];
+    lastEl.hidden = reviewing;
+    socialNoticeEl.hidden = reviewing;
     hintEl.hidden = !human;
     hintTextEl.hidden = reviewing || !hintTextEl.textContent;
 
+    const offer = phase === 'act' && seated[current]?.level === null
+      ? pendingOffers.find((o) => o.to === current && canOffer(social, state, o.from, o.to, activePlayers()) === o.target)
+      : undefined;
+    socialOfferEl.hidden = !offer || reviewing;
+    if (offer) socialOfferTextEl.textContent = `${seated[offer.from].name} offers a truce against ${seated[offer.target].name}. Avoid hits for a few rounds?`;
     playersEl.innerHTML = seated
       .map((p, i) => {
         const pl = viewState.players[i];
         const tag = p.level ? `${p.level === 'easy' ? 'Easy' : 'Hard'} · ${STYLES.find((x) => x.id === p.style)!.name}` : '';
         const place = reviewing ? -1 : placings.indexOf(i);
+        const pact = pactFor(social, i);
+        const ally = pact ? allyOf(pact, i) : -1;
+        const canInvite = !reviewing && phase === 'act' && seated[current]?.level === null && i !== current
+          && canOffer(social, state, current, i, activePlayers()) !== null
+          && !pendingOffers.some((o) => o.from === current && o.to === i);
+        const canEnd = !reviewing && phase === 'act' && seated[current]?.level === null && i !== current && ally === current;
+        const wary = !reviewing && seated[current]?.level === null && i !== current && social.trust[current]?.[i] < 0.36;
         return `<li class="${!reviewing && i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
           <span class="pname">${p.name}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
-          <span class="pinfo">${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}</span>
+          <span class="pinfo">${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}
+          ${pact && !reviewing ? `<span class="truce-tag" title="Truce with ${seated[ally].name} against ${seated[pact.target].name}">🤝 ${seated[ally].name} · vs ${seated[pact.target].name}</span>` : ''}
+          ${wary ? '<span class="wary-tag" title="Recent betrayal makes a truce unlikely">wary</span>' : ''}
+          ${canInvite ? `<button type="button" class="social-action" data-social="offer" data-player="${i}" title="Offer a short truce against the leader">Truce</button>` : ''}
+          ${canEnd ? `<button type="button" class="social-action" data-social="end" data-player="${i}" title="End this truce early">End</button>` : ''}</span>
         </li>`;
       })
       .join('');
@@ -721,6 +774,36 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     while (placings.includes(rival) && rival !== player) rival = (rival + 1) % seated.length;
     return rival;
   };
+  const activePlayers = () => seated.map((_, i) => i).filter((i) => !placings.includes(i));
+
+  function offerTruce(from: number, to: number) {
+    const target = canOffer(social, state, from, to, activePlayers());
+    if (target === null || pendingOffers.some((o) => o.from === from && o.to === to)) return;
+    if (seated[to].level !== null) {
+      if (acceptsOffer(social, state, from, to, target, seated[to].style)) {
+        makePact(social, from, to, target);
+        pendingOffers = pendingOffers.filter((o) => o.from !== from && o.to !== from && o.from !== to && o.to !== to);
+        announceSocial(`${seated[to].name} and ${seated[from].name} agree to slow ${seated[target].name}.`);
+      } else {
+        declineOffer(social, to, from);
+        announceSocial(`${seated[to].name} declines the truce.`);
+      }
+    } else {
+      pendingOffers.push({ from, to, target });
+      announceSocial(`${seated[from].name} offered ${seated[to].name} a truce against ${seated[target].name}.`);
+    }
+    render();
+  }
+
+  function computerOffer() {
+    if (seated[current].level === null || seated.length < 3 || pactFor(social, current)) return;
+    const options = activePlayers().filter((i) => i !== current && !pendingOffers.some((o) => o.from === current && o.to === i))
+      .map((i) => ({ player: i, target: canOffer(social, state, current, i, activePlayers()) }))
+      .filter((x): x is { player: number; target: number } => x.target !== null)
+      .filter((x) => threat(state, x.target) >= 55)
+      .sort((a, b) => social.trust[current][b.player] - social.trust[current][a.player]);
+    if (options.length) offerTruce(current, options[0].player);
+  }
 
   function startTurn() {
     if (gameOver()) return;
@@ -739,12 +822,17 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       return;
     }
     turn = newTurn();
+    for (const pact of advanceSocial(social, state, activePlayers())) {
+      announceSocial(`${seated[pact.a].name} and ${seated[pact.b].name}'s truce has ended.`);
+    }
+    pendingOffers = pendingOffers.filter((o) => canOffer(social, state, o.from, o.to, activePlayers()) === o.target);
     // apply() creates a new board for every move, so this remains the turn's original board.
     turnStartState = state;
     selectedValue = null;
     selectedPawn = null;
     hintedMove = null;
     thrownEl.textContent = '';
+    computerOffer();
     next();
   }
 
@@ -756,11 +844,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const values = turn.bank.join(' + ');
       const hadMoves = state !== turnStartState;
       state = turnStartState;
-      if (hadMoves) positions.push(state);
       turn = endedTurn();
       selectedValue = null;
       selectedPawn = null;
       lastEl.textContent = `No move possible for ${values}.${hadMoves ? ' Moves from this turn were undone.' : ''}`;
+      recordHistory(lastEl.textContent);
     }
     if (turnOver(state, current, turn)) {
       if (finished(state, current)) {
@@ -803,7 +891,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     render();
     await wait(DELAY.think);
     if (id !== gameId) return;
-    const { action } = chooseAction(state, current, turn, me.level, me.style, turnStartState, nextRival(current));
+    const { action } = chooseAction(state, current, turn, me.level, me.style, turnStartState, nextRival(current), social);
     if (!action) {
       turn = endedTurn();
       next();
@@ -835,12 +923,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       if (r === 'lost') {
         const who = seated[current].name;
         lastEl.textContent = `${who === 'You' ? 'You' : who} lost the turn: ${lostMessage(t.value, run)}`;
+        recordHistory(lastEl.textContent);
         render();
         await wait(DELAY.read);
-      }
+      } else recordHistory(`${seated[current].name} threw ${t.value}${t.value === 4 || t.value === 8 ? ' and earned another throw' : ''}.`);
     } else if (action.kind === 'skip') {
       turn.owed--;
       thrownEl.textContent = `${seated[current].name === 'You' ? 'You skip' : `${seated[current].name} skips`} the risky throw.`;
+      recordHistory(thrownEl.textContent);
     } else {
       await performMove(action.move);
     }
@@ -896,7 +986,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   hintEl.addEventListener('click', () => {
     if (phase !== 'act' || seated[current].level !== null || historyIndex !== null) return;
-    const { action, reason } = chooseAction(state, current, turn, 'hard', 'balanced', turnStartState, nextRival(current));
+    const { action, reason } = chooseAction(state, current, turn, 'hard', 'balanced', turnStartState, nextRival(current), social);
     hintTextEl.textContent = reason;
     if (action?.kind === 'move') {
       selectedValue = action.move.value;
@@ -909,6 +999,38 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     }
     render();
   });
+
+  playersEl.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-social]');
+    if (!button || phase !== 'act' || historyIndex !== null || seated[current].level !== null) return;
+    const other = Number(button.dataset.player);
+    if (button.dataset.social === 'offer') offerTruce(current, other);
+    else if (button.dataset.social === 'end') {
+      const pact = pactFor(social, current);
+      if (!pact || allyOf(pact, current) !== other) return;
+      endPact(social, pact, current);
+      announceSocial(`${seated[current].name} ended the truce with ${seated[other].name}.`);
+      render();
+    }
+  });
+
+  function answerOffer(accept: boolean) {
+    if (phase !== 'act' || historyIndex !== null || seated[current].level !== null) return;
+    const index = pendingOffers.findIndex((o) => o.to === current && canOffer(social, state, o.from, o.to, activePlayers()) === o.target);
+    if (index < 0) return;
+    const [offer] = pendingOffers.splice(index, 1);
+    if (accept) {
+      makePact(social, offer.from, offer.to, offer.target);
+      pendingOffers = pendingOffers.filter((o) => o.from !== offer.from && o.to !== offer.from && o.from !== offer.to && o.to !== offer.to);
+      announceSocial(`${seated[offer.from].name} and ${seated[offer.to].name} agree to slow ${seated[offer.target].name}.`);
+    } else {
+      declineOffer(social, offer.to, offer.from);
+      announceSocial(`${seated[offer.to].name} declined ${seated[offer.from].name}'s offer.`);
+    }
+    render();
+  }
+  $('social-accept').addEventListener('click', () => answerOffer(true));
+  $('social-decline').addEventListener('click', () => answerOffer(false));
 
   function onPawn(player: number, pawn: number) {
     if (phase !== 'act' || historyIndex !== null || player !== current || selectedValue === null) return;
@@ -927,8 +1049,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   function humanMove(move: Move, tapped?: number) {
     if (phase !== 'act' || historyIndex !== null) return;
     // Waiting pawns are interchangeable; bring in the one that was tapped.
-    if (move.from === WAITING && tapped !== undefined) move = { ...move, pawns: [tapped] };
-    else if (move.from === WAITING && selectedPawn !== null) move = { ...move, pawns: [selectedPawn] };
+    if (move.from === WAITING && state.entry === 'each' && tapped !== undefined) move = { ...move, pawns: [tapped] };
+    else if (move.from === WAITING && state.entry === 'each' && selectedPawn !== null) move = { ...move, pawns: [selectedPawn] };
     selectedPawn = null;
     act({ kind: 'move', move });
   }
@@ -959,9 +1081,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const { state: after, hits } = apply(state, move);
     const firstHit = hits.length > 0 && !state.players[move.player].hasHit;
     state = after;
-    positions.push(state);
     recordSpend(turn, move.value, hits.length > 0);
-    if (move.from === WAITING) lastEl.textContent = `${who.name} brought a pawn in.`;
+    const socialEvents: string[] = [];
+    for (const victim of new Set(hits.map((h) => h.player))) {
+      const outcome = recordHit(social, move.player, victim, relayAllowed(state, social, move.player, victim));
+      if (outcome === 'betrayal') socialEvents.push(`${who.name} broke the truce by hitting ${seated[victim].name}. ${seated[victim].name} will remember.`);
+      if (outcome === 'relay') socialEvents.push(`${seated[victim].name} gave ${who.name} a bonus throw that could reach the leader.`);
+    }
+    if (move.from === WAITING) lastEl.textContent = move.pawns.length === 4 ? `${who.name} brought all four pawns in.` : `${who.name} brought a pawn in.`;
     else if (hits.length) {
       const names = [...new Set(hits.map((h) => seated[h.player].name))].join(' and ');
       const verb = isYou(move.player) ? 'You hit' : `${who.name} hit`;
@@ -970,6 +1097,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       setTimeout(() => document.querySelectorAll('.pawn.knocked').forEach((el) => el.classList.remove('knocked')), 700);
     } else if (move.to === HOME) lastEl.textContent = `${who.name} reached the centre.`;
     else lastEl.textContent = `${who.name} moved ${move.steps}${move.pawns.length === 2 ? ' as a pair' : ''}.`;
+    recordHistory(lastEl.textContent);
+    socialEvents.forEach(announceSocial);
     render();
 
   }
@@ -997,6 +1126,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       statusEl.textContent = 'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '.';
     } else {
       lastEl.textContent = `${who.name} finishes ${ordinal(placings.length)}.`;
+      recordHistory(lastEl.textContent);
     }
     render();
   }
@@ -1006,9 +1136,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   function startGame() {
     const f = new FormData(setupEl);
     seated = buildSeated();
+    social = newSocial(seated.length);
+    pendingOffers = [];
+    socialNoticeEl.textContent = '';
     gameId++;
-    state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
+    state = newGame(SEATS_FOR[seated.length], f.get('entry') as EntryMode);
     positions = [state];
+    historyDescriptions = ['Game started.'];
     historyIndex = null;
     hintedMove = null;
     current = 0;
@@ -1046,9 +1180,18 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     renderSetupRows();
     // Preview the table with the chosen seats.
     const f = new FormData(setupEl);
+    $('entry-hint').textContent = f.get('entry') === 'all'
+      ? 'Spend one 4 or 8 to bring all four pawns in.'
+      : f.get('entry') === 'each'
+        ? 'Spend a 4 or 8 for each pawn you bring in.'
+        : 'All four pawns begin on your home square.';
     seated = buildSeated();
-    state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
+    social = newSocial(seated.length);
+    pendingOffers = [];
+    socialNoticeEl.textContent = '';
+    state = newGame(SEATS_FOR[seated.length], f.get('entry') as EntryMode);
     positions = [state];
+    historyDescriptions = ['Game started.'];
     historyIndex = null;
     hintedMove = null;
     buildPawns();
@@ -1663,6 +1806,28 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-weight: 600;
   }
 
+  .social-offer {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.7rem;
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    font-size: 0.85rem;
+  }
+
+  .social-offer[hidden] { display: none; }
+  .social-offer > div { display: flex; gap: 0.4rem; }
+  .social-offer .btn { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
+
+  .social-notice {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.83rem;
+  }
+  .social-notice:empty { display: none; }
+  .social-notice[hidden], .last[hidden], .history-description[hidden] { display: none; }
+
   .history-controls {
     display: flex;
     align-items: center;
@@ -1711,6 +1876,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     color: var(--muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
+  }
+
+  .history-description {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.45;
   }
 
   .hint-button {
@@ -1775,6 +1947,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   .players :global(.pinfo) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: end;
+    gap: 0.3rem;
     color: var(--muted);
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
@@ -1784,6 +1961,29 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     color: var(--fg);
     font-weight: 600;
   }
+
+  .players :global(.truce-tag),
+  .players :global(.wary-tag) {
+    padding: 0.12rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+    color: var(--fg);
+    white-space: nowrap;
+  }
+
+  .players :global(.wary-tag) { background: var(--surface); color: var(--muted); }
+
+  .players :global(.social-action) {
+    padding: 0.16rem 0.48rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .players :global(.social-action:hover) { border-color: var(--accent); }
 
   /* ---- Full screen ---- */
 

@@ -1,11 +1,13 @@
 ---
 import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
 ---
 
 <Base title="Tic-tac-toe" description="Tic-tac-toe against the computer or a friend.">
   <p class="back"><a href="/play/">← All games</a></p>
   <h1>Tic-tac-toe</h1>
 
+  <div class="game-area" data-zen>
   <div class="controls">
     <label>
       Mode
@@ -16,6 +18,7 @@ import Base from '../../layouts/Base.astro';
       </select>
     </label>
     <button class="btn" type="button" id="reset">New game</button>
+    <ZenToggle />
   </div>
 
   <p id="status" class="status" aria-live="polite"></p>
@@ -26,6 +29,7 @@ import Base from '../../layouts/Base.astro';
         <button type="button" class="cell" data-i={i} aria-label={`Square ${i + 1}`} />
       ))
     }
+  </div>
   </div>
 
   <dl id="stats" class="stats"></dl>
@@ -181,6 +185,14 @@ import Base from '../../layouts/Base.astro';
     width: min(100%, 22rem);
     aspect-ratio: 1;
     touch-action: manipulation;
+  }
+
+  .game-area:global(.zen-on) .board {
+    width: min(100%, calc(100dvh - 11rem), 36rem);
+  }
+
+  .game-area:global(.zen-on) .cell {
+    font-size: min(16vw, 11dvh);
   }
 
   .cell {

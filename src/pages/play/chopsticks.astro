@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
 import Hand from '../../components/Hand.astro';
 
 // Player 1 is the computer (top), player 0 is you (bottom). Index 0 is the
@@ -14,6 +15,7 @@ const sides = [
   <p class="back"><a href="/play/">← All games</a></p>
   <h1>Chopsticks</h1>
 
+  <div class="game-area" data-zen>
   <div class="controls">
     <label>
       Mode
@@ -23,6 +25,7 @@ const sides = [
       </select>
     </label>
     <button class="btn" type="button" id="reset">New game</button>
+    <ZenToggle />
   </div>
 
   <div class="table">
@@ -46,6 +49,7 @@ const sides = [
 
   <p id="status" class="status" aria-live="polite"></p>
   <p id="last" class="muted last"></p>
+  </div>
 
   <dl id="stats" class="stats"></dl>
 
@@ -335,6 +339,20 @@ const sides = [
     gap: 1rem;
     width: min(100%, 26rem);
     margin-top: 1.5rem;
+  }
+
+  .game-area:global(.zen-on) .table {
+    width: min(100%, 34rem);
+    margin-top: 0.5rem;
+  }
+
+  .game-area:global(.zen-on) .table :global(.hand-svg) {
+    max-width: clamp(4.5rem, calc((100dvh - 34rem) / 2.5), 10rem);
+  }
+
+  .game-area:global(.zen-on) .status,
+  .game-area:global(.zen-on) .last {
+    width: min(100%, 34rem);
   }
 
   .side {

@@ -1,0 +1,964 @@
+---
+import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
+
+// DOM order puts the computer's plank first. Along each plank the holes run
+// left to right in landscape (13..7 on top, 0..6 below) and top to bottom
+// when the board stands upright on narrow screens.
+const planks = [
+  { player: 1, holes: [13, 12, 11, 10, 9, 8, 7] },
+  { player: 0, holes: [0, 1, 2, 3, 4, 5, 6] },
+];
+---
+
+<Base title="Ali Guli Mane" description="Ali Guli Mane, the mancala game from Karnataka, on a wooden board with cowrie shells.">
+  <p class="back"><a href="/play/">← All games</a></p>
+  <h1>Ali Guli Mane</h1>
+  <p class="muted intro">ಅಳಿ ಗುಳಿ ಮಣೆ · the seed-sowing game from Karnataka.</p>
+
+  <!-- Cowrie shells, drawn once and reused. -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <defs>
+      <radialGradient id="cowrie-lip" cx="42%" cy="35%" r="75%">
+        <stop offset="0" stop-color="#fffaf0"></stop>
+        <stop offset="0.55" stop-color="#ece2ca"></stop>
+        <stop offset="1" stop-color="#b8a988"></stop>
+      </radialGradient>
+      <radialGradient id="cowrie-dome" cx="38%" cy="30%" r="80%">
+        <stop offset="0" stop-color="#f4f3e8"></stop>
+        <stop offset="0.5" stop-color="#cfd2c0"></stop>
+        <stop offset="1" stop-color="#8f9684"></stop>
+      </radialGradient>
+      <symbol id="cowrie-mouth" viewBox="0 0 24 32">
+        <ellipse cx="12" cy="16" rx="10.6" ry="14.6" fill="url(#cowrie-lip)" stroke="#8d7f63" stroke-width="0.7"></ellipse>
+        <path d="M12.4 3.2C10.3 9 10.1 22.5 11.8 28.8C13.9 22.8 14.2 9.3 12.4 3.2Z" fill="#3a2a1c"></path>
+        <g stroke="#efe5cf" stroke-width="0.9" stroke-linecap="round">
+          <path d="M10.2 7.5h1.4M10 10.5h1.5M9.9 13.5h1.5M9.9 16.5h1.5M10 19.5h1.5M10.2 22.5h1.4M10.6 25.5h1.2"></path>
+          <path d="M13.1 7.5h1.3M13.2 10.5h1.5M13.3 13.5h1.5M13.3 16.5h1.5M13.2 19.5h1.5M13 22.5h1.4M12.8 25.5h1.2"></path>
+        </g>
+        <ellipse cx="8" cy="9" rx="2.2" ry="4" fill="#fff" opacity="0.45"></ellipse>
+      </symbol>
+      <symbol id="cowrie-back" viewBox="0 0 24 32">
+        <ellipse cx="12" cy="16" rx="10.6" ry="14.6" fill="url(#cowrie-dome)" stroke="#7d8472" stroke-width="0.7"></ellipse>
+        <path d="M5 16c2-5 12-5 14 0" fill="none" stroke="#a9ad99" stroke-width="1" opacity="0.7"></path>
+        <ellipse cx="8.5" cy="9.5" rx="3" ry="5" fill="#fff" opacity="0.55"></ellipse>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="game-area" data-zen>
+  <form id="setup" class="setup">
+    <fieldset>
+      <legend>Shells per hole</legend>
+      <div class="chips">
+        {[5, 7, 12].map((n, i) => (
+          <label class="chip"><input type="radio" name="perHole" value={n} checked={i === 0} />{n}</label>
+        ))}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Sowing direction</legend>
+      <div class="chips">
+        <label class="chip"><input type="radio" name="direction" value="1" checked /><svg class="turn flip" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12.6 1.8v3.1H9.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Anticlockwise</label>
+        <label class="chip"><input type="radio" name="direction" value="-1" /><svg class="turn" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12.6 1.8v3.1H9.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Clockwise</label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Four-shell rule</legend>
+      <div class="chips">
+        <label class="chip"><input type="radio" name="fourRule" value="off" checked />Off</label>
+        <label class="chip"><input type="radio" name="fourRule" value="on" />On</label>
+      </div>
+      <p class="hint muted">Any hole that reaches four shells while you sow goes straight to you, on either side of the board.</p>
+    </fieldset>
+    <fieldset>
+      <legend>Opponent</legend>
+      <div class="chips">
+        <label class="chip"><input type="radio" name="level" value="easy" checked />Easy</label>
+        <label class="chip"><input type="radio" name="level" value="hard" />Hard</label>
+        <label class="chip"><input type="radio" name="level" value="pvp" />2 players</label>
+      </div>
+    </fieldset>
+    <div class="setup-actions">
+      <button type="submit" class="btn primary">Start match</button>
+      <ZenToggle />
+    </div>
+  </form>
+
+  <div id="matchbar" class="matchbar" hidden>
+    <span id="summary" class="muted"></span>
+    <label>
+      Speed
+      <select id="speed">
+        <option value="1">Normal</option>
+        <option value="0.35">Fast</option>
+      </select>
+    </label>
+    <button type="button" class="btn" id="newmatch">New match</button>
+    <ZenToggle />
+  </div>
+
+  <p id="round" class="round"></p>
+
+  <div class="table">
+    <div class="tray" data-player="1">
+      <span class="tray-name" data-name="1">Computer</span>
+      <div class="pile"></div>
+      <span class="tray-total">0</span>
+    </div>
+
+    <div class="board-labels" aria-hidden="true"><span data-name="0">You</span><span data-name="1">Computer</span></div>
+    <div class="board">
+      {
+        planks.map(({ player, holes }) => (
+          <div class="plank" data-player={player}>
+            {holes.map((h) => (
+              <button type="button" class="hole" data-hole={h} disabled>
+                <span class="shells" />
+                <span class="n" />
+              </button>
+            ))}
+          </div>
+        ))
+      }
+      <span class="hinge" style="--at: 22%"></span>
+      <span class="hinge" style="--at: 78%"></span>
+    </div>
+
+    <div class="tray" data-player="0">
+      <span class="tray-name" data-name="0">You</span>
+      <div class="pile"></div>
+      <span class="tray-total">0</span>
+    </div>
+  </div>
+
+  <p id="status" class="status" aria-live="polite"></p>
+  <p id="last" class="muted last"></p>
+  <div class="actions">
+    <button type="button" class="btn" id="skip" hidden>Skip ahead</button>
+    <button type="button" class="btn primary" id="next" hidden>Next round</button>
+  </div>
+  </div>
+
+  <dl id="stats" class="stats"></dl>
+
+  <details>
+    <summary>How to play</summary>
+    <p>
+      The board has two rows of seven holes. The row nearest you is yours. Every hole starts with
+      the same number of shells.
+    </p>
+    <p>
+      On your turn, tap one of your holes. All its shells get sown one by one into the following
+      holes, in the direction chosen for the match, skipping the hole they came from. When the last
+      shell lands, the shells in the next hole are picked up and sowing carries on.
+    </p>
+    <p>
+      If the next hole is empty, sowing stops. You capture the hole after the empty one along with
+      the hole facing it. If that hole is empty too, you get nothing. Either way, your turn ends.
+    </p>
+    <p>
+      The round ends when either row runs out of shells. Each player then keeps whatever is left
+      on their own side, and whoever holds more shells wins the round.
+    </p>
+    <p>
+      For the next round, each player refills their holes from their own winnings. A player
+      without enough shells leaves holes empty, and those holes are closed for the round. The
+      match ends when someone can't fill a single hole.
+    </p>
+  </details>
+
+  <p class="muted note">Match results are saved on this device only.</p>
+</Base>
+
+<script>
+  import {
+    canPlayRound,
+    computerMove,
+    finishRound,
+    holesOf,
+    legalMoves,
+    newRound,
+    owner,
+    play,
+    roundOver,
+    type Config,
+    type Event,
+    type Player,
+    type State,
+  } from '../../scripts/aliGuliMane';
+  import { recordResult, renderRecord } from '../../scripts/scores';
+
+  const YOU: Player = 0;
+  const COMPUTER: Player = 1;
+  const MAX_SHELLS_DRAWN = 36;
+  const PILE_SHELLS_DRAWN = 48;
+  const DELAY = { pick: 420, drop: 230, four: 650, capture: 900, miss: 700, think: 700 };
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const setupEl = $<HTMLFormElement>('setup');
+  const matchbarEl = $('matchbar');
+  const summaryEl = $('summary');
+  const speedEl = $<HTMLSelectElement>('speed');
+  const roundEl = $('round');
+  const statusEl = $('status');
+  const lastEl = $('last');
+  const skipEl = $<HTMLButtonElement>('skip');
+  const nextEl = $<HTMLButtonElement>('next');
+  const statsEl = $('stats');
+  const holeEls = new Map(
+    [...document.querySelectorAll<HTMLButtonElement>('.hole')].map((el) => [Number(el.dataset.hole), el]),
+  );
+  const trayEls = [0, 1].map((p) => document.querySelector<HTMLElement>(`.tray[data-player="${p}"]`)!);
+
+  let cfg: Config = { perHole: 5, direction: 1, fourRule: false };
+  let level: 'easy' | 'hard' | 'pvp' = 'easy';
+  let current: Player = YOU; // whose turn it is when a person is to move
+  let state: State = newRound(5);
+  let shown: State = state; // what the board currently shows, which lags during animation
+  let phase: 'setup' | 'human' | 'busy' | 'round-over' | 'match-over' = 'setup';
+  let round = 1;
+  let skipping = false;
+  let gameId = 0;
+  let active: number | null = null;
+  let freshHole: number | null = null;
+
+  // Stable pseudo-random numbers, so a hole's shells don't jump around on every redraw.
+  const noise = (a: number, b: number) => {
+    const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  const shellSvg = (seedA: number, seedB: number, style: string, extra = '') =>
+    `<svg class="shell${extra}" style="${style}" viewBox="0 0 24 32"><use href="#${
+      noise(seedA, seedB + 0.5) < 0.55 ? 'cowrie-mouth' : 'cowrie-back'
+    }"/></svg>`;
+
+  const drawHole = (h: number, n: number, fresh: boolean) => {
+    const shown = Math.min(n, MAX_SHELLS_DRAWN);
+    const width = Math.max(14, Math.min(34, 62 / Math.sqrt(Math.max(shown, 1))));
+    const reach = shown <= 1 ? 0 : 30;
+    let html = '';
+    for (let k = 0; k < shown; k++) {
+      const r = reach * Math.sqrt((k + 0.5) / shown);
+      const a = k * 2.39996 + h;
+      const x = 50 + r * Math.cos(a);
+      const y = 50 + r * Math.sin(a);
+      const rot = Math.floor(noise(h, k) * 360);
+      html += shellSvg(h, k, `left:${x}%;top:${y}%;width:${width}%;--r:${rot}deg`, fresh && k === shown - 1 ? ' fresh' : '');
+    }
+    return html;
+  };
+
+  const drawPile = (p: number, n: number) => {
+    const count = Math.min(n, PILE_SHELLS_DRAWN);
+    let html = '';
+    for (let k = 0; k < count; k++) {
+      const x = 5 + noise(p + 20, k) * 90;
+      const y = 32 + noise(p + 40, k) * 36;
+      const rot = Math.floor(noise(p + 60, k) * 360);
+      html += shellSvg(p + 80, k, `left:${x}%;top:${y}%;--r:${rot}deg`);
+    }
+    return html;
+  };
+
+  const render = () => {
+    const mine = phase === 'human' ? new Set(legalMoves(shown, current)) : new Set<number>();
+    holeEls.forEach((el, h) => {
+      const n = shown.pits[h];
+      el.querySelector('.shells')!.innerHTML = shown.closed[h] ? '' : drawHole(h, n, freshHole === h);
+      el.querySelector('.n')!.textContent = shown.closed[h] ? '' : String(n);
+      el.classList.toggle('closed', shown.closed[h]);
+      el.classList.toggle('active', active === h);
+      el.classList.toggle('playable', mine.has(h));
+      el.disabled = !mine.has(h);
+      const whose = possessive(owner(h));
+      const pos = holesOf(owner(h)).indexOf(h) + 1;
+      el.setAttribute(
+        'aria-label',
+        shown.closed[h] ? `${whose} hole ${pos}, closed` : `${whose} hole ${pos}: ${n} shell${n === 1 ? '' : 's'}`,
+      );
+    });
+    trayEls.forEach((el, p) => {
+      el.querySelector('.pile')!.innerHTML = drawPile(p, shown.captured[p]);
+      el.querySelector('.tray-total')!.textContent = String(shown.captured[p]);
+    });
+    document.querySelectorAll<HTMLElement>('.plank').forEach((el) => {
+      el.classList.toggle('to-move', phase === 'human' && Number(el.dataset.player) === current);
+    });
+    renderRecord(statsEl, pvp() ? null : `ali-guli-mane-${level}`);
+  };
+
+  const wait = (ms: number) =>
+    skipping ? Promise.resolve() : new Promise<void>((r) => setTimeout(r, ms * Number(speedEl.value)));
+
+  const pvp = () => level === 'pvp';
+  const who = (p: Player) => (pvp() ? ['Player 1', 'Player 2'] : ['You', 'Computer'])[p];
+  const possessive = (p: Player) => (pvp() ? `${who(p)}'s` : p === YOU ? 'Your' : "Computer's");
+  const ai = () => computerMove(state, COMPUTER, cfg, level === 'hard' ? 'hard' : 'easy');
+
+  // Replays a move's events on the board, one shell at a time.
+  async function animate(events: Event[], player: Player, id: number) {
+    let hand = 0;
+    const board = { pits: [...shown.pits], closed: shown.closed, captured: [...shown.captured] as [number, number] };
+    for (const ev of events) {
+      if (id !== gameId) return;
+      freshHole = null;
+      if (ev.type === 'pick') {
+        hand = ev.count;
+        board.pits[ev.hole] = 0;
+        active = ev.hole;
+        statusEl.textContent = `${who(player)} picked up ${ev.count}.`;
+      } else if (ev.type === 'drop') {
+        board.pits[ev.hole]++;
+        hand--;
+        active = ev.hole;
+        freshHole = ev.hole;
+        statusEl.textContent = hand ? `Sowing… ${hand} in hand.` : 'Sowing…';
+      } else if (ev.type === 'four') {
+        board.pits[ev.hole] = 0;
+        board.captured[ev.player] += 4;
+        lastEl.textContent =
+          !pvp() && ev.player === YOU ? 'You take a hole of four.' : `${pvp() ? who(ev.player) : 'The computer'} takes a hole of four.`;
+        flash(ev.hole, 'taken');
+      } else if (ev.type === 'capture') {
+        ev.holes.forEach((h) => {
+          board.pits[h] = 0;
+          flash(h, 'taken');
+        });
+        board.captured[ev.player] += ev.count;
+        lastEl.textContent = `${who(player)} captured ${ev.count}.`;
+        active = null;
+      } else {
+        lastEl.textContent = `${who(player)} found an empty hole. No capture.`;
+        active = null;
+      }
+      shown = board;
+      render();
+      await wait(DELAY[ev.type]);
+    }
+    active = null;
+    freshHole = null;
+  }
+
+  const flash = (h: number, cls: string) => {
+    const el = holeEls.get(h)!;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+  };
+
+  async function turn(player: Player, hole: number) {
+    const id = gameId;
+    phase = 'busy';
+    skipping = false;
+    skipEl.hidden = false;
+    const events: Event[] = [];
+    const next = play(state, player, hole, cfg, events);
+    await animate(events, player, id);
+    if (id !== gameId) return;
+    state = next;
+    shown = next;
+    skipEl.hidden = true;
+
+    if (roundOver(state)) return endRound();
+    const nextPlayer = (1 - player) as Player;
+    if (pvp() || nextPlayer === YOU) return humanTurn(nextPlayer);
+    statusEl.textContent = 'Computer is thinking…';
+    render();
+    await wait(DELAY.think);
+    if (id !== gameId) return;
+    turn(COMPUTER, ai());
+  }
+
+  const humanTurn = (p: Player) => {
+    phase = 'human';
+    current = p;
+    statusEl.textContent = pvp() ? `${who(p)}'s turn. Tap one of your holes.` : 'Your turn. Tap one of your holes.';
+    render();
+  };
+
+  const endRound = () => {
+    const totals = finishRound(state);
+    shown = { pits: Array(14).fill(0), closed: state.closed, captured: totals };
+    const [you, cpu] = totals;
+    const winner: Player = you > cpu ? 0 : 1;
+    const result =
+      you === cpu
+        ? 'The round is tied'
+        : pvp()
+          ? `${who(winner)} wins the round`
+          : winner === YOU
+            ? 'You win the round'
+            : 'The computer wins the round';
+    lastEl.textContent = `Shells left in each row go to that row's owner.`;
+
+    if (!canPlayRound(cfg.perHole, cpu) || !canPlayRound(cfg.perHole, you)) {
+      phase = 'match-over';
+      const youWon = canPlayRound(cfg.perHole, you);
+      const verdict = pvp()
+        ? `${who(youWon ? 0 : 1)} wins the match!`
+        : youWon
+          ? 'You win the match!'
+          : 'The computer wins the match.';
+      statusEl.textContent = `${result}, ${you} to ${cpu}. ${verdict}`;
+      if (!pvp()) recordResult(`ali-guli-mane-${level}`, youWon ? 'win' : 'loss');
+      nextEl.hidden = false;
+      nextEl.textContent = 'Play again';
+    } else {
+      phase = 'round-over';
+      statusEl.textContent = `${result}, ${you} to ${cpu}.`;
+      nextEl.hidden = false;
+      nextEl.textContent = 'Next round';
+    }
+    render();
+  };
+
+  const startRound = (totals?: [number, number]) => {
+    gameId++;
+    state = newRound(cfg.perHole, totals);
+    shown = state;
+    roundEl.textContent = `Round ${round}`;
+    nextEl.hidden = true;
+    skipEl.hidden = true;
+    const closed = (p: Player) => holesOf(p).filter((h) => state.closed[h]).length;
+    const notes = [];
+    const whoseHoles = (p: Player) => (pvp() ? `${who(p)}'s` : p === YOU ? 'your' : "the computer's");
+    for (const p of [YOU, COMPUTER]) {
+      const n = closed(p);
+      if (n) notes.push(`${n} of ${whoseHoles(p)} holes ${n === 1 ? 'is' : 'are'} closed`);
+    }
+    lastEl.textContent = notes.length ? `${notes.join(', ')} this round.` : '';
+    // Players take turns going first.
+    if (round % 2 === 1) humanTurn(0);
+    else if (pvp()) humanTurn(1);
+    else {
+      phase = 'busy';
+      statusEl.textContent = 'The computer goes first this round.';
+      render();
+      const id = gameId;
+      setTimeout(() => id === gameId && turn(COMPUTER, ai()), DELAY.think * 1.5);
+    }
+  };
+
+  const readSetup = () => {
+    const f = new FormData(setupEl);
+    cfg = {
+      perHole: Number(f.get('perHole')),
+      direction: Number(f.get('direction')) as 1 | -1,
+      fourRule: f.get('fourRule') === 'on',
+    };
+    level = f.get('level') as typeof level;
+    document.querySelectorAll<HTMLElement>('[data-name]').forEach((el) => {
+      el.textContent = who(Number(el.dataset.name) as Player);
+    });
+  };
+
+  const showSetup = () => {
+    gameId++;
+    phase = 'setup';
+    setupEl.hidden = false;
+    matchbarEl.hidden = true;
+    nextEl.hidden = true;
+    skipEl.hidden = true;
+    roundEl.textContent = '';
+    statusEl.textContent = '';
+    lastEl.textContent = '';
+    readSetup();
+    state = newRound(cfg.perHole);
+    shown = state;
+    render();
+  };
+
+  setupEl.addEventListener('change', () => {
+    readSetup();
+    state = newRound(cfg.perHole);
+    shown = state;
+    render();
+  });
+
+  setupEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    readSetup();
+    setupEl.hidden = true;
+    matchbarEl.hidden = false;
+    summaryEl.textContent = [
+      `${cfg.perHole} per hole`,
+      cfg.direction === 1 ? 'anticlockwise' : 'clockwise',
+      cfg.fourRule ? 'four-shell rule on' : 'four-shell rule off',
+      { easy: 'Easy', hard: 'Hard', pvp: '2 players' }[level],
+    ].join(' · ');
+    round = 1;
+    startRound();
+  });
+
+  holeEls.forEach((el, h) =>
+    el.addEventListener('click', () => {
+      if (phase === 'human' && legalMoves(state, current).includes(h)) turn(current, h);
+    }),
+  );
+
+  skipEl.addEventListener('click', () => (skipping = true));
+  nextEl.addEventListener('click', () => {
+    if (phase === 'match-over') return showSetup();
+    round++;
+    startRound(shown.captured);
+  });
+  $('newmatch').addEventListener('click', showSetup);
+
+  showSetup();
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  h1 {
+    margin-bottom: 0.25rem;
+  }
+
+  .intro {
+    margin-top: 0;
+  }
+
+  .sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  .setup {
+    display: grid;
+    gap: 0.9rem;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  legend {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .chip {
+    position: relative;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .turn {
+    width: 1em;
+    height: 1em;
+    margin-right: 0.35em;
+    vertical-align: -0.15em;
+  }
+
+  .turn.flip {
+    scale: -1 1;
+  }
+
+  .chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chip:has(input:checked) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    font-weight: 600;
+  }
+
+  .chip:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.85rem;
+  }
+
+  .setup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .game-area:global(.zen-on) > * {
+    width: min(100%, 64rem);
+  }
+
+  .game-area:global(.zen-on) {
+    gap: 0.4rem;
+  }
+
+  .game-area:global(.zen-on) .setup,
+  .game-area:global(.zen-on) .matchbar,
+  .game-area:global(.zen-on) .round,
+  .game-area:global(.zen-on) .status {
+    margin-top: 0;
+  }
+
+  /* Full screen keeps only what's needed to play. */
+  .game-area:global(.zen-on) #summary {
+    display: none;
+  }
+
+  .game-area:global(.zen-on) .pile {
+    height: 2rem;
+  }
+
+  .game-area:global(.zen-on) .actions:not(:has(button:not([hidden]))) {
+    display: none;
+  }
+
+  .game-area:global(.zen-on) .table {
+    width: min(100%, calc((100dvh - 14rem) * 3.2));
+    justify-self: center;
+    margin-inline: auto;
+  }
+
+  .btn.primary {
+    justify-self: start;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .matchbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    margin: 1.25rem 0 0;
+    font-size: 0.9rem;
+  }
+
+  .setup[hidden],
+  .matchbar[hidden] {
+    display: none;
+  }
+
+  select {
+    font: inherit;
+    margin-left: 0.3rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  .round {
+    margin: 1rem 0 0;
+    font-weight: 600;
+    min-height: 1.6em;
+  }
+
+  /* ---- Table, board, and shells ---- */
+
+  .table {
+    --grain-h: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.09' numOctaves='4' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.16 0 0 0 0 0.07 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    --grain-v: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='520'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.09 0.0035' numOctaves='4' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.16 0 0 0 0 0.07 1.6 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    --wood: linear-gradient(180deg, #d3a273 0%, #c08a5b 45%, #aa7547 100%);
+    --grain: var(--grain-h);
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .board {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.35)) drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+  }
+
+  .plank {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: clamp(0.3rem, 1.4vw, 0.7rem);
+    padding: clamp(0.5rem, 2vw, 0.9rem) clamp(0.8rem, 3vw, 1.4rem);
+    background: var(--grain), var(--wood);
+    background-size: cover;
+    clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
+    box-shadow:
+      inset 0 2px 0 rgb(255 240 220 / 0.35),
+      inset 0 -4px 8px rgb(60 30 10 / 0.35);
+  }
+
+  .plank[data-player='1'] {
+    --wood: linear-gradient(180deg, #c9965f 0%, #b88150 50%, #9f6a3e 100%);
+  }
+
+  /* The plank whose owner is to move gets a warm edge glow. */
+  .plank:global(.to-move) {
+    box-shadow:
+      inset 0 0 0 3px rgb(255 228 170 / 0.75),
+      inset 0 0 18px rgb(255 214 140 / 0.45),
+      inset 0 -4px 8px rgb(60 30 10 / 0.35);
+  }
+
+  .board-labels {
+    display: none;
+  }
+
+  .hinge {
+    position: absolute;
+    left: var(--at);
+    top: 50%;
+    width: 30px;
+    height: 12px;
+    translate: -50% -50%;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #eceff1, #9aa3aa 45%, #cfd5d9 55%, #7d868d);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+  }
+
+  .hole {
+    position: relative;
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 38%, #7c4c2c 0%, #8d5a35 48%, #a26d44 78%, #b27b4f 100%);
+    box-shadow:
+      inset 0 9px 14px rgb(45 20 5 / 0.6),
+      inset 0 -3px 5px rgb(255 225 190 / 0.25),
+      0 1px 0 rgb(255 235 210 / 0.35);
+    transition: box-shadow 0.15s ease;
+  }
+
+  .hole:disabled {
+    cursor: default;
+  }
+
+  .hole.playable:hover,
+  .hole.playable:focus-visible {
+    outline: none;
+    box-shadow:
+      inset 0 9px 14px rgb(45 20 5 / 0.6),
+      inset 0 -3px 5px rgb(255 225 190 / 0.25),
+      0 0 0 3px rgb(255 236 190 / 0.9);
+  }
+
+  .hole.active {
+    box-shadow:
+      inset 0 9px 14px rgb(45 20 5 / 0.6),
+      0 0 0 3px var(--accent),
+      0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+
+  /* A closed hole is plugged flush with the plank. */
+  .hole.closed {
+    background: radial-gradient(circle, transparent 58%, rgb(70 35 12 / 0.45) 61%, transparent 66%), var(--grain), var(--wood);
+    background-size: cover;
+    box-shadow: inset 0 1px 2px rgb(60 30 10 / 0.35);
+    opacity: 0.85;
+  }
+
+  .hole.taken {
+    animation: taken 0.6s ease;
+  }
+
+  @keyframes taken {
+    30% {
+      box-shadow:
+        inset 0 9px 14px rgb(45 20 5 / 0.6),
+        0 0 0 4px #f4d06f,
+        0 0 20px #f4d06f;
+    }
+  }
+
+  .shells {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .shells :global(.shell),
+  .pile :global(.shell) {
+    position: absolute;
+    aspect-ratio: 24 / 32;
+    height: auto;
+    translate: -50% -50%;
+    rotate: var(--r);
+    filter: drop-shadow(0 1.5px 1px rgb(40 20 5 / 0.55));
+  }
+
+  .shells :global(.shell.fresh) {
+    animation: drop-in 0.22s ease-out;
+  }
+
+  @keyframes drop-in {
+    from {
+      scale: 1.5;
+      opacity: 0;
+    }
+  }
+
+  .n {
+    position: absolute;
+    right: -2%;
+    bottom: -2%;
+    min-width: 1.4rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: rgb(40 22 10 / 0.8);
+    color: #f7ecd9;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .n:empty {
+    display: none;
+  }
+
+  .tray {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr 2.5rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .tray-name {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .pile {
+    position: relative;
+    height: 2.6rem;
+    border-radius: 999px;
+    background: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.04));
+  }
+
+  .pile :global(.shell) {
+    width: 1rem;
+  }
+
+  .tray-total {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* Narrow screens: stand the board upright so the holes stay big. */
+  @media (max-width: 40rem) {
+    .table {
+      --grain: var(--grain-v);
+      --wood: linear-gradient(90deg, #d3a273 0%, #c08a5b 45%, #aa7547 100%);
+    }
+
+    .plank[data-player='1'] {
+      --wood: linear-gradient(90deg, #c9965f 0%, #b88150 50%, #9f6a3e 100%);
+    }
+
+    .board,
+    .board-labels {
+      grid-template-columns: 1fr 1fr;
+      width: min(100%, 12rem);
+      margin-inline: auto;
+    }
+
+    .board-labels {
+      display: grid;
+      gap: 6px;
+      margin-bottom: -0.4rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* You on the left, the computer on the right, as if turned a quarter clockwise. */
+    .plank[data-player='0'] {
+      order: -1;
+    }
+
+    .plank {
+      grid-template-columns: 1fr;
+      grid-auto-rows: auto;
+      padding: 1rem 0.7rem;
+    }
+
+    .hinge {
+      left: 50%;
+      top: var(--at);
+      width: 12px;
+      height: 30px;
+    }
+
+    .tray {
+      grid-template-columns: 4.5rem 1fr 2.2rem;
+    }
+
+    .game-area:global(.zen-on) .table {
+      width: 100%;
+    }
+
+    .game-area:global(.zen-on) .board,
+    .game-area:global(.zen-on) .board-labels {
+      width: clamp(9rem, calc((100dvh - 14rem) / 3.5), 90vw);
+    }
+  }
+
+  .status {
+    min-height: 1.6em;
+    margin: 1rem 0 0.25rem;
+    font-weight: 600;
+  }
+
+  .last {
+    min-height: 1.6em;
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+    min-height: 2.2rem;
+    margin-top: 0.5rem;
+  }
+
+  details {
+    margin-top: 2rem;
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+</style>

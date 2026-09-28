@@ -14,4 +14,9 @@ export const games = [
     name: 'Wordling',
     blurb: 'Guess the five-letter word in six tries, as many rounds as you like.',
   },
+  {
+    slug: 'ali-guli-mane',
+    name: 'Ali Guli Mane',
+    blurb: 'The seed-sowing game from Karnataka, on a wooden board with cowrie shells. Play the computer or a friend.',
+  },
 ];

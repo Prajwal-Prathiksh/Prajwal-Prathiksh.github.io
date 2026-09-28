@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
 
 const ROWS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
 ---
@@ -8,6 +9,7 @@ const ROWS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
   <p class="back"><a href="/play/">← All games</a></p>
   <h1>Wordling</h1>
 
+  <div class="game-area" data-zen>
   <div class="controls">
     <label>
       Mode
@@ -17,6 +19,7 @@ const ROWS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
       </select>
     </label>
     <button class="btn" type="button" id="reset">New word</button>
+    <ZenToggle />
   </div>
 
   <div class="game">
@@ -51,6 +54,7 @@ const ROWS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
         ))
       }
     </div>
+  </div>
   </div>
 
   <dl id="stats" class="stats"></dl>
@@ -281,6 +285,19 @@ const ROWS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
     gap: 1.25rem;
     width: min(100%, 30rem);
     margin-top: 1.5rem;
+  }
+
+  .game-area:global(.zen-on) .game {
+    width: min(100%, 32rem);
+    margin-top: 0.5rem;
+  }
+
+  .game-area:global(.zen-on) .board {
+    width: min(100%, calc((100dvh - 20rem) * 5 / 6), 24rem);
+  }
+
+  .game-area:global(.zen-on) .key {
+    height: clamp(2.8rem, 7dvh, 4rem);
   }
 
   .toast {

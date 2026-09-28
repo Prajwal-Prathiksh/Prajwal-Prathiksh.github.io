@@ -1,0 +1,21 @@
+---
+// Full-screen ("zen") mode for a game. Place inside the element marked
+// data-zen; that element is what fills the screen.
+---
+
+<button type="button" class="btn zen-open" data-zen-open aria-label="Full screen">
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+  Full screen
+</button>
+<button type="button" class="zen-exit" data-zen-exit aria-label="Exit full screen">
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+  </svg>
+</button>
+
+<script>
+  import { setupZen } from '../scripts/zen';
+  setupZen();
+</script>

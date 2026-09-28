@@ -111,6 +111,68 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* Zen mode: a game's [data-zen] area covers the screen. See src/scripts/zen.ts. */
+.zen-open svg,
+.zen-exit svg {
+  width: 1em;
+  height: 1em;
+}
+
+.zen-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.zen-exit {
+  display: none;
+}
+
+html.zen,
+html.zen body {
+  overflow: hidden;
+}
+
+[data-zen].zen-on {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: max(3.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.zen-on .zen-open {
+  display: none;
+}
+
+.zen-on .zen-exit {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  z-index: 51;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 1rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

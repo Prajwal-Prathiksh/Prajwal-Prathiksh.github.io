@@ -80,7 +80,20 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         <p class="hint muted">Waiting pawns come in only on a thrown 4 or 8. Or start all four in play.</p>
       </fieldset>
       <fieldset id="levels-set">
-        <legend>Computer players' levels</legend>
+        <legend>
+          Computer players
+          <button type="button" id="style-help-toggle" class="style-help-toggle" aria-label="What do computer styles mean?" aria-controls="style-help-box" aria-expanded="false" title="What do computer styles mean?">?</button>
+        </legend>
+        <div id="style-help-box" class="style-help-box" hidden>
+          <p>Easy or Hard sets how carefully the computer chooses. Style changes what it favours.</p>
+          <ul>
+            <li><strong>Balanced</strong> weighs a useful hit against a safer route home.</li>
+            <li><strong>Aggressive</strong> may take a hit instead of the shorter route to the centre.</li>
+            <li><strong>Cautious</strong> often stops on a crossed safe square to avoid being hit.</li>
+            <li><strong>Builder</strong> looks for pairs that can slow pawns coming behind.</li>
+            <li><strong>Racer</strong> pushes toward the centre, even when a hit is available.</li>
+          </ul>
+        </div>
         <div id="opponent-rows" class="opponent-rows"></div>
       </fieldset>
       <fieldset id="debug-row" hidden>
@@ -171,6 +184,20 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
       <div class="side">
         <p id="status" class="status" aria-live="polite"></p>
+        <div id="history-controls" class="history-controls" hidden>
+          <button type="button" id="history-back" class="icon-btn" aria-label="Previous board position" title="Previous position">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6M5 12h15" /></svg>
+          </button>
+          <span id="history-position" class="history-position" aria-live="polite"></span>
+          <button type="button" id="history-forward" class="icon-btn" aria-label="Next board position" title="Next position" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6 6 6-6 6M19 12H4" /></svg>
+          </button>
+          <button type="button" id="history-current" class="icon-btn" aria-label="Return to current board" title="Current board" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 6 6 6-6 6M18 12H4M19 5v14" /></svg>
+          </button>
+        </div>
+        <button type="button" id="hint-button" class="btn hint-button" hidden>Hint</button>
+        <p id="hint-text" class="hint-text muted" aria-live="polite"></p>
         <p id="last" class="muted last"></p>
         <ol id="players" class="players"></ol>
       </div>
@@ -209,11 +236,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       On the outer ring your own pawns can share only the safe squares. In the inner ring, two of
       your pawns may sit together on a square, and an opponent landing there knocks out just one.
       Two pawns meeting on your first inner square, the one just inside your last outer square,
-      become a pair, circled in chalk. On that square you choose: move one alone, which splits
-      them, or move them together. Once they leave together they stay a pair for good and always
-      move together, at half the throw (2, 4 and 8 move a pair 1, 2 and 4 squares). A single pawn
-      can't jump an opponent's pair: it has to land exactly on the pair's square first, where it
-      is safe from them, then carry on. Only a pair can hit a pair; a pair landing on lone pawns
+      can become a pair. Their dotted chalk circle means they are still vulnerable singles.
+      Move one alone to split them, or move them together to commit the pair and make the circle
+      solid. A committed pair always moves together at half the throw (2, 4 and 8 move it 1, 2
+      and 4 squares). An opponent's single must land exactly on the committed pair's square
+      before moving past it. Your own singles can land there or move past freely. Only a pair
+      can hit a pair; a pair landing on lone pawns
       just shares the square with them. First to bring all four pawns
       to the centre wins. In the rare case that nobody can move at all, the game is a draw.
     </p>
@@ -228,10 +256,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     WAITING,
     apply,
     canSkip,
-    computerAction,
     finished,
     frozen,
     isPaired,
+    isPotentialPair,
     legalMoves,
     newGame,
     newTurn,
@@ -250,14 +278,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     type Seat,
     type State,
   } from '../../scripts/chowkaBhara';
+  import { chooseAction, type Level, type Style } from '../../scripts/chowkaBharaAI';
   import { recordResult, renderRecord } from '../../scripts/scores';
 
-  type Level = 'easy' | 'hard';
   interface Seated {
     name: string;
     colour: string;
     colourName: string;
     level: Level | null; // null for you
+    style: Style;
   }
 
   const COLOURS = [
@@ -266,6 +295,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     { id: 'green', name: 'Green' },
     { id: 'blue', name: 'Blue' },
   ];
+  const STYLES: { id: Style; name: string }[] = [
+    { id: 'balanced', name: 'Balanced' },
+    { id: 'aggressive', name: 'Aggressive' },
+    { id: 'cautious', name: 'Cautious' },
+    { id: 'builder', name: 'Builder' },
+    { id: 'racer', name: 'Racer' },
+  ];
   const SEATS_FOR: Record<number, Seat[]> = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
   const DELAY = { shake: 650, step: 170, think: 650, between: 550, read: 900 };
   const RECORD_KEY = 'chowka-bhara';
@@ -273,6 +309,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const setupEl = $<HTMLFormElement>('setup');
   const rowsEl = $('opponent-rows');
+  const styleHelpToggleEl = $<HTMLButtonElement>('style-help-toggle');
+  const styleHelpBoxEl = $('style-help-box');
   const matchbarEl = $('matchbar');
   const speedEl = $<HTMLSelectElement>('speed');
   const pawnsEl = $('pawns');
@@ -289,6 +327,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const bankEl = $('bank');
   const choicesEl = $('choices');
   const statusEl = $('status');
+  const hintEl = $<HTMLButtonElement>('hint-button');
+  const hintTextEl = $('hint-text');
+  const historyEl = $('history-controls');
+  const historyBackEl = $<HTMLButtonElement>('history-back');
+  const historyForwardEl = $<HTMLButtonElement>('history-forward');
+  const historyCurrentEl = $<HTMLButtonElement>('history-current');
+  const historyPositionEl = $('history-position');
   const lastEl = $('last');
   const playersEl = $('players');
   const statsEl = $('stats');
@@ -301,8 +346,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let current = 0;
   let turn: Turn = newTurn();
   let turnStartState: State = state;
+  let positions: State[] = [state];
+  let historyIndex: number | null = null;
   let selectedValue: number | null = null;
   let selectedPawn: number | null = null;
+  let hintedMove: Move | null = null;
   let phase: 'setup' | 'act' | 'pick' | 'busy' | 'over' = 'setup';
   let placings: number[] = []; // players in the order they finished
   let watching = false; // after you win, the computers can play on for the other places
@@ -318,6 +366,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   const readLevels = () =>
     [...rowsEl.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value as Level);
+  const readStyles = () =>
+    [...rowsEl.querySelectorAll<HTMLSelectElement>('select[name^="style-"]')].map((s) => s.value as Style);
 
   let humanColours: string[] = ['red'];
 
@@ -338,6 +388,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   const renderSetupRows = () => {
     const previous = readLevels();
+    const previousStyles = readStyles();
     let { humans, computers } = setupCounts();
 
     // Keep the total between two and four players.
@@ -382,6 +433,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         (c, i) => `<div class="opponent-row">
           <span class="who">${pawnIcon(c.id)}${c.name}</span>
           <div class="chips">${chips(`level-${i}`, [['easy', 'Easy'], ['hard', 'Hard']], previous[i] ?? 'easy', true)}</div>
+          <label class="style-choice">Style <select name="style-${i}">${STYLES.map((style) => `<option value="${style.id}"${style.id === (previousStyles[i] ?? (['aggressive', 'cautious', 'builder'][i] ?? 'balanced')) ? ' selected' : ''}>${style.name}</option>`).join('')}</select></label>
         </div>`,
       )
       .join('');
@@ -391,16 +443,18 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const buildSeated = (): Seated[] => {
     const { humans, computers } = setupCounts();
     const levels = readLevels();
+    const styles = readStyles();
     const byId = (id: string) => COLOURS.find((c) => c.id === id)!;
     const people = humanColours.slice(0, humans).map((id, i) => ({
       name: humans === 1 ? 'You' : `Player ${i + 1}`,
       colour: id,
       colourName: byId(id).name,
       level: null,
+      style: 'balanced' as Style,
     }));
     const others = COLOURS.filter((c) => !humanColours.includes(c.id))
       .slice(0, computers)
-      .map((c, i) => ({ name: c.name, colour: c.id, colourName: c.name, level: levels[i] ?? ('easy' as Level) }));
+      .map((c, i) => ({ name: c.name, colour: c.id, colourName: c.name, level: levels[i] ?? ('easy' as Level), style: styles[i] ?? 'balanced' }));
     return [...people, ...others];
   };
 
@@ -453,7 +507,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const [x, y] = centreOf([r, c]);
       const paired = keys.filter((k) => {
         const [i, j] = k.split('-').map(Number);
-        return isPaired(s, i, j);
+        return isPaired(s, i, j) || isPotentialPair(s, i, j);
       });
       if (paired.length === 2) {
         const rest = keys.filter((k) => !paired.includes(k));
@@ -507,11 +561,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     );
 
   function render() {
-    const spots = layout(state);
-    const human = phase === 'act' && seated[current]?.level === null;
+    const reviewing = historyIndex !== null;
+    const viewState = historyIndex === null ? state : positions[historyIndex];
+    const spots = layout(viewState);
+    const human = phase === 'act' && seated[current]?.level === null && !reviewing;
     const movable = new Set<number>();
     if (human && selectedValue !== null) {
-      state.players[current].pawns.forEach((_, j) => {
+      viewState.players[current].pawns.forEach((_, j) => {
         if (movesFor(current, j, selectedValue!).length) movable.add(j);
       });
     }
@@ -520,7 +576,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         const [x, y] = hopping.get(`${i}-${j}`) ?? spots.get(`${i}-${j}`)!;
         el.style.left = `${(x / 7) * 100}%`;
         el.style.top = `${(y / 7) * 100}%`;
-        const pos = state.players[i].pawns[j];
+        const pos = viewState.players[i].pawns[j];
         el.classList.toggle('home', pos === HOME);
         el.classList.toggle('movable', i === current && movable.has(j));
         el.classList.toggle('picked', i === current && selectedPawn === j && human);
@@ -530,13 +586,17 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       }),
     );
 
-    // A chalk loop round each pair.
-    pairsEl.innerHTML = state.players
+    // A dotted loop marks a possible pair; it becomes solid once they move together.
+    pairsEl.innerHTML = viewState.players
       .flatMap((p, i) =>
         p.partner
-          .map((b, a) => (b > a && !hopping.size ? spots.get(`${i}-${a}`) : null))
-          .filter((pt): pt is [number, number] => !!pt)
-          .map(([x, y]) => `<ellipse cx="${(x + 0.12) * 100}" cy="${y * 100}" rx="44" ry="29"/>`),
+          .map((b, a) => {
+            if (b <= a || hopping.size) return '';
+            const pt = spots.get(`${i}-${a}`);
+            if (!pt) return '';
+            const [x, y] = pt;
+            return `<ellipse class="${isPotentialPair(viewState, i, a) ? 'potential' : ''}" cx="${(x + 0.12) * 100}" cy="${y * 100}" rx="44" ry="29"/>`;
+          }),
       )
       .join('');
 
@@ -547,7 +607,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const options = movesFor(current, selectedPawn, selectedValue);
       const single = options.find((m) => m.pawns.length === 1);
       const pair = options.find((m) => m.pawns.length === 2);
-      const shown = single ?? pair;
+      const shown = options.find((m) => hintedMove && sameMove(m, hintedMove)) ?? single ?? pair;
       if (shown) {
         const seat = state.players[current].seat;
         const [x, y] = shown.to === HOME ? [3.5, 3.5] : centreOf(square(seat, shown.to));
@@ -580,17 +640,27 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       chip.addEventListener('click', () => {
         selectedValue = v;
         selectedPawn = null;
+        hintedMove = null;
         render();
       });
       bankEl.append(chip);
     });
 
+    const canReview = phase === 'act' && seated[current]?.level === null && positions.length > 1;
+    historyEl.hidden = !canReview;
+    historyBackEl.disabled = reviewing && historyIndex === 0;
+    historyForwardEl.hidden = !reviewing;
+    historyCurrentEl.hidden = !reviewing;
+    historyPositionEl.textContent = reviewing ? `Move ${historyIndex} / ${positions.length - 1}` : '';
+    hintEl.hidden = !human;
+    hintTextEl.hidden = reviewing || !hintTextEl.textContent;
+
     playersEl.innerHTML = seated
       .map((p, i) => {
-        const pl = state.players[i];
-        const tag = p.level ? (p.level === 'easy' ? 'Easy' : 'Hard') : '';
-        const place = placings.indexOf(i);
-        return `<li class="${i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
+        const pl = viewState.players[i];
+        const tag = p.level ? `${p.level === 'easy' ? 'Easy' : 'Hard'} · ${STYLES.find((x) => x.id === p.style)!.name}` : '';
+        const place = reviewing ? -1 : placings.indexOf(i);
+        return `<li class="${!reviewing && i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
           <span class="pname">${p.name}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
           <span class="pinfo">${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}</span>
@@ -600,10 +670,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     renderRecord(statsEl, RECORD_KEY);
   }
 
+  const sameMove = (a: Move, b: Move) =>
+    a.value === b.value && a.from === b.from && a.to === b.to && a.pawns.join() === b.pawns.join();
+
   function choiceButton(label: string, move: Move) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'btn';
+    b.classList.toggle('hinted', !!hintedMove && sameMove(move, hintedMove));
     b.textContent = label;
     b.addEventListener('click', () => humanMove(move));
     return b;
@@ -642,6 +716,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   // throw, or move. See Turn in chowkaBhara.ts for the counting.
 
   const risky = () => canSkip(turn);
+  const nextRival = (player: number) => {
+    let rival = (player + 1) % seated.length;
+    while (placings.includes(rival) && rival !== player) rival = (rival + 1) % seated.length;
+    return rival;
+  };
 
   function startTurn() {
     if (gameOver()) return;
@@ -664,6 +743,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     turnStartState = state;
     selectedValue = null;
     selectedPawn = null;
+    hintedMove = null;
     thrownEl.textContent = '';
     next();
   }
@@ -674,11 +754,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     if (gameOver()) return;
     if (stranded(state, current, turn)) {
       const values = turn.bank.join(' + ');
+      const hadMoves = state !== turnStartState;
       state = turnStartState;
+      if (hadMoves) positions.push(state);
       turn = endedTurn();
       selectedValue = null;
       selectedPawn = null;
-      lastEl.textContent = `No move possible for ${values}. Moves from this turn were undone.`;
+      lastEl.textContent = `No move possible for ${values}.${hadMoves ? ' Moves from this turn were undone.' : ''}`;
     }
     if (turnOver(state, current, turn)) {
       if (finished(state, current)) {
@@ -721,7 +803,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     render();
     await wait(DELAY.think);
     if (id !== gameId) return;
-    const action = computerAction(state, current, turn, me.level) as Action;
+    const { action } = chooseAction(state, current, turn, me.level, me.style, turnStartState, nextRival(current));
+    if (!action) {
+      turn = endedTurn();
+      next();
+      return;
+    }
     if (action.kind === 'throw' && current === pickFor) {
       // Testing: wait for you to choose this computer's throw.
       phase = 'pick';
@@ -735,6 +822,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   async function act(action: Action) {
     const id = gameId;
     phase = 'busy';
+    hintTextEl.textContent = '';
+    hintedMove = null;
     if (action.kind === 'throw') {
       const t = action.value ? { up: shellsFor(action.value), value: action.value } : throwShells();
       render();
@@ -777,21 +866,52 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   });
 
   throwEl.addEventListener('click', () => {
-    if ((phase === 'act' && turn.owed > 0) || phase === 'pick') act({ kind: 'throw' });
+    if ((phase === 'act' && historyIndex === null && turn.owed > 0) || phase === 'pick') act({ kind: 'throw' });
   });
   pickEl.querySelectorAll<HTMLButtonElement>('[data-throw]').forEach((b) =>
     b.addEventListener('click', () => {
       const value = Number(b.dataset.throw);
-      if ((phase === 'act' && turn.owed > 0 && pickThrows) || phase === 'pick') act({ kind: 'throw', value });
+      if ((phase === 'act' && historyIndex === null && turn.owed > 0 && pickThrows) || phase === 'pick') act({ kind: 'throw', value });
     }),
   );
 
   skipEl.addEventListener('click', () => {
-    if (phase === 'act' && canSkip(turn)) act({ kind: 'skip' });
+    if (phase === 'act' && historyIndex === null && canSkip(turn)) act({ kind: 'skip' });
+  });
+
+  historyBackEl.addEventListener('click', () => {
+    if (phase !== 'act' || seated[current].level !== null || positions.length < 2) return;
+    historyIndex = historyIndex === null ? positions.length - 2 : Math.max(0, historyIndex - 1);
+    render();
+  });
+  historyForwardEl.addEventListener('click', () => {
+    if (historyIndex === null) return;
+    historyIndex = historyIndex + 1 >= positions.length - 1 ? null : historyIndex + 1;
+    render();
+  });
+  historyCurrentEl.addEventListener('click', () => {
+    historyIndex = null;
+    render();
+  });
+
+  hintEl.addEventListener('click', () => {
+    if (phase !== 'act' || seated[current].level !== null || historyIndex !== null) return;
+    const { action, reason } = chooseAction(state, current, turn, 'hard', 'balanced', turnStartState, nextRival(current));
+    hintTextEl.textContent = reason;
+    if (action?.kind === 'move') {
+      selectedValue = action.move.value;
+      selectedPawn = action.move.pawns[0];
+      hintedMove = action.move;
+    } else {
+      selectedValue = null;
+      selectedPawn = null;
+      hintedMove = null;
+    }
+    render();
   });
 
   function onPawn(player: number, pawn: number) {
-    if (phase !== 'act' || player !== current || selectedValue === null) return;
+    if (phase !== 'act' || historyIndex !== null || player !== current || selectedValue === null) return;
     const options = movesFor(player, pawn, selectedValue);
     if (!options.length) return;
     // A lone option (a single, or a pair that has already left its square) moves at once;
@@ -800,11 +920,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       return humanMove(options.find((m) => m.pawns.length === 1) ?? options[0], pawn);
     }
     selectedPawn = pawn;
+    hintedMove = null;
     render();
   }
 
   function humanMove(move: Move, tapped?: number) {
-    if (phase !== 'act') return;
+    if (phase !== 'act' || historyIndex !== null) return;
     // Waiting pawns are interchangeable; bring in the one that was tapped.
     if (move.from === WAITING && tapped !== undefined) move = { ...move, pawns: [tapped] };
     else if (move.from === WAITING && selectedPawn !== null) move = { ...move, pawns: [selectedPawn] };
@@ -838,6 +959,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const { state: after, hits } = apply(state, move);
     const firstHit = hits.length > 0 && !state.players[move.player].hasHit;
     state = after;
+    positions.push(state);
     recordSpend(turn, move.value, hits.length > 0);
     if (move.from === WAITING) lastEl.textContent = `${who.name} brought a pawn in.`;
     else if (hits.length) {
@@ -886,6 +1008,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     seated = buildSeated();
     gameId++;
     state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
+    positions = [state];
+    historyIndex = null;
+    hintedMove = null;
     current = 0;
     turn = newTurn();
     pickThrows = debugAllowed && f.get('pickThrows') === 'on';
@@ -894,6 +1019,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     watching = false;
     watchEl.hidden = true;
     lastEl.textContent = '';
+    hintTextEl.textContent = '';
     thrownEl.textContent = '';
     setupEl.hidden = true;
     matchbarEl.hidden = false;
@@ -911,6 +1037,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     throwEl.hidden = true;
     statusEl.textContent = '';
     lastEl.textContent = '';
+    hintTextEl.textContent = '';
     thrownEl.textContent = '';
     turn = endedTurn();
     placings = [];
@@ -921,6 +1048,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const f = new FormData(setupEl);
     seated = buildSeated();
     state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
+    positions = [state];
+    historyIndex = null;
+    hintedMove = null;
     buildPawns();
     render();
   }
@@ -940,6 +1070,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   setupEl.addEventListener('submit', (e) => {
     e.preventDefault();
     startGame();
+  });
+  styleHelpToggleEl.addEventListener('click', () => {
+    styleHelpBoxEl.hidden = !styleHelpBoxEl.hidden;
+    styleHelpToggleEl.setAttribute('aria-expanded', String(!styleHelpBoxEl.hidden));
   });
   $('newgame').addEventListener('click', showSetup);
 
@@ -994,6 +1128,57 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-size: 0.85rem;
     color: var(--muted);
     margin-bottom: 0.4rem;
+  }
+
+  .style-help-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-left: 0.25rem;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--muted);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+
+  .style-help-toggle[aria-expanded='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .style-help-box {
+    max-width: 36rem;
+    margin: 0 0 0.75rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--fg);
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  .style-help-box[hidden] {
+    display: none;
+  }
+
+  .style-help-box p {
+    margin: 0 0 0.45rem;
+  }
+
+  .style-help-box ul {
+    margin: 0;
+    padding-left: 1.15rem;
+  }
+
+  .style-help-box li + li {
+    margin-top: 0.25rem;
   }
 
   .setup :global(.chips) {
@@ -1060,6 +1245,18 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     align-items: center;
     gap: 0.4rem;
     min-width: 6rem;
+  }
+
+  .opponent-rows :global(.style-choice) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .opponent-rows :global(.style-choice select) {
+    margin-left: 0;
   }
 
   .hint {
@@ -1157,6 +1354,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   .pairmarks :global(ellipse) {
     stroke-width: 3.4;
     opacity: 0.95;
+  }
+
+  .pairmarks :global(ellipse.potential) {
+    stroke-dasharray: 1 8;
+    opacity: 0.8;
   }
 
   .yards :global(rect) {
@@ -1450,10 +1652,76 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     color: #f7ecd9;
   }
 
+  .choices :global(.btn.hinted) {
+    border-color: #f1d9a8;
+    box-shadow: 0 0 0 2px rgb(241 217 168 / 0.25);
+  }
+
   .status {
     min-height: 1.6em;
     margin: 0.4rem 0 0;
     font-weight: 600;
+  }
+
+  .history-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2rem;
+  }
+
+  .history-controls[hidden],
+  .history-controls :global([hidden]),
+  .hint-button[hidden],
+  .hint-text[hidden] {
+    display: none;
+  }
+
+  .icon-btn {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0.25rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--fg);
+    cursor: pointer;
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .icon-btn svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .history-position {
+    min-width: 5.7rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hint-button {
+    justify-self: start;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .hint-text {
+    margin: 0;
+    font-size: 0.85rem;
   }
 
   .last {

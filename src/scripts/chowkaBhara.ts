@@ -9,13 +9,15 @@
 // and 24 means it has reached the centre.
 //
 // A pawn may share a square with its own side only on a safe square or, two at
-// most, in the inner ring. Two pawns meeting on their first inner square form a
-// pair: they may split there, but once they move off it together they stay a
-// pair for good. Two meeting on any other inner square just sit together, and
+// most, in the inner ring. Two pawns meeting on their first inner square may
+// move off together as a pair; until then they are still vulnerable singles and
+// may split. Once they leave together they stay a pair for good. Two meeting on
+// any other inner square just sit together, and
 // an opponent landing there knocks out only one of them. A pair moves half the
 // throw (so 2, 4 and 8 move it 1, 2 and 4), can only hit another pair (it
-// shares a square with lone pawns), and can't be jumped: a single must land
-// exactly on it (hitting nothing) first.
+// shares a square with lone pawns), and can't be jumped. An opponent's single
+// may land exactly on the pair's square (hitting nothing). A friendly single
+// can land on or pass through its own pair freely.
 
 export type Seat = 0 | 1 | 2 | 3;
 export type Square = readonly [number, number]; // [row, col], row 0 at the top
@@ -29,7 +31,7 @@ const SOLO = -1;
 export interface PlayerState {
   seat: Seat;
   pawns: number[];
-  partner: number[]; // index of the pawn each one is paired with, or -1
+  partner: number[]; // potential pair on square 16 or committed pair beyond it; -1 otherwise
   hasHit: boolean; // unlocks the inner ring for all of this player's pawns
 }
 
@@ -94,7 +96,10 @@ const clone = (s: State): State => ({
   players: s.players.map((p) => ({ ...p, pawns: [...p.pawns], partner: [...p.partner] })),
 });
 
-export const isPaired = (s: State, player: number, pawn: number) => s.players[player].partner[pawn] !== SOLO;
+export const isPotentialPair = (s: State, player: number, pawn: number) =>
+  s.players[player].partner[pawn] !== SOLO && s.players[player].pawns[pawn] === PAIR_SQUARE;
+export const isPaired = (s: State, player: number, pawn: number) =>
+  s.players[player].partner[pawn] !== SOLO && s.players[player].pawns[pawn] > PAIR_SQUARE && s.players[player].pawns[pawn] < HOME;
 
 interface Occupant extends Hit {
   paired: boolean;
@@ -108,7 +113,7 @@ function occupancy(s: State) {
       if (pos < 0 || pos === HOME) return;
       const k = keyOf(square(p.seat, pos));
       if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push({ player, pawn, paired: p.partner[pawn] !== SOLO });
+      map.get(k)!.push({ player, pawn, paired: isPaired(s, player, pawn) });
     }),
   );
   return map;
@@ -133,15 +138,17 @@ function tryMove(s: State, occ: Map<number, Occupant[]>, player: number, pawns: 
   if (to > HOME) return null; // the centre needs an exact throw
   if (!p.hasHit && to > LAST_OUTER) return null; // the inner ring opens after a first hit
 
-  // Own pawns may share safe squares, or an inner square two at a time.
+  // Own pawns may share safe squares or an inner square two at a time.
+  // Singles can also share a committed pair's square without a limit.
   if (to !== HOME) {
     const sq = square(p.seat, to);
     const mine = (occ.get(keyOf(sq)) ?? []).filter((o) => o.player === player && !pawns.includes(o.pawn));
-    if (mine.length && !isSafe(sq) && !(to >= PAIR_SQUARE && !pair && mine.length === 1)) return null;
+    if (mine.length && !isSafe(sq) && !(to >= PAIR_SQUARE && !pair && (mine.length === 1 || mine.some((o) => o.paired)))) return null;
   }
 
   if (!pair) {
-    // A single can't jump an opponent's pair, though it may land on the pair's square.
+    // An opposing single must land on a committed pair before passing it.
+    // A friendly single can land on or pass its own pair freely.
     for (let i = from + 1; i < to; i++) {
       if (opponents(occ, square(p.seat, i), player).some((o) => o.paired)) return null;
     }
@@ -185,7 +192,7 @@ export function apply(start: State, move: Move): { state: State; hits: Hit[] } {
   move.pawns.forEach((i) => (p.pawns[i] = move.to));
   if (move.to === HOME) move.pawns.forEach((i) => (p.partner[i] = SOLO));
 
-  // Two lone pawns meeting on the first inner square pair up.
+  // Two lone pawns meeting on the first inner square can pair on a later move.
   if (move.to === PAIR_SQUARE && move.pawns.length === 1) {
     const mate = p.pawns.findIndex((pos, i) => i !== move.pawns[0] && pos === PAIR_SQUARE && p.partner[i] === SOLO);
     if (mate >= 0) {
@@ -207,6 +214,8 @@ export function apply(start: State, move: Move): { state: State; hits: Hit[] } {
       hits = hits.map(({ player, pawn }) => ({ player, pawn }));
       hits.forEach((h) => {
         const q = s.players[h.player];
+        const mate = q.partner[h.pawn];
+        if (mate !== SOLO) q.partner[mate] = SOLO;
         q.pawns[h.pawn] = 0; // back to its home square, already in play
         q.partner[h.pawn] = SOLO;
       });
@@ -242,69 +251,6 @@ export function shellsFor(value: number): boolean[] {
     [up[i], up[j]] = [up[j], up[i]];
   }
   return up;
-}
-
-// ---- Computer player ----
-
-// Chance of each throw with fair shells.
-const CHANCE: Record<number, number> = { 1: 4 / 16, 2: 6 / 16, 3: 4 / 16, 4: 1 / 16, 8: 1 / 16 };
-
-// Rough chance that some opponent single can land on a lone pawn here next turn.
-function danger(s: State, player: number, sq: Square): number {
-  if (isSafe(sq)) return 0;
-  let risk = 0;
-  const k = keyOf(sq);
-  s.players.forEach((q, i) => {
-    if (i === player) return;
-    q.pawns.forEach((pos) => {
-      if (pos < 0 || pos === HOME) return;
-      for (const [v, chance] of Object.entries(CHANCE)) {
-        const to = pos + Number(v); // singles only: a pair can't hit a lone pawn
-        if (to >= HOME || (!q.hasHit && to > LAST_OUTER)) continue;
-        if (keyOf(square(q.seat, to)) === k) risk += chance;
-      }
-    });
-  });
-  return Math.min(1, risk);
-}
-
-function evaluate(s: State, move: Move, careful: boolean): number {
-  const { state: after, hits } = apply(s, move);
-  const me = s.players[move.player];
-  const pair = move.pawns.length === 2;
-  let score = move.steps * (pair ? 1.7 : 1);
-  score += hits.length * 60;
-  hits.forEach((h) => (score += Math.max(0, s.players[h.player].pawns[h.pawn]) * 1.5));
-  if (!me.hasHit && hits.length) score += 25; // first hit opens the inner ring
-  if (move.from === WAITING) score += 22;
-  if (move.to === HOME) score += 40 * move.pawns.length;
-  if (!careful) return score + Math.random();
-
-  const formsPair = !pair && isPaired(after, move.player, move.pawns[0]);
-  if (formsPair) score += 14;
-  if (!pair && isPaired(s, move.player, move.pawns[0])) score -= 10; // splitting a pair
-  if (move.to !== HOME && !pair && !formsPair) {
-    const dest = square(me.seat, move.to);
-    if (isSafe(dest)) score += 6;
-    score -= danger(after, move.player, dest) * 45;
-  }
-  if (move.from > 0 && !isPaired(s, move.player, move.pawns[0])) {
-    score += danger(s, move.player, square(me.seat, move.from)) * 35; // escaping a threat
-  }
-  return score;
-}
-
-export function computerChoice(s: State, player: number, bank: number[], level: 'easy' | 'hard'): Move | null {
-  const options = [...new Set(bank)].flatMap((v) => legalMoves(s, player, v));
-  if (!options.length) return null;
-  if (level === 'easy' && Math.random() < 0.45) return options[Math.floor(Math.random() * options.length)];
-  let best = options[0];
-  let bestScore = -Infinity;
-  for (const m of options) {
-    const v = evaluate(s, m, level === 'hard');
-    if (v > bestScore) [best, bestScore] = [m, v];
-  }
-  return best;
 }
 
 // ---- Throws within a turn ----
@@ -363,18 +309,3 @@ export const turnOver = (s: State, player: number, t: Turn) => t.owed === 0 && u
 
 // A throw may carry a chosen value (for testing); otherwise the shells decide.
 export type Action = { kind: 'throw'; value?: number } | { kind: 'skip' } | { kind: 'move'; move: Move };
-
-export function computerAction(s: State, player: number, t: Turn, level: 'easy' | 'hard'): Action | null {
-  if (t.owed > 0 && !canSkip(t)) return { kind: 'throw' };
-  if (canSkip(t)) {
-    if (level === 'hard') {
-      // Spend a 4 or 8 first to lower the risk; otherwise skip when holding a lot.
-      const lower = computerChoice(s, player, t.bank.filter(isBonus), level);
-      if (lower) return { kind: 'move', move: lower };
-      return t.bank.reduce((a, b) => a + b, 0) >= 8 ? { kind: 'skip' } : { kind: 'throw' };
-    }
-    return Math.random() < 0.5 ? { kind: 'throw' } : { kind: 'skip' };
-  }
-  const move = computerChoice(s, player, t.bank, level);
-  return move ? { kind: 'move', move } : null;
-}

@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import ZenToggle from '../../components/ZenToggle.astro';
+import CowrieSprite from '../../components/CowrieSprite.astro';
 
 // DOM order puts the computer's plank first. Along each plank the holes run
 // left to right in landscape (13..7 on top, 0..6 below) and top to bottom
@@ -16,35 +17,7 @@ const planks = [
   <h1>Ali Guli Mane</h1>
   <p class="muted intro">ಅಳಿ ಗುಳಿ ಮಣೆ · the seed-sowing game from Karnataka.</p>
 
-  <!-- Cowrie shells, drawn once and reused. -->
-  <svg class="sprite" aria-hidden="true" focusable="false">
-    <defs>
-      <radialGradient id="cowrie-lip" cx="42%" cy="35%" r="75%">
-        <stop offset="0" stop-color="#fffaf0"></stop>
-        <stop offset="0.55" stop-color="#ece2ca"></stop>
-        <stop offset="1" stop-color="#b8a988"></stop>
-      </radialGradient>
-      <radialGradient id="cowrie-dome" cx="38%" cy="30%" r="80%">
-        <stop offset="0" stop-color="#f4f3e8"></stop>
-        <stop offset="0.5" stop-color="#cfd2c0"></stop>
-        <stop offset="1" stop-color="#8f9684"></stop>
-      </radialGradient>
-      <symbol id="cowrie-mouth" viewBox="0 0 24 32">
-        <ellipse cx="12" cy="16" rx="10.6" ry="14.6" fill="url(#cowrie-lip)" stroke="#8d7f63" stroke-width="0.7"></ellipse>
-        <path d="M12.4 3.2C10.3 9 10.1 22.5 11.8 28.8C13.9 22.8 14.2 9.3 12.4 3.2Z" fill="#3a2a1c"></path>
-        <g stroke="#efe5cf" stroke-width="0.9" stroke-linecap="round">
-          <path d="M10.2 7.5h1.4M10 10.5h1.5M9.9 13.5h1.5M9.9 16.5h1.5M10 19.5h1.5M10.2 22.5h1.4M10.6 25.5h1.2"></path>
-          <path d="M13.1 7.5h1.3M13.2 10.5h1.5M13.3 13.5h1.5M13.3 16.5h1.5M13.2 19.5h1.5M13 22.5h1.4M12.8 25.5h1.2"></path>
-        </g>
-        <ellipse cx="8" cy="9" rx="2.2" ry="4" fill="#fff" opacity="0.45"></ellipse>
-      </symbol>
-      <symbol id="cowrie-back" viewBox="0 0 24 32">
-        <ellipse cx="12" cy="16" rx="10.6" ry="14.6" fill="url(#cowrie-dome)" stroke="#7d8472" stroke-width="0.7"></ellipse>
-        <path d="M5 16c2-5 12-5 14 0" fill="none" stroke="#a9ad99" stroke-width="1" opacity="0.7"></path>
-        <ellipse cx="8.5" cy="9.5" rx="3" ry="5" fill="#fff" opacity="0.55"></ellipse>
-      </symbol>
-    </defs>
-  </svg>
+  <CowrieSprite />
 
   <div class="game-area" data-zen>
   <form id="setup" class="setup">
@@ -522,13 +495,6 @@ const planks = [
 
   .intro {
     margin-top: 0;
-  }
-
-  .sprite {
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
   }
 
   .setup {

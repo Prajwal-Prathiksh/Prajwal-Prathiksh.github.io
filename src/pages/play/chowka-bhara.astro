@@ -1,0 +1,1492 @@
+---
+import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
+import CowrieSprite from '../../components/CowrieSprite.astro';
+
+const COLOURS = [
+  { id: 'red', name: 'Red', light: '#f39a7e', mid: '#c23b2a', dark: '#6e170e' },
+  { id: 'yellow', name: 'Yellow', light: '#fff0a8', mid: '#e2a41c', dark: '#7c4f03' },
+  { id: 'green', name: 'Green', light: '#b5e3a6', mid: '#3d8a4a', dark: '#173f1f' },
+  { id: 'blue', name: 'Blue', light: '#a9c6f2', mid: '#2c5aa0', dark: '#10284f' },
+];
+
+// Board squares in 7x7 units: the 5x5 grid sits inside a one-unit margin
+// that holds each player's waiting pawns.
+const cells = Array.from({ length: 25 }, (_, i) => ({ r: Math.floor(i / 5), c: i % 5 }));
+const SAFE = new Set(['4,2', '2,4', '0,2', '2,0']);
+const petals = Array.from({ length: 8 }, (_, i) => i * 45);
+const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
+---
+
+<Base title="Chowka Bhara" description="Chowka Bhara, the cowrie-shell race game, chalked on a red-oxide floor. Play against up to three computer players.">
+  <p class="back"><a href="/play/">← All games</a></p>
+  <h1>Chowka Bhara</h1>
+  <p class="muted intro">ಚೌಕ ಬಾರ · the cowrie race game, chalked on the floor.</p>
+
+  <CowrieSprite />
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <defs>
+      {
+        COLOURS.map((c) => (
+          <radialGradient id={`pebble-${c.id}`} cx="36%" cy="30%" r="75%">
+            <stop offset="0" stop-color={c.light} />
+            <stop offset="0.45" stop-color={c.mid} />
+            <stop offset="1" stop-color={c.dark} />
+          </radialGradient>
+        ))
+      }
+      {
+        COLOURS.map((c) => (
+          <symbol id={`pawn-${c.id}`} viewBox="0 0 40 40">
+            <ellipse cx="20" cy="23" rx="17" ry="14.5" fill="rgb(20 5 0 / 0.35)" />
+            <ellipse cx="20" cy="20" rx="16.5" ry="14.5" fill={`url(#pebble-${c.id})`} />
+            <ellipse cx="14" cy="13" rx="6" ry="3.6" fill="#fff" opacity="0.5" transform="rotate(-18 14 13)" />
+            <ellipse cx="20" cy="20" rx="16.5" ry="14.5" fill="none" stroke="rgb(0 0 0 / 0.25)" stroke-width="1" />
+          </symbol>
+        ))
+      }
+    </defs>
+  </svg>
+
+  <div class="game-area" data-zen>
+    <form id="setup" class="setup">
+      <fieldset>
+        <legend>Computer players</legend>
+        <div class="chips">
+          {[1, 2, 3].map((n, i) => (
+            <label class="chip"><input type="radio" name="opponents" value={n} checked={i === 2} />{n}</label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Your colour</legend>
+        <div class="chips">
+          {
+            COLOURS.map((c, i) => (
+              <label class="chip swatch">
+                <input type="radio" name="colour" value={c.id} checked={i === 0} />
+                <svg viewBox="0 0 40 40" aria-hidden="true"><use href={`#pawn-${c.id}`} /></svg>
+                {c.name}
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Entering the board</legend>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="entry" value="wait" checked />Wait for a 4 or 8</label>
+          <label class="chip"><input type="radio" name="entry" value="home" />Start on the home square</label>
+        </div>
+        <p class="hint muted">Waiting pawns come in only on a thrown 4 or 8. Or start all four in play.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Computer players' levels</legend>
+        <div id="opponent-rows" class="opponent-rows"></div>
+      </fieldset>
+      <fieldset id="debug-row" hidden>
+        <legend>Testing</legend>
+        <label class="check"><input type="checkbox" name="pickThrows" /> Choose my own throws instead of throwing the cowries</label>
+        <label class="check">
+          Also choose throws for
+          <select name="pickFor" id="pick-for"><option value="">no computer</option></select>
+        </label>
+      </fieldset>
+      <div class="setup-actions">
+        <button type="submit" class="btn primary">Start game</button>
+        <ZenToggle />
+      </div>
+    </form>
+
+    <div id="matchbar" class="matchbar" hidden>
+      <label>
+        Speed
+        <select id="speed">
+          <option value="1">Normal</option>
+          <option value="0.4">Fast</option>
+        </select>
+      </label>
+      <button type="button" class="btn" id="newgame">New game</button>
+      <ZenToggle />
+    </div>
+
+    <div class="play">
+      <div class="floor" id="floor">
+        <div class="board-square">
+        <svg class="board" viewBox="0 0 700 700" aria-hidden="true">
+          <defs>
+            <filter id="chalk" x="-5%" y="-5%" width="110%" height="110%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="5" result="noise"></feTurbulence>
+              <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.5" xChannelSelector="R" yChannelSelector="G" result="rough"></feDisplacementMap>
+              <feColorMatrix in="noise" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.25" result="holes"></feColorMatrix>
+              <feComposite in="rough" in2="holes" operator="in"></feComposite>
+            </filter>
+          </defs>
+
+          <g class="chalk" filter="url(#chalk)">
+            {cells.map(({ r, c }) => <rect x={100 + c * 100} y={100 + r * 100} width="100" height="100" />)}
+            <rect x="94" y="94" width="512" height="512" rx="4" />
+            {
+              cells
+                .filter(({ r, c }) => SAFE.has(`${r},${c}`))
+                .map(({ r, c }) => (
+                  <g>
+                    <path d={`M${112 + c * 100} ${112 + r * 100}L${188 + c * 100} ${188 + r * 100}M${188 + c * 100} ${112 + r * 100}L${112 + c * 100} ${188 + r * 100}`} />
+                    {[[0, -36], [36, 0], [0, 36], [-36, 0]].map(([dx, dy]) => (
+                      <circle class="dot" cx={150 + c * 100 + dx} cy={150 + r * 100 + dy} r="3" />
+                    ))}
+                  </g>
+                ))
+            }
+            <g class="kolam" transform="translate(350 350)">
+              {petals.map((a) => <ellipse cx="0" cy="-21" rx="8.5" ry="20" transform={`rotate(${a})`} />)}
+              <circle r="9" />
+              {dots.map((a) => <circle class="dot" cx={Math.cos(a) * 44} cy={Math.sin(a) * 44} r="2.6" />)}
+            </g>
+          </g>
+          <g id="yards" class="chalk yards" filter="url(#chalk)"></g>
+          <g id="pairs" class="chalk pairmarks" filter="url(#chalk)"></g>
+          <g id="marks"></g>
+        </svg>
+        <div id="pawns" class="pawns"></div>
+        </div>
+
+        <div class="thrower" id="thrower" hidden>
+          <div id="shells" class="shells" aria-hidden="true">
+            {[0, 1, 2, 3].map(() => <svg class="cowrie" viewBox="0 0 24 32"><use href="#cowrie-back" /></svg>)}
+          </div>
+          <p id="thrown" class="thrown" aria-live="polite"></p>
+          <div class="throw-actions">
+            <button type="button" class="btn primary" id="throw" hidden>Throw cowries</button>
+            <button type="button" class="btn skip" id="skip" hidden>Skip throw</button>
+            <button type="button" class="btn skip" id="watch" hidden>Watch the rest</button>
+            <div id="pick" class="pick" hidden>
+              <span>or choose:</span>
+              {[1, 2, 3, 4, 8].map((v) => <button type="button" class="value" data-throw={v}>{v}</button>)}
+            </div>
+            <div id="bank" class="bank"></div>
+          </div>
+          <div id="choices" class="choices"></div>
+        </div>
+      </div>
+
+      <div class="side">
+        <p id="status" class="status" aria-live="polite"></p>
+        <p id="last" class="muted last"></p>
+        <ol id="players" class="players"></ol>
+      </div>
+    </div>
+  </div>
+
+  <dl id="stats" class="stats"></dl>
+
+  <details>
+    <summary>How to play</summary>
+    <p>
+      Each player has four pawns waiting beside their edge of the board. Throw the four cowries:
+      the number that land mouth up is your move. All four up is <em>chowka</em> (4), all four down
+      is <em>bhara</em> (8). A 4 or 8 earns another throw, and so does every hit. You can take an
+      earned throw straight away or move first, whichever you like.
+    </p>
+    <p>
+      Careful with 4s and 8s: holding three from a row loses everything left in your turn. Spending
+      one lowers the count, and a 1, 2 or 3 resets it. With two held, you can skip the next throw
+      and play what you have.
+    </p>
+    <p>
+      Spend each throw on one pawn, in any order. A waiting pawn comes onto the board, on your home
+      square (the crossed square on your edge), only by spending a 4 or an 8. Once in, it stays in.
+      If you choose to start on the home square in setup, all four pawns begin in play instead.
+    </p>
+    <p>
+      Pawns race anticlockwise round the outer ring. Landing on an opponent's pawn sends it back
+      to its home square, where it starts its lap again, and earns you another throw. The crossed
+      squares and the centre are safe. Until you've hit someone, your pawns can go no further than
+      the square before your home square. After your first hit, they turn into the inner ring
+      there, go round it clockwise, and finish in the centre by exact count.
+    </p>
+    <p>
+      On the outer ring your own pawns can share only the safe squares. In the inner ring, two of
+      your pawns may sit together on a square, and an opponent landing there knocks out just one.
+      Two pawns meeting on your first inner square, the one just inside your last outer square,
+      become a pair, circled in chalk. On that square you choose: move one alone, which splits
+      them, or move them together. Once they leave together they stay a pair for good and always
+      move together, at half the throw (2, 4 and 8 move a pair 1, 2 and 4 squares). A single pawn
+      can't jump an opponent's pair: it has to land exactly on the pair's square first, where it
+      is safe from them, then carry on. Only a pair can hit a pair; a pair landing on lone pawns
+      just shares the square with them. First to bring all four pawns
+      to the centre wins. In the rare case that nobody can move at all, the game is a draw.
+    </p>
+  </details>
+
+  <p class="muted note">Results are saved on this device only.</p>
+</Base>
+
+<script>
+  import {
+    HOME,
+    WAITING,
+    apply,
+    canSkip,
+    computerAction,
+    finished,
+    frozen,
+    isPaired,
+    legalMoves,
+    newGame,
+    newTurn,
+    endedTurn,
+    shellsFor,
+    recordSpend,
+    recordThrow,
+    square,
+    throwShells,
+    turnOver,
+    usable,
+    type Action,
+    type Move,
+    type Turn,
+    type Seat,
+    type State,
+  } from '../../scripts/chowkaBhara';
+  import { recordResult, renderRecord } from '../../scripts/scores';
+
+  type Level = 'easy' | 'hard';
+  interface Seated {
+    name: string;
+    colour: string;
+    colourName: string;
+    level: Level | null; // null for you
+  }
+
+  const COLOURS = [
+    { id: 'red', name: 'Red' },
+    { id: 'yellow', name: 'Yellow' },
+    { id: 'green', name: 'Green' },
+    { id: 'blue', name: 'Blue' },
+  ];
+  const SEATS_FOR: Record<number, Seat[]> = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
+  const DELAY = { shake: 650, step: 170, think: 650, between: 550, read: 900 };
+  const RECORD_KEY = 'chowka-bhara';
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const setupEl = $<HTMLFormElement>('setup');
+  const rowsEl = $('opponent-rows');
+  const matchbarEl = $('matchbar');
+  const speedEl = $<HTMLSelectElement>('speed');
+  const pawnsEl = $('pawns');
+  const shellsEl = $('shells');
+  const thrownEl = $('thrown');
+  const throwEl = $<HTMLButtonElement>('throw');
+  const skipEl = $<HTMLButtonElement>('skip');
+  const watchEl = $<HTMLButtonElement>('watch');
+  const pickEl = $('pick');
+  // Testing aid: with ?debug in the address, setup offers choosing your own throws.
+  const debugAllowed = new URLSearchParams(location.search).has('debug');
+  let pickThrows = false;
+  let pickFor: number | null = null; // a computer player whose throws you choose (testing)
+  const bankEl = $('bank');
+  const choicesEl = $('choices');
+  const statusEl = $('status');
+  const lastEl = $('last');
+  const playersEl = $('players');
+  const statsEl = $('stats');
+  const yardsEl = document.getElementById('yards')!;
+  const marksEl = document.getElementById('marks')!;
+  const pairsEl = document.getElementById('pairs')!;
+
+  let seated: Seated[] = [];
+  let state: State = newGame([0, 2]);
+  let current = 0;
+  let turn: Turn = newTurn();
+  let selectedValue: number | null = null;
+  let selectedPawn: number | null = null;
+  let phase: 'setup' | 'act' | 'pick' | 'busy' | 'over' = 'setup';
+  let placings: number[] = []; // players in the order they finished
+  let watching = false; // after you win, the computers can play on for the other places
+  let gameId = 0;
+  const pawnEls: HTMLButtonElement[][] = [];
+  const hopping = new Map<string, [number, number]>(); // pawn key -> board point during a hop
+
+  // A move can end the game while a caller awaits it, so re-read the phase.
+  const gameOver = () => phase === 'over';
+  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * Number(speedEl.value)));
+
+  // ---- Setup ----
+
+  const readLevels = () =>
+    [...rowsEl.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value as Level);
+
+  const renderSetupRows = () => {
+    const f = new FormData(setupEl);
+    const n = Number(f.get('opponents'));
+    const mine = String(f.get('colour'));
+    const previous = readLevels();
+    const others = COLOURS.filter((c) => c.id !== mine).slice(0, n);
+    const pickForEl = document.getElementById('pick-for') as HTMLSelectElement;
+    const chosen = pickForEl.value;
+    pickForEl.innerHTML =
+      '<option value="">no computer</option>' +
+      others.map((c, i) => `<option value="${i + 1}"${chosen === String(i + 1) ? ' selected' : ''}>${c.name}</option>`).join('');
+    rowsEl.innerHTML = others
+      .map((c, i) => {
+        const lvl = previous[i] ?? 'easy';
+        return `<div class="opponent-row">
+          <span class="who"><svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${c.id}"/></svg>${c.name}</span>
+          <div class="chips">
+            ${(['easy', 'hard'] as const)
+              .map(
+                (l) =>
+                  `<label class="chip small"><input type="radio" name="level-${i}" value="${l}" ${l === lvl ? 'checked' : ''}/>${l === 'easy' ? 'Easy' : 'Hard'}</label>`,
+              )
+              .join('')}
+          </div>
+        </div>`;
+      })
+      .join('');
+  };
+
+  // ---- Board geometry, in 7x7 board units ----
+
+  const centreOf = ([r, c]: readonly [number, number]): [number, number] => [c + 1.5, r + 1.5];
+
+  // Rotate a point about the board centre by a seat's quarter turns (anticlockwise on screen).
+  const forSeat = (seat: Seat, [x, y]: [number, number]): [number, number] => {
+    let dx = x - 3.5;
+    let dy = y - 3.5;
+    for (let i = 0; i < seat; i++) [dx, dy] = [dy, -dx];
+    return [3.5 + dx, 3.5 + dy];
+  };
+
+  const yardSpot = (seat: Seat, pawn: number) => forSeat(seat, [2.4 + pawn * 0.73, 6.5]);
+
+  const CLUSTER: [number, number][][] = [
+    [[0, 0]],
+    [[-0.17, 0], [0.17, 0]],
+    [[-0.17, -0.12], [0.17, -0.12], [0, 0.17]],
+    [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]],
+  ];
+
+  function layout(s: State): Map<string, [number, number]> {
+    const spots = new Map<string, [number, number]>();
+    const bySquare = new Map<string, string[]>();
+    s.players.forEach((p, i) =>
+      p.pawns.forEach((pos, j) => {
+        const key = `${i}-${j}`;
+        if (pos === WAITING) spots.set(key, yardSpot(p.seat, j));
+        else if (pos === HOME) {
+          const [x, y] = forSeat(p.seat, [3.5 + (j - 1.5) * 0.17, 3.5 + 0.27]);
+          spots.set(key, [x, y]);
+        } else {
+          const sq = square(p.seat, pos).join();
+          if (!bySquare.has(sq)) bySquare.set(sq, []);
+          bySquare.get(sq)!.push(key);
+        }
+      }),
+    );
+    bySquare.forEach((keys, sq) => {
+      const [r, c] = sq.split(',').map(Number);
+      const [x, y] = centreOf([r, c]);
+      const paired = keys.filter((k) => {
+        const [i, j] = k.split('-').map(Number);
+        return isPaired(s, i, j);
+      });
+      if (paired.length === 2) {
+        const rest = keys.filter((k) => !paired.includes(k));
+        const lift = rest.length ? -0.13 : 0;
+        paired.forEach((k, n) => spots.set(k, [x + (n ? 0.12 : -0.12), y + lift]));
+        rest.forEach((k, n) => spots.set(k, [x + (n - (rest.length - 1) / 2) * 0.3, y + 0.2]));
+        return;
+      }
+      const shape = CLUSTER[Math.min(keys.length, 4) - 1];
+      keys.forEach((k, n) => {
+        const [dx, dy] = n < 4 ? shape[n] : [(n - 4) * 0.08, 0];
+        spots.set(k, [x + dx, y + dy]);
+      });
+    });
+    return spots;
+  }
+
+  // ---- Rendering ----
+
+  const buildPawns = () => {
+    pawnsEl.innerHTML = '';
+    pawnEls.length = 0;
+    seated.forEach((p, i) => {
+      pawnEls[i] = [0, 1, 2, 3].map((j) => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'pawn';
+        el.dataset.player = String(i);
+        el.dataset.pawn = String(j);
+        el.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>`;
+        el.addEventListener('click', () => onPawn(i, j));
+        pawnsEl.append(el);
+        return el;
+      });
+    });
+    // A chalk outline for each seat's waiting area.
+    yardsEl.innerHTML = state.players
+      .map((p) => {
+        const [x, y] = forSeat(p.seat, [3.5, 6.5]);
+        const vertical = p.seat % 2 === 1;
+        const w = vertical ? 58 : 330;
+        const h = vertical ? 330 : 58;
+        return `<rect x="${x * 100 - w / 2}" y="${y * 100 - h / 2}" width="${w}" height="${h}" rx="29" stroke-dasharray="3 9"/>`;
+      })
+      .join('');
+  };
+
+  const movesFor = (player: number, pawn: number, value: number) =>
+    legalMoves(state, player, value).filter((m) =>
+      state.players[player].pawns[pawn] === WAITING ? m.from === WAITING : m.pawns.includes(pawn),
+    );
+
+  function render() {
+    const spots = layout(state);
+    const human = phase === 'act' && seated[current]?.level === null;
+    const movable = new Set<number>();
+    if (human && selectedValue !== null) {
+      state.players[current].pawns.forEach((_, j) => {
+        if (movesFor(current, j, selectedValue!).length) movable.add(j);
+      });
+    }
+    seated.forEach((p, i) =>
+      pawnEls[i].forEach((el, j) => {
+        const [x, y] = hopping.get(`${i}-${j}`) ?? spots.get(`${i}-${j}`)!;
+        el.style.left = `${(x / 7) * 100}%`;
+        el.style.top = `${(y / 7) * 100}%`;
+        const pos = state.players[i].pawns[j];
+        el.classList.toggle('home', pos === HOME);
+        el.classList.toggle('movable', i === current && movable.has(j));
+        el.classList.toggle('picked', i === current && selectedPawn === j && human);
+        el.disabled = !(i === current && movable.has(j));
+        const where = pos === WAITING ? 'waiting' : pos === HOME ? 'home' : `${pos} steps along`;
+        el.setAttribute('aria-label', `${p.colourName} pawn ${j + 1}, ${where}`);
+      }),
+    );
+
+    // A chalk loop round each pair.
+    pairsEl.innerHTML = state.players
+      .flatMap((p, i) =>
+        p.partner
+          .map((b, a) => (b > a && !hopping.size ? spots.get(`${i}-${a}`) : null))
+          .filter((pt): pt is [number, number] => !!pt)
+          .map(([x, y]) => `<ellipse cx="${(x + 0.12) * 100}" cy="${y * 100}" rx="44" ry="29"/>`),
+      )
+      .join('');
+
+    // Where the picked pawn would land.
+    marksEl.innerHTML = '';
+    choicesEl.innerHTML = '';
+    if (human && selectedPawn !== null && selectedValue !== null) {
+      const options = movesFor(current, selectedPawn, selectedValue);
+      const single = options.find((m) => m.pawns.length === 1);
+      const pair = options.find((m) => m.pawns.length === 2);
+      const shown = single ?? pair;
+      if (shown) {
+        const seat = state.players[current].seat;
+        const [x, y] = shown.to === HOME ? [3.5, 3.5] : centreOf(square(seat, shown.to));
+        marksEl.innerHTML = `<circle class="target" cx="${x * 100}" cy="${y * 100}" r="40"/>`;
+      }
+      if (single) choicesEl.append(choiceButton(single.from === WAITING ? 'Bring in' : `Move ${selectedValue}`, single));
+      if (pair) choicesEl.append(choiceButton(`Move pair ${pair.steps}`, pair));
+    }
+
+    // Throw and skip buttons, then the banked throws.
+    const picking = phase === 'pick';
+    throwEl.hidden = !((human && turn.owed > 0) || picking);
+    throwEl.textContent = picking
+      ? `Throw for ${seated[current].name}`
+      : turn.bank.length || turn.owed > 1
+        ? `Throw again${turn.owed > 1 ? ` (${turn.owed})` : ''}`
+        : 'Throw cowries';
+    skipEl.hidden = !(human && canSkip(turn));
+    pickEl.hidden = !((human && turn.owed > 0 && pickThrows) || picking);
+    const bank = turn.bank;
+    bankEl.innerHTML = '';
+    bank.forEach((v, idx) => {
+      const usable = human && legalMoves(state, current, v).length > 0;
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'value';
+      chip.textContent = String(v);
+      chip.disabled = !usable;
+      chip.classList.toggle('on', human && selectedValue === v && bank.indexOf(v) === idx);
+      chip.addEventListener('click', () => {
+        selectedValue = v;
+        selectedPawn = null;
+        render();
+      });
+      bankEl.append(chip);
+    });
+
+    playersEl.innerHTML = seated
+      .map((p, i) => {
+        const pl = state.players[i];
+        const waiting = pl.pawns.filter((x) => x === WAITING).length;
+        const home = pl.pawns.filter((x) => x === HOME).length;
+        const tag = p.level ? (p.level === 'easy' ? 'Easy' : 'Hard') : '';
+        const place = placings.indexOf(i);
+        return `<li class="${i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
+          <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
+          <span class="pname">${p.name}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
+          <span class="pinfo">${home}/4 in centre · ${waiting} waiting${pl.hasHit ? ' · <b title="Has hit, inner ring open">hit ✓</b>' : ''}</span>
+        </li>`;
+      })
+      .join('');
+    renderRecord(statsEl, RECORD_KEY);
+  }
+
+  function choiceButton(label: string, move: Move) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn';
+    b.textContent = label;
+    b.addEventListener('click', () => humanMove(move));
+    return b;
+  }
+
+  // ---- Cowries ----
+
+  async function throwAnimation(up: boolean[]) {
+    const shells = [...shellsEl.querySelectorAll<SVGElement>('.cowrie')];
+    shells.forEach((s) => {
+      s.classList.remove('landed');
+      s.classList.add('tumble');
+    });
+    await wait(DELAY.shake);
+    shells.forEach((s, i) => {
+      s.classList.remove('tumble');
+      s.querySelector('use')!.setAttribute('href', up[i] ? '#cowrie-mouth' : '#cowrie-back');
+      s.style.setProperty('--r', `${Math.floor(Math.random() * 360)}deg`);
+      s.style.setProperty('--dx', `${(Math.random() - 0.5) * 12}px`);
+      s.style.setProperty('--dy', `${(Math.random() - 0.5) * 10}px`);
+      s.classList.add('landed');
+    });
+  }
+
+  const bonusName = (v: number) => (v === 4 ? 'Chowka (4)' : 'Bhara (8)');
+  // e.g. "Bhara (8) on top of 8 and 4: three in a row."
+  const lostMessage = (v: number, run: number[]) =>
+    `${bonusName(v)} on top of ${run.join(' and ')}: three in a row.`;
+
+  const describe = (v: number) =>
+    v === 4 ? 'Chowka! 4, throw again.' : v === 8 ? 'Bhara! 8, throw again.' : `Threw ${v}.`;
+
+  // ---- Turn flow ----
+  //
+  // A turn is a series of actions: throw (while throws are owed), skip a risky
+  // throw, or move. See Turn in chowkaBhara.ts for the counting.
+
+  const risky = () => canSkip(turn);
+
+  function startTurn() {
+    if (gameOver()) return;
+    if (frozen(state)) {
+      phase = 'over';
+      turn = endedTurn();
+      if (watching) {
+        watching = false;
+        statusEl.textContent =
+          'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '. The rest are stuck for good.';
+      } else {
+        statusEl.textContent = "Draw: no one can move any more, so the game can't go on.";
+        recordResult(RECORD_KEY, 'draw');
+      }
+      render();
+      return;
+    }
+    turn = newTurn();
+    selectedValue = null;
+    selectedPawn = null;
+    thrownEl.textContent = '';
+    next();
+  }
+
+  // Decide what happens now: end the turn, wait for you, or let the computer act.
+  async function next() {
+    const id = gameId;
+    if (gameOver()) return;
+    if (turnOver(state, current, turn)) {
+      if (turn.bank.length) {
+        lastEl.textContent = `No move possible for ${turn.bank.join(' + ')}.`;
+        turn.bank = [];
+      }
+      phase = 'busy';
+      render();
+      await wait(DELAY.read);
+      if (id !== gameId) return;
+      do current = (current + 1) % seated.length;
+      while (placings.includes(current));
+      return startTurn();
+    }
+    const me = seated[current];
+    if (me.level === null) {
+      phase = 'act';
+      const moves = usable(state, current, turn);
+      if (selectedValue === null || !turn.bank.includes(selectedValue) || !moves.includes(selectedValue)) {
+        selectedValue = moves[0] ?? null;
+        selectedPawn = null;
+      }
+      statusEl.textContent = !turn.bank.length
+        ? turn.owed > 1 || lastEl.textContent.includes('Bonus')
+          ? 'Throw again.'
+          : 'Your turn. Throw the cowries.'
+        : risky()
+          ? 'Two 4/8s held: a third would lose the turn. Spend one, throw, or skip.'
+          : turn.owed > 0
+            ? moves.length
+              ? 'Move a pawn, or throw again first.'
+              : 'Nothing can move yet. Throw again.'
+            : 'Pick a throw, then tap a pawn to move.';
+      render();
+      return;
+    }
+    phase = 'busy';
+    statusEl.textContent = `${me.name}'s turn.`;
+    render();
+    await wait(DELAY.think);
+    if (id !== gameId) return;
+    const action = computerAction(state, current, turn, me.level) as Action;
+    if (action.kind === 'throw' && current === pickFor) {
+      // Testing: wait for you to choose this computer's throw.
+      phase = 'pick';
+      statusEl.textContent = `Choose ${me.name}'s throw.`;
+      render();
+      return;
+    }
+    await act(action);
+  }
+
+  async function act(action: Action) {
+    const id = gameId;
+    phase = 'busy';
+    if (action.kind === 'throw') {
+      const t = action.value ? { up: shellsFor(action.value), value: action.value } : throwShells();
+      render();
+      await throwAnimation(t.up);
+      if (id !== gameId) return;
+      const run = [...turn.run];
+      const r = recordThrow(turn, t.value);
+      thrownEl.textContent = r === 'lost' ? lostMessage(t.value, run) : describe(t.value);
+      if (r === 'lost') {
+        const who = seated[current].name;
+        lastEl.textContent = `${who === 'You' ? 'You' : who} lost the turn: ${lostMessage(t.value, run)}`;
+        render();
+        await wait(DELAY.read);
+      }
+    } else if (action.kind === 'skip') {
+      turn.owed--;
+      thrownEl.textContent = `${seated[current].name === 'You' ? 'You skip' : `${seated[current].name} skips`} the risky throw.`;
+    } else {
+      await performMove(action.move);
+    }
+    if (id !== gameId) return;
+    await wait(DELAY.between * 0.5);
+    if (id !== gameId) return;
+    next();
+  }
+
+  const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n] ?? 'th'}`;
+
+  watchEl.addEventListener('click', () => {
+    if (phase !== 'over' || watching) return;
+    watching = true;
+    phase = 'busy'; // the game is running again
+    watchEl.hidden = true;
+    statusEl.textContent = 'Watching the computers play for the other places.';
+    do current = (current + 1) % seated.length;
+    while (placings.includes(current));
+    startTurn();
+  });
+
+  throwEl.addEventListener('click', () => {
+    if ((phase === 'act' && turn.owed > 0) || phase === 'pick') act({ kind: 'throw' });
+  });
+  pickEl.querySelectorAll<HTMLButtonElement>('[data-throw]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const value = Number(b.dataset.throw);
+      if ((phase === 'act' && turn.owed > 0 && pickThrows) || phase === 'pick') act({ kind: 'throw', value });
+    }),
+  );
+
+  skipEl.addEventListener('click', () => {
+    if (phase === 'act' && canSkip(turn)) act({ kind: 'skip' });
+  });
+
+  function onPawn(player: number, pawn: number) {
+    if (phase !== 'act' || player !== current || selectedValue === null) return;
+    const options = movesFor(player, pawn, selectedValue);
+    if (!options.length) return;
+    // A lone option (a single, or a pair that has already left its square) moves at once;
+    // on the pair square, the first tap shows the choice and a second tap moves one pawn.
+    if (selectedPawn === pawn || options.length === 1) {
+      return humanMove(options.find((m) => m.pawns.length === 1) ?? options[0], pawn);
+    }
+    selectedPawn = pawn;
+    render();
+  }
+
+  function humanMove(move: Move, tapped?: number) {
+    if (phase !== 'act') return;
+    // Waiting pawns are interchangeable; bring in the one that was tapped.
+    if (move.from === WAITING && tapped !== undefined) move = { ...move, pawns: [tapped] };
+    else if (move.from === WAITING && selectedPawn !== null) move = { ...move, pawns: [selectedPawn] };
+    selectedPawn = null;
+    act({ kind: 'move', move });
+  }
+
+  async function performMove(move: Move) {
+    const id = gameId;
+    const who = seated[move.player];
+    const seat = state.players[move.player].seat;
+    selectedValue = null;
+    render();
+
+    // Hop square by square.
+    if (move.from !== WAITING) {
+      const steps = [];
+      for (let i = move.from + 1; i <= move.from + move.steps; i++) steps.push(i);
+      for (const [n, idx] of steps.entries()) {
+        if (id !== gameId) return;
+        move.pawns.forEach((p, k) => {
+          const [x, y] = idx === HOME ? [3.5, 3.5] : centreOf(square(seat, idx));
+          hopping.set(`${move.player}-${p}`, [x + (move.pawns.length === 2 ? (k ? 0.12 : -0.12) : 0), y]);
+        });
+        render();
+        await wait(n === steps.length - 1 ? DELAY.step * 1.4 : DELAY.step);
+      }
+    }
+    hopping.clear();
+
+    const { state: after, hits } = apply(state, move);
+    const firstHit = hits.length > 0 && !state.players[move.player].hasHit;
+    state = after;
+    recordSpend(turn, move.value, hits.length > 0);
+    if (move.from === WAITING) lastEl.textContent = `${who.name} brought a pawn in.`;
+    else if (hits.length) {
+      const names = [...new Set(hits.map((h) => seated[h.player].name))].join(' and ');
+      const verb = who.level === null ? 'You hit' : `${who.name} hit`;
+      lastEl.textContent = `${verb} ${names === 'You' ? 'you' : names}!${firstHit ? ' The inner ring is open.' : ''} Bonus throw.`;
+      hits.forEach((h) => pawnEls[h.player][h.pawn].classList.add('knocked'));
+      setTimeout(() => document.querySelectorAll('.pawn.knocked').forEach((el) => el.classList.remove('knocked')), 700);
+    } else if (move.to === HOME) lastEl.textContent = `${who.name} reached the centre.`;
+    else lastEl.textContent = `${who.name} moved ${move.steps}${move.pawns.length === 2 ? ' as a pair' : ''}.`;
+    render();
+
+    if (finished(state, move.player)) {
+      placings.push(move.player);
+      turn = endedTurn(); // a finished player's turn ends here
+      const left = seated.map((_, i) => i).filter((i) => !placings.includes(i));
+      if (!watching) {
+        phase = 'over';
+        const youWon = who.level === null;
+        statusEl.textContent = youWon ? 'You win! All four pawns are in the centre.' : `${who.name} wins.`;
+        recordResult(RECORD_KEY, youWon ? 'win' : 'loss');
+        watchEl.hidden = !(youWon && left.length >= 2);
+      } else if (left.length <= 1) {
+        placings.push(...left);
+        phase = 'over';
+        watching = false;
+        statusEl.textContent = 'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '.';
+      } else {
+        lastEl.textContent = `${who.name} finishes ${ordinal(placings.length)}.`;
+      }
+      render();
+    }
+  }
+
+  // ---- Game setup ----
+
+  function startGame() {
+    const f = new FormData(setupEl);
+    const n = Number(f.get('opponents'));
+    const mine = String(f.get('colour'));
+    const levels = readLevels();
+    const others = COLOURS.filter((c) => c.id !== mine).slice(0, n);
+    const you = COLOURS.find((c) => c.id === mine)!;
+    seated = [
+      { name: 'You', colour: you.id, colourName: you.name, level: null },
+      ...others.map((c, i) => ({ name: c.name, colour: c.id, colourName: c.name, level: levels[i] ?? 'easy' })),
+    ];
+    gameId++;
+    state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
+    current = 0;
+    turn = newTurn();
+    pickThrows = debugAllowed && f.get('pickThrows') === 'on';
+    pickFor = debugAllowed && f.get('pickFor') ? Number(f.get('pickFor')) : null;
+    placings = [];
+    watching = false;
+    watchEl.hidden = true;
+    lastEl.textContent = '';
+    thrownEl.textContent = '';
+    setupEl.hidden = true;
+    matchbarEl.hidden = false;
+    $('thrower').hidden = false;
+    buildPawns();
+    startTurn();
+  }
+
+  function showSetup() {
+    gameId++;
+    phase = 'setup';
+    setupEl.hidden = false;
+    matchbarEl.hidden = true;
+    $('thrower').hidden = true;
+    throwEl.hidden = true;
+    statusEl.textContent = '';
+    lastEl.textContent = '';
+    thrownEl.textContent = '';
+    turn = endedTurn();
+    placings = [];
+    watching = false;
+    watchEl.hidden = true;
+    renderSetupRows();
+    // Preview the table with the chosen seats.
+    const f = new FormData(setupEl);
+    const n = Number(f.get('opponents'));
+    const mine = String(f.get('colour'));
+    const others = COLOURS.filter((c) => c.id !== mine).slice(0, n);
+    const you = COLOURS.find((c) => c.id === mine)!;
+    seated = [
+      { name: 'You', colour: you.id, colourName: you.name, level: null },
+      ...others.map((c) => ({ name: c.name, colour: c.id, colourName: c.name, level: 'easy' as Level })),
+    ];
+    state = newGame(SEATS_FOR[seated.length], f.get('entry') === 'home');
+    buildPawns();
+    render();
+  }
+
+  setupEl.addEventListener('change', (e) => {
+    const name = (e.target as HTMLInputElement).name;
+    if (name === 'opponents' || name === 'colour' || name === 'entry') showSetup();
+  });
+  setupEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    startGame();
+  });
+  $('newgame').addEventListener('click', showSetup);
+
+  $('debug-row').hidden = !debugAllowed;
+  showSetup();
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  h1 {
+    margin-bottom: 0.25rem;
+  }
+
+  .intro {
+    margin-top: 0;
+  }
+
+  .sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  /* ---- Setup ---- */
+
+  .setup {
+    display: grid;
+    gap: 0.9rem;
+    margin: 1.5rem 0 1rem;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .setup[hidden],
+  .matchbar[hidden] {
+    display: none;
+  }
+
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  legend {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .setup :global(.chips) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .setup :global(.chip) {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .setup :global(.chip.small) {
+    padding: 0.2rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .setup :global(.chip input) {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .setup :global(.chip:has(input:checked)) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    font-weight: 600;
+  }
+
+  .setup :global(.chip:has(input:focus-visible)) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .setup :global(.chip svg),
+  .opponent-rows :global(svg) {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .opponent-rows {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .opponent-rows :global(.opponent-row) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+  }
+
+  .opponent-rows :global(.who) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 6rem;
+  }
+
+  .hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.85rem;
+  }
+
+  .setup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .matchbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    margin: 1.25rem 0 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  select {
+    font: inherit;
+    margin-left: 0.3rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  /* ---- Floor and board ---- */
+
+  .play {
+    display: grid;
+    gap: 1rem;
+  }
+
+  /* Red-oxide floor: one surface under the board and the throwing circle. */
+  .floor {
+    --oxide: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='8' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.04 0 0 0 0 0.02 0 0 0 0.55 0'/%3E%3C/filter%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' seed='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.85 0 0 0 0 0.75 0 0 0 0.12 -0.02'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E");
+    display: grid;
+    width: min(100%, 36rem);
+    margin-inline: auto;
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 42% 28%, rgb(255 255 255 / 0.08), transparent 55%),
+      radial-gradient(ellipse at 50% 50%, transparent 55%, rgb(0 0 0 / 0.28)),
+      var(--oxide),
+      #933c29;
+    background-size: auto, auto, 600px 600px, auto;
+    box-shadow:
+      0 12px 28px rgb(0 0 0 / 0.35),
+      inset 0 0 40px rgb(0 0 0 / 0.3);
+    touch-action: manipulation;
+  }
+
+  .board-square {
+    position: relative;
+    aspect-ratio: 1;
+  }
+
+  .board {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .chalk :global(rect),
+  .chalk :global(path),
+  .chalk :global(ellipse),
+  .chalk :global(circle) {
+    fill: none;
+    stroke: #f4eee3;
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.9;
+  }
+
+  .chalk :global(.dot) {
+    fill: #f4eee3;
+    stroke: none;
+  }
+
+  .pairmarks :global(ellipse) {
+    stroke-width: 3.4;
+    opacity: 0.95;
+  }
+
+  .yards :global(rect) {
+    stroke-width: 2.5;
+    opacity: 0.55;
+  }
+
+  #marks :global(.target) {
+    fill: rgb(255 240 200 / 0.18);
+    stroke: #fff4d6;
+    stroke-width: 3;
+    stroke-dasharray: 6 7;
+    animation: spin 6s linear infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  @keyframes spin {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  .pawns {
+    position: absolute;
+    inset: 0;
+  }
+
+  .pawns :global(.pawn) {
+    position: absolute;
+    width: 6.4%;
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    translate: -50% -50%;
+    transition:
+      left 0.16s ease,
+      top 0.16s ease,
+      scale 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pawns :global(.pawn svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 2px 2px rgb(30 5 0 / 0.5));
+  }
+
+  .pawns :global(.pawn:disabled) {
+    cursor: default;
+  }
+
+  .pawns :global(.pawn.home) {
+    width: 4.8%;
+  }
+
+  .pawns :global(.pawn.movable) {
+    z-index: 2;
+    cursor: pointer;
+    animation: bob 1.4s ease-in-out infinite;
+  }
+
+  .pawns :global(.pawn.movable)::after {
+    content: '';
+    position: absolute;
+    inset: -18%;
+    border: 2px dashed rgb(255 244 214 / 0.85);
+    border-radius: 50%;
+  }
+
+  .pawns :global(.pawn.picked) {
+    z-index: 3;
+    scale: 1.2;
+    animation: none;
+  }
+
+  .pawns :global(.pawn.picked)::after {
+    border-style: solid;
+    border-color: #fff4d6;
+  }
+
+  .pawns :global(.pawn.knocked) {
+    animation: knocked 0.6s ease;
+  }
+
+  @keyframes bob {
+    50% {
+      translate: -50% -62%;
+    }
+  }
+
+  @keyframes knocked {
+    30% {
+      scale: 1.4;
+      rotate: 25deg;
+    }
+  }
+
+  /* ---- Cowries, throws, players ---- */
+
+  .side {
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+    width: min(100%, 36rem);
+    margin-inline: auto;
+  }
+
+  .thrower[hidden] {
+    display: none;
+  }
+
+  /* The throwing circle, chalked on the same floor. */
+  .thrower {
+    display: grid;
+    gap: 0.5rem;
+    align-content: center;
+    margin: 0 1rem 1rem;
+    padding: 0.75rem;
+    border: 2px dashed rgb(244 238 227 / 0.4);
+    border-radius: 18px;
+    color: #f7ecd9;
+    text-shadow: 0 1px 2px rgb(40 8 0 / 0.5);
+  }
+
+  .shells {
+    display: flex;
+    justify-content: center;
+    gap: 0.9rem;
+    height: 3.4rem;
+    align-items: center;
+  }
+
+  .cowrie {
+    width: 1.9rem;
+    aspect-ratio: 24 / 32;
+    rotate: var(--r, 0deg);
+    translate: var(--dx, 0) var(--dy, 0);
+    filter: drop-shadow(0 2px 2px rgb(20 5 0 / 0.6));
+    transition:
+      rotate 0.35s ease-out,
+      translate 0.35s ease-out;
+  }
+
+  .cowrie:global(.tumble) {
+    animation: tumble 0.25s linear infinite;
+  }
+
+  @keyframes tumble {
+    0% {
+      rotate: 0deg;
+      translate: 0 -6px;
+    }
+    50% {
+      rotate: 180deg;
+      translate: 3px 2px;
+    }
+    100% {
+      rotate: 360deg;
+      translate: 0 -6px;
+    }
+  }
+
+  .thrown {
+    min-height: 1.5em;
+    margin: 0;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .throw-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.4rem;
+  }
+
+  .throw-actions .btn.primary {
+    background: #f1d9a8;
+    border-color: #f1d9a8;
+    color: #4a1f14;
+    font-size: 1rem;
+    padding: 0.45rem 1.2rem;
+  }
+
+  .throw-actions .btn.skip {
+    background: rgb(0 0 0 / 0.25);
+    border-color: rgb(247 236 217 / 0.5);
+    color: #f7ecd9;
+  }
+
+  .pick {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+  }
+
+  .pick[hidden] {
+    display: none;
+  }
+
+  .pick .value {
+    min-width: 2.1rem;
+    height: 2.1rem;
+    border: 2px dashed rgb(247 236 217 / 0.55);
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.2);
+    color: #f7ecd9;
+    font-weight: 700;
+  }
+
+  .pick .value:hover {
+    border-style: solid;
+  }
+
+  .check select {
+    font: inherit;
+    padding: 0.2rem 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  #debug-row {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  #debug-row[hidden] {
+    display: none;
+  }
+
+  .bank {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .bank :global(.value) {
+    min-width: 2.4rem;
+    height: 2.4rem;
+    border: 2px solid rgb(247 236 217 / 0.5);
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.2);
+    color: #f7ecd9;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  .bank :global(.value.on) {
+    background: #f1d9a8;
+    border-color: #f1d9a8;
+    color: #4a1f14;
+  }
+
+  .bank :global(.value:disabled) {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .choices:empty {
+    display: none;
+  }
+
+  .choices :global(.btn) {
+    background: rgb(0 0 0 / 0.25);
+    border-color: rgb(247 236 217 / 0.4);
+    color: #f7ecd9;
+  }
+
+  .status {
+    min-height: 1.6em;
+    margin: 0.4rem 0 0;
+    font-weight: 600;
+  }
+
+  .last {
+    min-height: 1.6em;
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .players {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .players :global(li) {
+    display: grid;
+    grid-template-columns: 1.4rem 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 0.9rem;
+  }
+
+  .players :global(li.now) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  }
+
+  .players :global(svg) {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+
+  .players :global(.place) {
+    margin-left: 0.3rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: #f1d9a8;
+    color: #4a1f14;
+    font-style: normal;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .players :global(small) {
+    color: var(--muted);
+  }
+
+  .players :global(.pinfo) {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .players :global(.pinfo b) {
+    color: var(--fg);
+    font-weight: 600;
+  }
+
+  /* ---- Full screen ---- */
+
+  .game-area:global(.zen-on) > * {
+    width: min(100%, 64rem);
+  }
+
+  .game-area:global(.zen-on) .setup,
+  .game-area:global(.zen-on) .matchbar {
+    margin-block: 0;
+  }
+
+  .game-area:global(.zen-on) .floor {
+    width: min(100%, calc(100dvh - 22rem));
+  }
+
+  /* Wide full screen: the throwing circle moves to the board's right, on the same floor. */
+  @media (min-width: 56rem) {
+    .game-area:global(.zen-on) .play {
+      grid-template-columns: auto 17rem;
+      align-items: start;
+      justify-content: center;
+      width: auto;
+      max-width: 100%;
+    }
+
+    .game-area:global(.zen-on) .floor {
+      --square: min(calc(100vw - 36rem), calc(100dvh - 10rem));
+      grid-template-columns: var(--square) 14rem;
+      width: auto;
+    }
+
+    .game-area:global(.zen-on) .thrower {
+      margin: 1rem 1rem 1rem 0;
+    }
+  }
+
+  details {
+    margin-top: 2rem;
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+</style>

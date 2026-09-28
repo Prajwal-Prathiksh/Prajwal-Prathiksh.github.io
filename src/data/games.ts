@@ -19,4 +19,9 @@ export const games = [
     name: 'Ali Guli Mane',
     blurb: 'The seed-sowing game from Karnataka, on a wooden board with cowrie shells. Play the computer or a friend.',
   },
+  {
+    slug: 'chowka-bhara',
+    name: 'Chowka Bhara',
+    blurb: 'The cowrie-shell race game, chalked on a red-oxide floor. You against up to three computer players.',
+  },
 ];

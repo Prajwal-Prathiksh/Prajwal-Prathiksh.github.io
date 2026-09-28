@@ -1,0 +1,506 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const ROWS = ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'];
+---
+
+<Base title="Wordling" description="Guess the five-letter word in six tries. Play as many rounds as you like.">
+  <p class="back"><a href="/play/">← All games</a></p>
+  <h1>Wordling</h1>
+
+  <div class="controls">
+    <label>
+      Mode
+      <select id="mode">
+        <option value="easy">Easy</option>
+        <option value="hard">Hard</option>
+      </select>
+    </label>
+    <button class="btn" type="button" id="reset">New word</button>
+  </div>
+
+  <div class="game">
+    <p id="toast" class="toast" aria-live="assertive"></p>
+
+    <div id="board" class="board" role="grid" aria-label="Guesses">
+      {
+        Array.from({ length: 6 }, () => (
+          <div class="row" role="row">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div class="tile" role="gridcell" style={`--i: ${i}`} />
+            ))}
+          </div>
+        ))
+      }
+    </div>
+
+    <div id="keyboard" class="keyboard" aria-label="Keyboard">
+      {
+        ROWS.map((row) => (
+          <div class="keys">
+            {row.split('').map((k) =>
+              k === '+' ? (
+                <button type="button" class="key wide" data-key="enter">Enter</button>
+              ) : k === '-' ? (
+                <button type="button" class="key wide" data-key="backspace" aria-label="Delete">⌫</button>
+              ) : (
+                <button type="button" class="key" data-key={k}>{k}</button>
+              ),
+            )}
+          </div>
+        ))
+      }
+    </div>
+  </div>
+
+  <dl id="stats" class="stats"></dl>
+
+  <details>
+    <summary>How to play</summary>
+    <p>Guess the hidden five-letter word in six tries. Each guess must be a real word. After each guess, the tiles show how close you were:</p>
+    <ul class="legend">
+      <li><span class="tile mini" data-state="correct">a</span> right letter, right spot</li>
+      <li><span class="tile mini" data-state="present">b</span> in the word, wrong spot (marked with a dot)</li>
+      <li><span class="tile mini" data-state="absent">c</span> not in the word</li>
+    </ul>
+    <p>In hard mode, every hint you've found has to be used in your next guesses.</p>
+    <p>There's no daily limit. Press New word whenever you want another.</p>
+  </details>
+
+  <p class="muted note">Scores are saved on this device only.</p>
+</Base>
+
+<script>
+  import { LENGTH, TRIES, evaluate, hardModeError, isValid, randomAnswer, type Mark } from '../../scripts/wordling';
+  import { loadRecord, recordResult } from '../../scripts/scores';
+
+  const REVEAL_MS = 250;
+  const RANK: Record<Mark, number> = { absent: 0, present: 1, correct: 2 };
+
+  const modeEl = document.getElementById('mode') as HTMLSelectElement;
+  const toastEl = document.getElementById('toast')!;
+  const statsEl = document.getElementById('stats')!;
+  const rows = [...document.querySelectorAll<HTMLElement>('.board .row')];
+  const keys = new Map(
+    [...document.querySelectorAll<HTMLButtonElement>('.key')].map((k) => [k.dataset.key!, k]),
+  );
+
+  let answer = '';
+  let current = '';
+  let history: { word: string; marks: Mark[] }[] = [];
+  let over = false;
+  let busy = false;
+  let toastTimer = 0;
+  const recent = new Set<string>();
+
+  const recordKey = () => `wordling-${modeEl.value}`;
+  const tiles = (row: number) => [...rows[row].querySelectorAll<HTMLElement>('.tile')];
+
+  const toast = (text: string, sticky = false) => {
+    clearTimeout(toastTimer);
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    if (!sticky) toastTimer = window.setTimeout(() => toastEl.classList.remove('show'), 1800);
+  };
+
+  const renderStats = () => {
+    const r = loadRecord(recordKey());
+    const played = r.wins + r.losses;
+    statsEl.innerHTML = [
+      ['Played', played],
+      ['Win %', played ? Math.round((100 * r.wins) / played) : 0],
+      ['Streak', r.streak],
+      ['Best streak', r.bestStreak],
+    ]
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+      .join('');
+  };
+
+  const renderCurrent = () => {
+    const row = history.length;
+    if (row >= TRIES) return;
+    tiles(row).forEach((t, i) => {
+      const letter = current[i] ?? '';
+      if (t.textContent !== letter && letter) {
+        t.classList.remove('pop');
+        void t.offsetWidth;
+        t.classList.add('pop');
+      }
+      t.textContent = letter;
+      t.dataset.state = letter ? 'typed' : '';
+    });
+  };
+
+  const shake = () => {
+    const row = rows[history.length];
+    row.classList.remove('shake');
+    void row.offsetWidth;
+    row.classList.add('shake');
+  };
+
+  const paintKeys = (word: string, marks: Mark[]) => {
+    word.split('').forEach((c, i) => {
+      const key = keys.get(c)!;
+      const prev = key.dataset.state as Mark | undefined;
+      if (!prev || RANK[marks[i]] > RANK[prev]) key.dataset.state = marks[i];
+    });
+  };
+
+  const LABEL: Record<Mark, string> = {
+    correct: 'right spot',
+    present: 'wrong spot',
+    absent: 'not in word',
+  };
+
+  const submit = () => {
+    if (current.length < LENGTH) return (shake(), toast('Not enough letters'));
+    if (!isValid(current)) return (shake(), toast('Not in word list'));
+    if (modeEl.value === 'hard') {
+      const err = hardModeError(current, history);
+      if (err) return (shake(), toast(err));
+    }
+
+    const word = current;
+    const marks = evaluate(word, answer);
+    const row = history.length;
+    history.push({ word, marks });
+    current = '';
+    busy = true;
+
+    tiles(row).forEach((t, i) => {
+      t.dataset.state = marks[i];
+      t.classList.add('flip');
+      t.setAttribute('aria-label', `${word[i].toUpperCase()}, ${LABEL[marks[i]]}`);
+    });
+
+    setTimeout(() => {
+      busy = false;
+      paintKeys(word, marks);
+      if (word === answer) {
+        over = true;
+        rows[row].classList.add('win');
+        toast(['First try!', 'Solved in 2.', 'Solved in 3.', 'Solved in 4.', 'Solved in 5.', 'Phew, solved in 6.'][row], true);
+        recordResult(recordKey(), 'win');
+      } else if (history.length === TRIES) {
+        over = true;
+        toast(`The word was ${answer.toUpperCase()}.`, true);
+        recordResult(recordKey(), 'loss');
+      }
+      renderStats();
+    }, REVEAL_MS * LENGTH + 300);
+  };
+
+  const press = (key: string) => {
+    if (over || busy) return;
+    if (key === 'enter') submit();
+    else if (key === 'backspace') current = current.slice(0, -1);
+    else if (/^[a-z]$/.test(key) && current.length < LENGTH) current += key;
+    renderCurrent();
+  };
+
+  keys.forEach((el, key) =>
+    el.addEventListener('click', () => {
+      press(key);
+      el.blur(); // so Enter on a physical keyboard doesn't re-press this key
+    }),
+  );
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target instanceof HTMLSelectElement || (e.target as HTMLElement).closest?.('summary')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'enter' || key === 'backspace' || /^[a-z]$/.test(key)) {
+      e.preventDefault();
+      press(key);
+    }
+  });
+
+  const reset = () => {
+    if (recent.size > 200) recent.clear();
+    answer = randomAnswer(recent);
+    recent.add(answer);
+    current = '';
+    history = [];
+    over = false;
+    busy = false;
+    toastEl.classList.remove('show');
+    rows.forEach((r) => r.classList.remove('win', 'shake'));
+    document.querySelectorAll<HTMLElement>('.board .tile').forEach((t) => {
+      t.textContent = '';
+      t.dataset.state = '';
+      t.classList.remove('flip', 'pop');
+      t.removeAttribute('aria-label');
+    });
+    keys.forEach((k) => delete k.dataset.state);
+    renderStats();
+  };
+
+  document.getElementById('reset')!.addEventListener('click', (e) => {
+    reset();
+    (e.currentTarget as HTMLElement).blur();
+  });
+  modeEl.addEventListener('change', () => {
+    reset();
+    modeEl.blur();
+  });
+  reset();
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+  }
+
+  select {
+    font: inherit;
+    margin-left: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  .game {
+    --correct: var(--accent);
+    --present: light-dark(#c47f17, #d9a441);
+    --absent: light-dark(#a3a8ae, #22262b);
+    --on-absent: light-dark(#fff, #6b727b);
+    --on-mark: light-dark(#fff, #121417);
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 1.25rem;
+    width: min(100%, 30rem);
+    margin-top: 1.5rem;
+  }
+
+  .toast {
+    position: absolute;
+    top: -0.5rem;
+    left: 50%;
+    z-index: 3;
+    margin: 0;
+    padding: 0.45rem 0.9rem;
+    border-radius: 8px;
+    background: var(--fg);
+    color: var(--bg);
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    translate: -50% 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .toast:global(.show) {
+    opacity: 1;
+  }
+
+  .board {
+    display: grid;
+    gap: 0.35rem;
+    width: min(100%, 18.5rem);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.35rem;
+  }
+
+  .tile {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    font-size: clamp(1.4rem, 7vw, 1.9rem);
+    font-weight: 700;
+    text-transform: uppercase;
+    user-select: none;
+  }
+
+  .tile[data-state='typed'] {
+    border-color: var(--muted);
+  }
+
+  .tile[data-state='correct'],
+  .tile[data-state='present'],
+  .tile[data-state='absent'] {
+    color: var(--on-mark);
+  }
+
+  .tile[data-state='correct'] {
+    background: var(--correct);
+    border-color: var(--correct);
+  }
+
+  .tile[data-state='present'] {
+    background: var(--present);
+    border-color: var(--present);
+  }
+
+  .tile[data-state='absent'] {
+    background: var(--absent);
+    border-color: var(--absent);
+    color: var(--on-absent);
+  }
+
+  /* A dot marks "wrong spot" so the hint doesn't rely on colour alone. */
+  .tile[data-state='present']::after,
+  .key[data-state='present']::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .tile:global(.pop) {
+    animation: pop 0.1s ease;
+  }
+
+  /* Each tile turns its colour halfway through its own flip. */
+  .tile:global(.flip) {
+    animation: flip 0.25s ease calc(var(--i) * 250ms) both;
+    transition:
+      background-color 0s linear calc(var(--i) * 250ms + 125ms),
+      border-color 0s linear calc(var(--i) * 250ms + 125ms),
+      color 0s linear calc(var(--i) * 250ms + 125ms);
+  }
+
+  .row:global(.shake) {
+    animation: shake 0.35s ease;
+  }
+
+  .row:global(.win) .tile {
+    animation: bounce 0.4s ease calc(var(--i) * 80ms) both;
+  }
+
+  @keyframes pop {
+    50% {
+      scale: 1.08;
+    }
+  }
+
+  @keyframes flip {
+    50% {
+      rotate: x 90deg;
+    }
+  }
+
+  @keyframes shake {
+    20%,
+    60% {
+      translate: -6px 0;
+    }
+    40%,
+    80% {
+      translate: 6px 0;
+    }
+  }
+
+  @keyframes bounce {
+    40% {
+      translate: 0 -10px;
+    }
+  }
+
+  .keyboard {
+    display: grid;
+    gap: 0.4rem;
+    width: 100%;
+    touch-action: manipulation;
+  }
+
+  .keys {
+    display: flex;
+    justify-content: center;
+    gap: 0.3rem;
+  }
+
+  .key {
+    position: relative;
+    flex: 1;
+    max-width: 2.6rem;
+    height: 3.2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: light-dark(#dfe2e6, #2f343b);
+    font-size: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    user-select: none;
+  }
+
+  .key.wide {
+    flex: 1.6;
+    max-width: 4.2rem;
+    font-size: 0.8rem;
+  }
+
+  .key[data-state='correct'] {
+    background: var(--correct);
+    color: var(--on-mark);
+  }
+
+  .key[data-state='present'] {
+    background: var(--present);
+    color: var(--on-mark);
+  }
+
+  /* Ruled-out letters fade back so the keys still worth trying stand out. */
+  .key[data-state='absent'] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: light-dark(#b4b8be, #4a5058);
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+  }
+
+  details {
+    margin-top: 2rem;
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .legend {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .legend .mini {
+    width: 1.9rem;
+    font-size: 1rem;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+</style>

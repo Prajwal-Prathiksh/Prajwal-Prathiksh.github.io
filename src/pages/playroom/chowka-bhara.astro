@@ -81,21 +81,23 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         <p id="entry-hint" class="hint muted">All four pawns begin on your home square.</p>
       </fieldset>
       <fieldset id="levels-set">
-        <legend>
-          Computer players
-          <button type="button" id="style-help-toggle" class="style-help-toggle" aria-label="What do computer styles mean?" aria-controls="style-help-box" aria-expanded="false" title="What do computer styles mean?">?</button>
-        </legend>
-        <div id="style-help-box" class="style-help-box" hidden>
-          <p>Easy or Hard sets how carefully the computer chooses. Style changes what it favours.</p>
-          <ul>
-            <li><strong>Balanced</strong> weighs a useful hit against a safer route home.</li>
-            <li><strong>Aggressive</strong> may take a hit instead of the shorter route to the centre.</li>
-            <li><strong>Cautious</strong> often stops on a crossed safe square to avoid being hit.</li>
-            <li><strong>Builder</strong> looks for pairs that can slow pawns coming behind.</li>
-            <li><strong>Racer</strong> pushes toward the centre, even when a hit is available.</li>
-          </ul>
-        </div>
+        <legend>Computer difficulty</legend>
         <div id="opponent-rows" class="opponent-rows"></div>
+        <details class="personality-options">
+          <summary>Computer personalities <span>Balanced by default</span></summary>
+          <p class="hint muted">Optional starting preferences. Computers still learn how everyone plays during the game.</p>
+          <div id="style-rows" class="opponent-rows style-rows"></div>
+          <details class="style-guide">
+            <summary>What do the personalities change?</summary>
+            <ul>
+              <li><strong>Balanced</strong> weighs a useful hit against a safer route home.</li>
+              <li><strong>Aggressive</strong> may take a hit instead of the shorter route to the centre.</li>
+              <li><strong>Cautious</strong> often stops on a crossed safe square to avoid being hit.</li>
+              <li><strong>Builder</strong> looks for pairs that can slow pawns coming behind.</li>
+              <li><strong>Racer</strong> pushes toward the centre, even when a hit is available.</li>
+            </ul>
+          </details>
+        </details>
       </fieldset>
       <fieldset id="debug-row" hidden>
         <legend>Testing</legend>
@@ -308,6 +310,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     type EntryMode,
   } from '../../scripts/chowkaBhara';
   import { chooseAction, type Level, type Style } from '../../scripts/chowkaBharaAI';
+  import type { AIRequest, AIResponse } from '../../scripts/chowkaBharaAI.worker';
+  import { observeAction, predictedAcceptance } from '../../scripts/chowkaBharaOpponent';
   import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
   import { recordResult, renderRecord } from '../../scripts/scores';
 
@@ -339,8 +343,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const setupEl = $<HTMLFormElement>('setup');
   const rowsEl = $('opponent-rows');
-  const styleHelpToggleEl = $<HTMLButtonElement>('style-help-toggle');
-  const styleHelpBoxEl = $('style-help-box');
+  const styleRowsEl = $('style-rows');
   const matchbarEl = $('matchbar');
   const speedEl = $<HTMLSelectElement>('speed');
   const pawnsEl = $('pawns');
@@ -392,6 +395,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let placings: number[] = []; // players in the order they finished
   let watching = false; // after you win, the computers can play on for the other places
   let gameId = 0;
+  let aiRequest = 0;
+  let aiWorker: Worker | null = null;
+  const aiPending = new Map<number, { resolve: (response: AIResponse) => void; reject: (error: Error) => void }>();
   let social: SocialState = newSocial(2);
   let pendingOffers: { from: number; to: number; target: number }[] = [];
   const pawnEls: HTMLButtonElement[][] = [];
@@ -400,6 +406,38 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   // A move can end the game while a caller awaits it, so re-read the phase.
   const gameOver = () => phase === 'over';
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * Number(speedEl.value)));
+
+  function askAI(request: Omit<AIRequest, 'id'>): Promise<AIResponse> {
+    if (!aiWorker) {
+      aiWorker = new Worker(new URL('../../scripts/chowkaBharaAI.worker.ts', import.meta.url), { type: 'module' });
+      aiWorker.onmessage = (event: MessageEvent<AIResponse>) => {
+        const pending = aiPending.get(event.data.id);
+        if (!pending) return;
+        aiPending.delete(event.data.id);
+        pending.resolve(event.data);
+      };
+      aiWorker.onerror = () => {
+        const error = new Error('The AI worker stopped unexpectedly.');
+        aiPending.forEach(({ reject }) => reject(error));
+        aiPending.clear();
+        aiWorker?.terminate();
+        aiWorker = null;
+      };
+    }
+    const id = ++aiRequest;
+    aiWorker.postMessage({ id, ...request } satisfies AIRequest);
+    return new Promise((resolve, reject) => aiPending.set(id, { resolve, reject }));
+  }
+
+  async function chooseInWorker(level: Level, style: Style) {
+    try {
+      return await askAI({ state, player: current, turn, level, style, turnStart: turnStartState, nextPlayer: nextRival(current), social });
+    } catch {
+      // Older or restricted browsers can still play; only the UI-thread
+      // responsiveness benefit is lost.
+      return chooseAction(state, current, turn, level, style, turnStartState, nextRival(current), social);
+    }
+  }
 
   function recordHistory(description: string) {
     positions.push(state);
@@ -416,7 +454,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const readLevels = () =>
     [...rowsEl.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value as Level);
   const readStyles = () =>
-    [...rowsEl.querySelectorAll<HTMLSelectElement>('select[name^="style-"]')].map((s) => s.value as Style);
+    [...styleRowsEl.querySelectorAll<HTMLSelectElement>('select[name^="style-"]')].map((s) => s.value as Style);
 
   let humanColours: string[] = ['blue'];
   const humanNames: string[] = [];
@@ -488,8 +526,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         (c, i) => `<div class="opponent-row">
           <span class="who">${pawnIcon(c.id)}${c.name}</span>
           <div class="chips">${chips(`level-${i}`, [['easy', 'Easy'], ['hard', 'Hard']], previous[i] ?? 'easy', true)}</div>
-          <label class="style-choice">Style <select name="style-${i}">${STYLES.map((style) => `<option value="${style.id}"${style.id === (previousStyles[i] ?? (['aggressive', 'cautious', 'builder'][i] ?? 'balanced')) ? ' selected' : ''}>${style.name}</option>`).join('')}</select></label>
         </div>`,
+      )
+      .join('');
+    styleRowsEl.innerHTML = others
+      .map(
+        (c, i) => `<label class="opponent-row style-choice">
+          <span class="who">${pawnIcon(c.id)}${c.name}</span>
+          <select name="style-${i}" aria-label="${c.name} computer personality">${STYLES.map((style) => `<option value="${style.id}"${style.id === (previousStyles[i] ?? 'balanced') ? ' selected' : ''}>${style.name}</option>`).join('')}</select>
+        </label>`,
       )
       .join('');
   };
@@ -864,7 +909,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       .map((i) => ({ player: i, target: canOffer(social, state, current, i, activePlayers()) }))
       .filter((x): x is { player: number; target: number } => x.target !== null)
       .filter((x) => threat(state, x.target) >= 55)
-      .sort((a, b) => social.trust[current][b.player] - social.trust[current][a.player]);
+      .sort((a, b) =>
+        predictedAcceptance(social, state, current, b.player, b.target)
+        - predictedAcceptance(social, state, current, a.player, a.target)
+        || social.trust[current][b.player] - social.trust[current][a.player]);
     if (options.length) offerTruce(current, options[0].player);
   }
 
@@ -948,7 +996,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     render();
     await wait(DELAY.think);
     if (id !== gameId) return;
-    const { action } = chooseAction(state, current, turn, me.level, me.style, turnStartState, nextRival(current), social);
+    const { action } = await chooseInWorker(me.level, me.style);
+    if (id !== gameId) return;
     if (!action) {
       turn = endedTurn();
       next();
@@ -1043,9 +1092,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     render();
   });
 
-  hintEl.addEventListener('click', () => {
+  hintEl.addEventListener('click', async () => {
     if (phase !== 'act' || seated[current].level !== null || historyIndex !== null) return;
-    const { action, reason } = chooseAction(state, current, turn, 'hard', 'balanced', turnStartState, nextRival(current), social);
+    const id = gameId;
+    hintEl.disabled = true;
+    hintEl.textContent = 'Thinking…';
+    const { action, reason } = await chooseInWorker('hard', 'balanced');
+    hintEl.disabled = false;
+    hintEl.textContent = 'Hint';
+    if (id !== gameId || phase !== 'act') return;
     hintTextEl.textContent = reason;
     if (action?.kind === 'move') {
       selectedPawn = action.move.pawns[0];
@@ -1151,6 +1206,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     }
     hopping.clear();
 
+    observeAction(social, state, move.player, turn, { kind: 'move', move });
     const { state: after, hits } = apply(state, move);
     const firstHit = hits.length > 0 && !state.players[move.player].hasHit;
     state = after;
@@ -1294,10 +1350,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     e.preventDefault();
     startGame();
   });
-  styleHelpToggleEl.addEventListener('click', () => {
-    styleHelpBoxEl.hidden = !styleHelpBoxEl.hidden;
-    styleHelpToggleEl.setAttribute('aria-expanded', String(!styleHelpBoxEl.hidden));
-  });
   $('newgame').addEventListener('click', showSetup);
   entryToggleEl.addEventListener('click', () => {
     const show = entryToggleEl.getAttribute('aria-pressed') !== 'true';
@@ -1358,55 +1410,58 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     margin-bottom: 0.4rem;
   }
 
-  .style-help-toggle {
-    display: inline-grid;
-    place-items: center;
-    width: 1.35rem;
-    height: 1.35rem;
-    margin-left: 0.25rem;
-    padding: 0;
-    border: 1px solid var(--line);
-    border-radius: 50%;
-    background: var(--surface);
-    color: var(--muted);
-    font: inherit;
-    font-weight: 700;
-    cursor: pointer;
-    vertical-align: middle;
-  }
-
-  .style-help-toggle[aria-expanded='true'] {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .style-help-box {
+  .personality-options {
     max-width: 36rem;
-    margin: 0 0 0.75rem;
-    padding: 0.7rem 0.85rem;
+    margin-top: 0.7rem;
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--surface);
+  }
+
+  .personality-options > summary,
+  .style-guide > summary {
+    cursor: pointer;
     color: var(--fg);
-    font-size: 0.85rem;
+    font-size: 0.88rem;
+  }
+
+  .personality-options > summary {
+    padding: 0.65rem 0.8rem;
+  }
+
+  .personality-options > summary span {
+    margin-left: 0.35rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 400;
+  }
+
+  .personality-options[open] {
+    padding-bottom: 0.75rem;
+  }
+
+  .personality-options[open] > summary {
+    margin-bottom: 0.65rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .personality-options > .hint,
+  .personality-options > .style-rows,
+  .personality-options > .style-guide {
+    margin-right: 0.8rem;
+    margin-left: 0.8rem;
+  }
+
+  .style-guide {
+    margin-top: 0.65rem;
+    color: var(--muted);
+    font-size: 0.82rem;
     line-height: 1.45;
   }
 
-  .style-help-box[hidden] {
-    display: none;
-  }
-
-  .style-help-box p {
-    margin: 0 0 0.45rem;
-  }
-
-  .style-help-box ul {
-    margin: 0;
+  .style-guide ul {
+    margin: 0.5rem 0 0;
     padding-left: 1.15rem;
-  }
-
-  .style-help-box li + li {
-    margin-top: 0.25rem;
   }
 
   .setup :global(.chips) {

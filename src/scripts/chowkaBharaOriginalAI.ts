@@ -1,3 +1,5 @@
+// Frozen tournament reference from commit a71e7b8. Keep this implementation
+// unchanged so reported results remain comparable to the original Hard AI.
 import {
   HOME,
   LAST_OUTER,
@@ -10,6 +12,7 @@ import {
   isSafe,
   keyOf,
   legalMoves,
+  recordSpend,
   recordThrow,
   square,
   stranded,
@@ -19,15 +22,12 @@ import {
   type State,
   type Turn,
 } from './chowkaBhara';
-import { CHOWKA_MODEL, decisionScore, modelScore, type EvaluationModel } from './chowkaBharaModel';
-import { applyKnownAction, copyTurn, possibleActions, THROW_ODDS } from './chowkaBharaMatch';
-import { inferredStyleWeights } from './chowkaBharaOpponent';
 import { allyOf, pactFor, relayValue, threat, type SocialState } from './chowkaBharaSocial';
 
 export type Style = 'balanced' | 'aggressive' | 'cautious' | 'builder' | 'racer';
 export type Level = 'easy' | 'hard';
 
-const ODDS: [number, number][] = THROW_ODDS.map(([value, count]) => [value, count / 16]);
+const ODDS: [number, number][] = [[1, 4 / 16], [2, 6 / 16], [3, 4 / 16], [4, 1 / 16], [8, 1 / 16]];
 const WEIGHTS: Record<Style, { progress: number; centre: number; safe: number; pair: number; hit: number; opponent: number; reply: number }> = {
   balanced: { progress: 2.5, centre: 62, safe: 5, pair: 12, hit: 18, opponent: 0.5, reply: 0.38 },
   aggressive: { progress: 2.3, centre: 58, safe: 2, pair: 7, hit: 28, opponent: 0.7, reply: 0.35 },
@@ -37,6 +37,8 @@ const WEIGHTS: Record<Style, { progress: number; centre: number; safe: number; p
 };
 
 const boardKey = (s: State) => s.players.map((p) => `${p.pawns.join(',')}/${p.partner.join(',')}/${+p.hasHit}`).join('|');
+const copyTurn = (t: Turn): Turn => ({ bank: [...t.bank], owed: t.owed, streak: t.streak, run: [...t.run] });
+
 function playerScore(s: State, player: number, style: Style): number {
   const p = s.players[player];
   const w = WEIGHTS[style];
@@ -69,7 +71,7 @@ function playerScore(s: State, player: number, style: Style): number {
   return score;
 }
 
-function heuristicBoardScore(s: State, player: number, style: Style, social: SocialState, broken = false): number {
+function boardScore(s: State, player: number, style: Style, social: SocialState, broken = false): number {
   const own = playerScore(s, player, style);
   const others = s.players.map((_, i) => i).filter((i) => i !== player);
   if (!others.length) return own;
@@ -86,45 +88,10 @@ function heuristicBoardScore(s: State, player: number, style: Style, social: Soc
   return own - penalty;
 }
 
-function boardScore(
-  s: State,
-  player: number,
-  style: Style,
-  social: SocialState,
-  broken = false,
-  model: EvaluationModel | null = CHOWKA_MODEL,
-): number {
-  if (!model) return heuristicBoardScore(s, player, style, social, broken);
-  // Self-play learns the balanced positional judgement. Styles remain visible
-  // through their smaller, hand-authored preference delta.
-  let score = modelScore(s, player, model) + (playerScore(s, player, style) - playerScore(s, player, 'balanced')) * 0.55;
-  const pact = broken ? undefined : pactFor(social, player);
-  if (pact) {
-    score += modelScore(s, allyOf(pact, player), model) * 0.08;
-    score -= modelScore(s, pact.target, model) * 0.12;
-  }
-  for (let i = 0; i < s.players.length; i++) {
-    if (i !== player) score -= (social.grudge[player]?.[i] ?? 0) * 6;
-  }
-  return score;
-}
-
-function inferredOpponentScore(
-  s: State,
-  observer: number,
-  opponent: number,
-  social: SocialState,
-  broken: boolean,
-  model: EvaluationModel | null,
-): number {
-  return inferredStyleWeights(social, observer, opponent).reduce((score, belief) =>
-    score + belief.probability * boardScore(s, opponent, belief.style, social, broken, model), 0);
-}
-
 // Check all five cowrie results for the next opponent. For each result, assume
 // that opponent chooses their best immediate reply, then weight by its odds.
-function replyScore(s: State, player: number, style: Style, nextPlayer: number, social: SocialState, broken: boolean, model: EvaluationModel | null): number {
-  const base = boardScore(s, player, style, social, broken, model);
+function replyScore(s: State, player: number, style: Style, nextPlayer: number, social: SocialState, broken: boolean): number {
+  const base = boardScore(s, player, style, social, broken);
   if (nextPlayer === player || finished(s, player) || finished(s, nextPlayer)) return base;
   const pact = broken ? undefined : pactFor(social, player);
   const allied = pact && allyOf(pact, player) === nextPlayer;
@@ -135,8 +102,8 @@ function replyScore(s: State, player: number, style: Style, nextPlayer: number, 
     for (const move of legalMoves(s, nextPlayer, value)) {
       const result = apply(s, move);
       const after = result.state;
-      let theirs = inferredOpponentScore(after, player, nextPlayer, social, broken, model);
-      let ours = boardScore(after, player, style, social, broken, model);
+      let theirs = boardScore(after, nextPlayer, 'balanced', social, broken);
+      let ours = boardScore(after, player, style, social, broken);
       if (allied && result.hits.some((h) => h.player === player)) {
         const relay = threat(s, pact.target) >= 55 ? relayValue(after, nextPlayer, pact.target) : 0;
         if (relay >= 12) {
@@ -155,6 +122,24 @@ function replyScore(s: State, player: number, style: Style, nextPlayer: number, 
   }
   const weight = allied ? Math.max(0.55, WEIGHTS[style].reply) : WEIGHTS[style].reply;
   return base * (1 - weight) + expected * weight;
+}
+
+function possibleActions(s: State, player: number, t: Turn): Action[] {
+  const moves: Action[] = [...new Set(t.bank)].flatMap((value) => legalMoves(s, player, value).map((move) => ({ kind: 'move' as const, move })));
+  if (t.owed > 0) moves.push({ kind: 'throw' });
+  if (canSkip(t)) moves.push({ kind: 'skip' });
+  return moves;
+}
+
+function nextPosition(s: State, t: Turn, action: Exclude<Action, { kind: 'throw' }>): { state: State; turn: Turn; hits: Hit[] } {
+  const after = copyTurn(t);
+  if (action.kind === 'skip') {
+    after.owed--;
+    return { state: s, turn: after, hits: [] };
+  }
+  const result = apply(s, action.move);
+  recordSpend(after, action.move.value, result.hits.length > 0);
+  return { state: result.state, turn: after, hits: result.hits };
 }
 
 function socialGain(s: State, after: State, actor: number, hits: Hit[], social: SocialState, broken: boolean) {
@@ -201,44 +186,26 @@ function actionReason(s: State, action: Action, social: SocialState, nextPlayer:
   return `Use ${m.value} to move pawn ${m.pawns[0] + 1} forward.`;
 }
 
-function hardAction(s: State, player: number, t: Turn, style: Style, start: State, nextPlayer: number, social: SocialState, model: EvaluationModel | null, nodeBudget: number): Action | null {
+function hardAction(s: State, player: number, t: Turn, style: Style, start: State, nextPlayer: number, social: SocialState): Action | null {
   const root = possibleActions(s, player, t);
   if (!root.length) return null;
-  const memo = new Map<string, number>();
+  let memo = new Map<string, number>();
   const leaves = new Map<string, number>();
   const terminal = (board: State, broken: boolean) => {
     const key = `${boardKey(board)}|${+broken}`;
     let value = leaves.get(key);
     if (value === undefined) {
-      value = replyScore(board, player, style, nextPlayer, social, broken, model) + (finished(board, player) ? 2000 : 0);
+      value = replyScore(board, player, style, nextPlayer, social, broken) + (finished(board, player) ? 2000 : 0);
       leaves.set(key, value);
     }
     return value;
   };
   const startScore = terminal(start, false);
-  const scoreDuringTurn = (board: State, turn: Turn, broken: boolean) => {
-    const positional = boardScore(board, player, style, social, broken, model);
-    return model ? positional + decisionScore(board, player, turn, start, model) - modelScore(board, player, model)
-      : positional + Math.min(12, turn.bank.length * 2 + turn.owed * 2);
-  };
-  const rootPrior = (action: Action) => {
-    if (action.kind === 'throw') {
-      let expected = 0;
-      for (const [value, chance] of ODDS) {
-        const after = copyTurn(t);
-        recordThrow(after, value);
-        expected += chance * scoreDuringTurn(s, after, false);
-      }
-      return expected;
-    }
-    const after = applyKnownAction(s, t, action);
-    return scoreDuringTurn(after.state, after.turn, false);
-  };
   const search = (board: State, turn: Turn, depth: number, budget: { left: number }, broken: boolean): number => {
     if (stranded(board, player, turn)) return startScore - 1;
     if (turn.owed === 0 && turn.bank.length === 0) return terminal(board, broken);
     if (depth === 0 || budget.left-- <= 0) {
-      return scoreDuringTurn(board, turn, broken);
+      return boardScore(board, player, style, social, broken) + Math.min(12, turn.bank.length * 2 + turn.owed * 2);
     }
     const key = `${boardKey(board)}|${turn.bank.slice().sort((a, b) => a - b)}|${turn.owed}|${turn.streak}|${depth}|${+broken}`;
     const known = memo.get(key);
@@ -254,7 +221,7 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
           score += chance * search(board, after, depth - 1, budget, broken);
         }
       } else {
-        const after = applyKnownAction(board, turn, action);
+        const after = nextPosition(board, turn, action);
         const effect = socialGain(board, after.state, player, after.hits, social, broken);
         score = effect.gain + search(after.state, after.turn, depth - 1, budget, effect.broke);
       }
@@ -264,18 +231,12 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
     if (budget.left > 0) memo.set(key, best);
     return best;
   };
-  const orderedRoot = root.map((action, index) => ({
-    action,
-    index,
-    score: rootPrior(action),
-  })).sort((a, b) => b.score - a.score || a.index - b.index).map(({ action }) => action);
-  let chosen = orderedRoot[0];
+  let chosen = root[0];
   let best = -Infinity;
-  // Share the decision budget fairly across root actions. Sorting moves by
-  // their static score improves useful coverage inside each capped branch.
-  const perActionBudget = Math.max(12, Math.floor(nodeBudget / orderedRoot.length));
-  for (const action of orderedRoot) {
-    const budget = { left: perActionBudget };
+  for (const action of root) {
+    // Complete ordinary turns; cap rare chains of hits and bonus throws.
+    memo = new Map<string, number>();
+    const budget = { left: 600 };
     let score: number;
     if (action.kind === 'throw') {
       score = 0;
@@ -285,17 +246,16 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
         score += chance * search(s, after, 11, budget, false);
       }
     } else {
-      const after = applyKnownAction(s, t, action);
+      const after = nextPosition(s, t, action);
       const effect = socialGain(s, after.state, player, after.hits, social, false);
       score = effect.gain + search(after.state, after.turn, 11, budget, effect.broke);
     }
-    score = score * 0.8 + rootPrior(action) * 0.2;
     if (score > best) { best = score; chosen = action; }
   }
   return chosen;
 }
 
-function easyAction(s: State, player: number, t: Turn, style: Style, social: SocialState, model: EvaluationModel | null): Action | null {
+function easyAction(s: State, player: number, t: Turn, style: Style, social: SocialState): Action | null {
   const moves = possibleActions(s, player, t).filter((a): a is { kind: 'move'; move: Move } => a.kind === 'move');
   if (!moves.length) return t.owed > 0 ? (canSkip(t) ? { kind: 'skip' } : { kind: 'throw' }) : null;
   if (canSkip(t) && Math.random() < 0.28) return { kind: 'skip' };
@@ -303,7 +263,7 @@ function easyAction(s: State, player: number, t: Turn, style: Style, social: Soc
   const ranked = moves.map((action) => {
     const result = apply(s, action.move);
     const effect = socialGain(s, result.state, player, result.hits, social, false);
-    return { action, score: boardScore(result.state, player, style, social, effect.broke, model) + effect.gain };
+    return { action, score: boardScore(result.state, player, style, social, effect.broke) + effect.gain };
   })
     .sort((a, b) => b.score - a.score);
   // Usually take a good move. Sometimes overlook a hit or leave a pawn exposed,
@@ -313,13 +273,11 @@ function easyAction(s: State, player: number, t: Turn, style: Style, social: Soc
   return close[roll < 0.58 ? 0 : roll < 0.85 ? Math.min(1, close.length - 1) : Math.min(2, close.length - 1)].action;
 }
 
-export function chooseAction(
+export function chooseOriginalHardAction(
   s: State, player: number, t: Turn, level: Level, style: Style, turnStart: State, nextPlayer: number, social: SocialState,
-  options: { model?: EvaluationModel | null; nodeBudget?: number } = {},
 ): { action: Action | null; reason: string } {
-  const model = options.model === undefined ? CHOWKA_MODEL : options.model;
   const action = level === 'hard'
-    ? hardAction(s, player, t, style, turnStart, nextPlayer, social, model, options.nodeBudget ?? 96)
-    : easyAction(s, player, t, style, social, model);
+    ? hardAction(s, player, t, style, turnStart, nextPlayer, social)
+    : easyAction(s, player, t, style, social);
   return { action, reason: action ? actionReason(s, action, social, nextPlayer) : 'No move is available.' };
 }

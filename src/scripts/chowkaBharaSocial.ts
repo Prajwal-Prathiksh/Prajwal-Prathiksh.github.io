@@ -13,7 +13,14 @@ export interface SocialState {
   grudge: number[][]; // recent hits remembered by the victim
   cooldown: number[][]; // earliest turn an observer will trust the other again
   pacts: Pact[];
+  // behaviour[observer][player] is an online probability distribution over
+  // balanced, aggressive, cautious, builder, and racer play.
+  behaviour: number[][][];
 }
+
+export const BEHAVIOUR_STYLES = ['balanced', 'aggressive', 'cautious', 'builder', 'racer'] as const;
+export type BehaviourStyle = typeof BEHAVIOUR_STYLES[number];
+const STYLE_PRIOR = [0.4, 0.15, 0.15, 0.15, 0.15];
 
 const ODDS: [number, number][] = [[1, 4 / 16], [2, 6 / 16], [3, 4 / 16], [4, 1 / 16], [8, 1 / 16]];
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
@@ -25,7 +32,13 @@ export function newSocial(players: number): SocialState {
     grudge: Array.from({ length: players }, () => Array(players).fill(0)),
     cooldown: Array.from({ length: players }, () => Array(players).fill(0)),
     pacts: [],
+    behaviour: Array.from({ length: players }, () =>
+      Array.from({ length: players }, () => [...STYLE_PRIOR])),
   };
+}
+
+export function styleBelief(social: SocialState, observer: number, player: number): number[] {
+  return social.behaviour?.[observer]?.[player] ?? STYLE_PRIOR;
 }
 
 export const pactFor = (social: SocialState, player: number) =>

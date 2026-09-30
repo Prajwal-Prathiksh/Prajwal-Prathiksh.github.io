@@ -12,6 +12,11 @@
     "build": "astro build && node scripts/build-sw.mjs",
     "preview": "astro preview",
     "check": "astro check",
+    "selfplay:smoke": "node scripts/run-chowka-tool.mjs smoke",
+    "selfplay:benchmark": "node scripts/run-chowka-tool.mjs benchmark",
+    "selfplay:train": "node scripts/run-chowka-tool.mjs train",
+    "selfplay:tournament": "node scripts/run-chowka-tool.mjs tournament",
+    "selfplay:baseline": "node scripts/run-chowka-tool.mjs baseline",
     "astro": "astro"
   },
   "allowScripts": {
@@ -24,6 +29,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "esbuild": "^0.28.2",
     "typescript": "^6.0.3",
     "workbox-build": "^7.4.1"
   }

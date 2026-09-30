@@ -42,6 +42,22 @@ Links from the old Jekyll site (`/publications/`, `/resume/`, `/assets/pdf/*.pdf
 
 Scores stay in the visitor's `localStorage` under keys prefixed `pp-games:`. They never leave the device, and the site uses no cookies, analytics, or third-party requests. `/playroom/` has a button that clears them.
 
+### Training Chowka Bhara
+
+Chowka Bhara's Hard opponent combines bounded lookahead with a compact evaluator trained by self-play. It scores the board and the current turn, including held throws, capture and finishing options, owed throws, bonus streak risk, and likely follow-up captures. During a match, each player also maintains a small probability distribution over every opponent's playing style. Observed move choices update that profile, and reply search uses the inferred mixture instead of assuming balanced play. Trust, grudges, refusals, and betrayals remain separate relationship-specific memories.
+
+The simulator imports the same TypeScript rules as the browser game. Training uses Node worker threads and defaults to all but one logical CPU, so it does not need Python or a GPU runtime.
+
+```sh
+npm run selfplay:smoke
+npm run selfplay:benchmark -- --budget=96 --repeats=20
+npm run selfplay:train -- --generations=6 --population=15 --games=24 --entry=mixed
+npm run selfplay:tournament -- --games=160 --players=4 --entry=home
+npm run selfplay:baseline -- --games=180 --players=4 --entry=mixed
+```
+
+Training writes the learned weights to `src/data/chowka-bhara-model.json`. Runs are reproducible with `--seed=<number>`. `--workers`, `--players`, `--entry`, and `--budget` can override the defaults. Entry defaults to `mixed`, which rotates through all three setup rules. A positive tournament budget compares the evaluators inside live-style search; zero uses the faster one-ply self-play policy. The baseline command runs four-player games against the frozen Hard AI from commit `a71e7b8` and reports each entry rule separately.
+
 A game built with another tool (plain JS, a canvas engine, WebAssembly) can also go in `public/playroom/<name>/` as static files. Astro copies that folder into the site unchanged.
 
 GitHub Pages only serves static files. Anything that runs in the browser works. Server code, databases, and online leaderboards do not. The limits are 1 GB per site and 100 MB per file.

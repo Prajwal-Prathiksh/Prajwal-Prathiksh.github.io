@@ -4,10 +4,10 @@ import ZenToggle from '../../components/ZenToggle.astro';
 import CowrieSprite from '../../components/CowrieSprite.astro';
 
 const COLOURS = [
-  { id: 'blue', name: 'Blue', light: '#a9c6f2', mid: '#2c5aa0', dark: '#10284f' },
-  { id: 'red', name: 'Red', light: '#f39a7e', mid: '#c23b2a', dark: '#6e170e' },
-  { id: 'yellow', name: 'Yellow', light: '#fff0a8', mid: '#e2a41c', dark: '#7c4f03' },
-  { id: 'green', name: 'Green', light: '#b5e3a6', mid: '#3d8a4a', dark: '#173f1f' },
+  { id: 'blue', name: 'Blue', light: '#b4d5ff', mid: '#3277cf', dark: '#123d80' },
+  { id: 'red', name: 'Red', light: '#ffb098', mid: '#e54e38', dark: '#8e2518' },
+  { id: 'yellow', name: 'Yellow', light: '#fff3a5', mid: '#f0b51e', dark: '#986206' },
+  { id: 'green', name: 'Green', light: '#c4f3b3', mid: '#38a65a', dark: '#196235' },
 ];
 
 // Board squares in 7x7 units: the 5x5 grid sits inside a one-unit margin
@@ -115,12 +115,17 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       <label>
         Speed
         <select id="speed">
-          <option value="1">Normal</option>
+          <option value="1.8">Slow</option>
+          <option value="1" selected>Normal</option>
           <option value="0.4">Fast</option>
           <option value="0.2">Very fast</option>
         </select>
       </label>
       <button type="button" class="btn" id="newgame">New game</button>
+      <button type="button" class="btn entry-toggle" id="entry-toggle" aria-pressed="false" aria-controls="entry-guides" title="Show where each colour enters the inner ring after its first hit">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7a6 6 0 0 1 6 6v6m-4-4 4 4 4-4" /></svg>
+        Inner-ring entries
+      </button>
       <ZenToggle />
     </div>
 
@@ -159,13 +164,22 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             </g>
           </g>
           <g id="yards" class="chalk yards" filter="url(#chalk)"></g>
+          <g id="entry-guides" class="entry-guides" filter="url(#chalk)" visibility="hidden"></g>
           <g id="pairs" class="chalk pairmarks" filter="url(#chalk)"></g>
           <g id="marks"></g>
         </svg>
         <div id="pawns" class="pawns"></div>
+        <div id="move-picker" class="move-picker" role="dialog" aria-label="Choose a throw for this pawn" hidden>
+          <div class="move-picker-heading"><span>Use a throw</span><button type="button" id="move-picker-close" aria-label="Cancel move">×</button></div>
+          <div id="choices" class="choices"></div>
+        </div>
         </div>
 
         <div class="thrower" id="thrower" hidden>
+          <div id="throw-player" class="throw-player">
+            <svg viewBox="0 0 40 40" aria-hidden="true"><use id="throw-player-pawn" /></svg>
+            <span id="throw-player-name"></span>
+          </div>
           <div id="shells" class="shells" aria-hidden="true">
             {[0, 1, 2, 3].map(() => <svg class="cowrie" viewBox="0 0 24 32"><use href="#cowrie-back" /></svg>)}
           </div>
@@ -180,7 +194,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             </div>
             <div id="bank" class="bank"></div>
           </div>
-          <div id="choices" class="choices"></div>
         </div>
       </div>
 
@@ -267,6 +280,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 <script>
   import {
     HOME,
+    LAST_OUTER,
+    PAIR_SQUARE,
     WAITING,
     apply,
     canSkip,
@@ -285,7 +300,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     stranded,
     throwShells,
     turnOver,
-    usable,
     type Action,
     type Move,
     type Turn,
@@ -306,10 +320,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   const COLOURS = [
-    { id: 'blue', name: 'Blue' },
-    { id: 'red', name: 'Red' },
-    { id: 'yellow', name: 'Yellow' },
-    { id: 'green', name: 'Green' },
+    { id: 'blue', name: 'Blue', chalk: '#b4d5ff' },
+    { id: 'red', name: 'Red', chalk: '#ffb098' },
+    { id: 'yellow', name: 'Yellow', chalk: '#fff3a5' },
+    { id: 'green', name: 'Green', chalk: '#c4f3b3' },
   ];
   const STYLES: { id: Style; name: string }[] = [
     { id: 'balanced', name: 'Balanced' },
@@ -342,6 +356,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let pickFor: number | null = null; // a computer player whose throws you choose (testing)
   const bankEl = $('bank');
   const choicesEl = $('choices');
+  const movePickerEl = $('move-picker');
   const statusEl = $('status');
   const socialOfferEl = $('social-offer');
   const socialOfferTextEl = $('social-offer-text');
@@ -360,6 +375,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const yardsEl = document.getElementById('yards')!;
   const marksEl = document.getElementById('marks')!;
   const pairsEl = document.getElementById('pairs')!;
+  const entryGuidesEl = document.getElementById('entry-guides')!;
+  const entryToggleEl = $<HTMLButtonElement>('entry-toggle');
 
   let seated: Seated[] = [];
   let state: State = newGame([0, 2]);
@@ -369,7 +386,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let positions: State[] = [state];
   let historyDescriptions: string[] = ['Game started.'];
   let historyIndex: number | null = null;
-  let selectedValue: number | null = null;
   let selectedPawn: number | null = null;
   let hintedMove: Move | null = null;
   let phase: 'setup' | 'act' | 'pick' | 'busy' | 'over' = 'setup';
@@ -403,6 +419,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     [...rowsEl.querySelectorAll<HTMLSelectElement>('select[name^="style-"]')].map((s) => s.value as Style);
 
   let humanColours: string[] = ['blue'];
+  const humanNames: string[] = [];
+  const defaultHumanName = (i: number, count: number) => count === 1 ? 'You' : `Player ${i + 1}`;
+  const humanName = (i: number, count: number) => humanNames[i]?.trim() || defaultHumanName(i, count);
+  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]!);
 
   const setupCounts = () => {
     const f = new FormData(setupEl);
@@ -446,7 +468,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     $('human-rows').innerHTML = humanColours
       .map(
         (colour, i) => `<div class="opponent-row">
-          <span class="who">${humans === 1 ? 'You' : `Player ${i + 1}`}</span>
+          <label class="human-name"><span>Name</span><input type="text" name="human-name-${i}" aria-label="Player ${i + 1} name" autocomplete="off" maxlength="24" value="${escapeHtml(humanName(i, humans))}" /></label>
           <div class="chips">${COLOURS.map((c) => `<label class="chip swatch small"><input type="radio" name="colour-${i}" value="${c.id}" ${c.id === colour ? 'checked' : ''}/>${pawnIcon(c.id)}${c.name}</label>`).join('')}</div>
         </div>`,
       )
@@ -479,7 +501,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const styles = readStyles();
     const byId = (id: string) => COLOURS.find((c) => c.id === id)!;
     const people = humanColours.slice(0, humans).map((id, i) => ({
-      name: humans === 1 ? 'You' : `Player ${i + 1}`,
+      name: humanName(i, humans),
       colour: id,
       colourName: byId(id).name,
       level: null,
@@ -586,6 +608,21 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         return `<rect x="${x * 100 - w / 2}" y="${y * 100 - h / 2}" width="${w}" height="${h}" rx="29" stroke-dasharray="3 9"/>`;
       })
       .join('');
+    // Cross the boundary between the last outer square and the first inner square.
+    // Derive arrows from the routes so they follow the chosen seats and colours.
+    entryGuidesEl.innerHTML = state.players.map((p, i) => {
+      const [ox, oy] = centreOf(square(p.seat, LAST_OUTER)).map((n) => n * 100);
+      const [ix, iy] = centreOf(square(p.seat, PAIR_SQUARE)).map((n) => n * 100);
+      const dx = (ix - ox) / 100;
+      const dy = (iy - oy) / 100;
+      const mx = (ox + ix) / 2;
+      const my = (oy + iy) / 2;
+      const tipX = mx + dx * 22;
+      const tipY = my + dy * 22;
+      const path = `M${mx - dx * 22} ${my - dy * 22}L${tipX} ${tipY}M${tipX - dx * 9 - dy * 7} ${tipY - dy * 9 + dx * 7}L${tipX} ${tipY}L${tipX - dx * 9 + dy * 7} ${tipY - dy * 9 - dx * 7}`;
+      const colour = COLOURS.find((c) => c.id === seated[i].colour)!.chalk;
+      return `<g><path class="entry-shadow" d="${path}"/><path d="${path}" stroke="${colour}"/></g>`;
+    }).join('');
   };
 
   const movesFor = (player: number, pawn: number, value: number) =>
@@ -593,15 +630,34 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       state.players[player].pawns[pawn] === WAITING ? m.from === WAITING : m.pawns.includes(pawn),
     );
 
+  function positionMovePicker(x: number, y: number) {
+    const boardWidth = pawnsEl.clientWidth;
+    const halfWidth = movePickerEl.offsetWidth / 2 + 8;
+    movePickerEl.style.left = `${Math.max(halfWidth, Math.min(boardWidth - halfWidth, x / 7 * boardWidth))}px`;
+    movePickerEl.style.top = `${y / 7 * 100}%`;
+    movePickerEl.classList.toggle('below', y / 7 * boardWidth < movePickerEl.offsetHeight + 32);
+  }
+
+  window.addEventListener('resize', () => {
+    if (!movePickerEl.hidden && selectedPawn !== null) positionMovePicker(...layout(state).get(`${current}-${selectedPawn}`)!);
+  });
+
   function render() {
     const reviewing = historyIndex !== null;
     const viewState = historyIndex === null ? state : positions[historyIndex];
     const spots = layout(viewState);
     const human = phase === 'act' && seated[current]?.level === null && !reviewing;
+    const thrower = seated[current];
+    if (thrower) {
+      document.getElementById('throw-player-pawn')!.setAttribute('href', `#pawn-${thrower.colour}`);
+      $('throw-player-name').textContent = thrower.name === thrower.colourName
+        ? thrower.colourName : `${thrower.name} · ${thrower.colourName}`;
+      $('throw-player').style.setProperty('--player-colour', COLOURS.find((c) => c.id === thrower.colour)!.chalk);
+    }
     const movable = new Set<number>();
-    if (human && selectedValue !== null) {
+    if (human) {
       viewState.players[current].pawns.forEach((_, j) => {
-        if (movesFor(current, j, selectedValue!).length) movable.add(j);
+        if (turn.bank.some((value) => movesFor(current, j, value).length)) movable.add(j);
       });
     }
     seated.forEach((p, i) =>
@@ -633,21 +689,34 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       )
       .join('');
 
-    // Where the picked pawn would land.
+    // Pick a pawn first, then offer the legal moves for its held throws.
     marksEl.innerHTML = '';
     choicesEl.innerHTML = '';
-    if (human && selectedPawn !== null && selectedValue !== null) {
-      const options = movesFor(current, selectedPawn, selectedValue);
-      const single = options.find((m) => m.pawns.length === 1 || (m.from === WAITING && m.pawns.length === 4));
-      const pair = options.find((m) => m.pawns.length === 2);
-      const shown = options.find((m) => hintedMove && sameMove(m, hintedMove)) ?? single ?? pair;
-      if (shown) {
-        const seat = state.players[current].seat;
-        const [x, y] = shown.to === HOME ? [3.5, 3.5] : centreOf(square(seat, shown.to));
-        marksEl.innerHTML = `<circle class="target" cx="${x * 100}" cy="${y * 100}" r="40"/>`;
+    movePickerEl.hidden = !(human && selectedPawn !== null);
+    if (human && selectedPawn !== null) {
+      const options = [...new Set(turn.bank)].flatMap((value) => movesFor(current, selectedPawn!, value));
+      movePickerEl.hidden = !options.length;
+      const [x, y] = spots.get(`${current}-${selectedPawn}`)!;
+      for (const move of options) {
+        const pair = move.pawns.length === 2;
+        const alternative = options.some((m) => m.value === move.value && m.pawns.length !== move.pawns.length);
+        const detail = move.from === WAITING ? move.pawns.length === 4 ? 'Enter all' : 'Enter pawn'
+          : pair ? `Pair · ${move.steps} ${move.steps === 1 ? 'square' : 'squares'}`
+          : alternative ? `Single · ${move.steps} squares` : '';
+        const button = choiceButton(String(move.value), move);
+        button.setAttribute('aria-label', `Use ${move.value}${detail ? `: ${detail}` : ''}`);
+        if (detail) {
+          const label = document.createElement('small');
+          label.textContent = detail;
+          button.append(label);
+        }
+        choicesEl.append(button);
       }
-      if (single) choicesEl.append(choiceButton(single.from === WAITING ? single.pawns.length === 4 ? 'Bring all in' : 'Bring in' : `Move ${selectedValue}`, single));
-      if (pair) choicesEl.append(choiceButton(`Move pair ${pair.steps}`, pair));
+      positionMovePicker(x, y);
+      if (hintedMove && options.some((m) => sameMove(m, hintedMove!))) {
+        const [tx, ty] = hintedMove.to === HOME ? [3.5, 3.5] : centreOf(square(state.players[current].seat, hintedMove.to));
+        marksEl.innerHTML = `<circle class="target" cx="${tx * 100}" cy="${ty * 100}" r="40"/>`;
+      }
     }
 
     // Throw and skip buttons, then the banked throws.
@@ -662,20 +731,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     pickEl.hidden = !((human && turn.owed > 0 && pickThrows) || picking);
     const bank = turn.bank;
     bankEl.innerHTML = '';
-    bank.forEach((v, idx) => {
-      const usable = human && legalMoves(state, current, v).length > 0;
-      const chip = document.createElement('button');
-      chip.type = 'button';
+    bankEl.setAttribute('aria-label', 'Held throws');
+    bank.forEach((v) => {
+      const chip = document.createElement('span');
       chip.className = 'value';
       chip.textContent = String(v);
-      chip.disabled = !usable;
-      chip.classList.toggle('on', human && selectedValue === v && bank.indexOf(v) === idx);
-      chip.addEventListener('click', () => {
-        selectedValue = v;
-        selectedPawn = null;
-        hintedMove = null;
-        render();
-      });
       bankEl.append(chip);
     });
 
@@ -711,9 +771,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         const wary = !reviewing && seated[current]?.level === null && i !== current && social.trust[current]?.[i] < 0.36;
         return `<li class="${!reviewing && i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
-          <span class="pname">${p.name}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
+          <span class="pname">${escapeHtml(p.name)}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
           <span class="pinfo">${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}
-          ${pact && !reviewing ? `<span class="truce-tag" title="Truce with ${seated[ally].name} against ${seated[pact.target].name}">🤝 ${seated[ally].name} · vs ${seated[pact.target].name}</span>` : ''}
+          ${pact && !reviewing ? `<span class="truce-tag" title="Truce with ${escapeHtml(seated[ally].name)} against ${escapeHtml(seated[pact.target].name)}">🤝 ${escapeHtml(seated[ally].name)} · vs ${escapeHtml(seated[pact.target].name)}</span>` : ''}
           ${wary ? '<span class="wary-tag" title="Recent betrayal makes a truce unlikely">wary</span>' : ''}
           ${canInvite ? `<button type="button" class="social-action" data-social="offer" data-player="${i}" title="Offer a short truce against the leader">Truce</button>` : ''}
           ${canEnd ? `<button type="button" class="social-action" data-social="end" data-player="${i}" title="End this truce early">End</button>` : ''}</span>
@@ -731,7 +791,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     b.type = 'button';
     b.className = 'btn';
     b.classList.toggle('hinted', !!hintedMove && sameMove(move, hintedMove));
-    b.textContent = label;
+    const number = document.createElement('span');
+    number.className = 'throw-value';
+    number.textContent = label;
+    b.append(number);
     b.addEventListener('click', () => humanMove(move));
     return b;
   }
@@ -828,7 +891,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     pendingOffers = pendingOffers.filter((o) => canOffer(social, state, o.from, o.to, activePlayers()) === o.target);
     // apply() creates a new board for every move, so this remains the turn's original board.
     turnStartState = state;
-    selectedValue = null;
     selectedPawn = null;
     hintedMove = null;
     thrownEl.textContent = '';
@@ -845,7 +907,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const hadMoves = state !== turnStartState;
       state = turnStartState;
       turn = endedTurn();
-      selectedValue = null;
       selectedPawn = null;
       lastEl.textContent = `No move possible for ${values}.${hadMoves ? ' Moves from this turn were undone.' : ''}`;
       recordHistory(lastEl.textContent);
@@ -866,11 +927,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const me = seated[current];
     if (me.level === null) {
       phase = 'act';
-      const moves = usable(state, current, turn);
-      if (selectedValue === null || !turn.bank.includes(selectedValue) || !moves.includes(selectedValue)) {
-        selectedValue = moves[0] ?? null;
-        selectedPawn = null;
-      }
+      selectedPawn = null;
       const prompt = !turn.bank.length
         ? turn.owed > 1 || lastEl.textContent.includes('Bonus')
           ? 'Throw again.'
@@ -881,7 +938,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           ? 'Two 4/8s held: a third would lose the turn. Spend one, throw, or skip.'
           : turn.owed > 0
             ? 'Move a pawn, or throw again first.'
-            : 'Pick a throw, then tap a pawn to move.';
+            : 'Tap a pawn to move.';
       statusEl.textContent = soloHuman() || prompt.startsWith('Your') ? prompt : `${me.name} (${me.colourName}): ${prompt}`;
       render();
       return;
@@ -971,6 +1028,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   historyBackEl.addEventListener('click', () => {
     if (phase !== 'act' || seated[current].level !== null || positions.length < 2) return;
+    selectedPawn = null;
+    hintedMove = null;
     historyIndex = historyIndex === null ? positions.length - 2 : Math.max(0, historyIndex - 1);
     render();
   });
@@ -989,11 +1048,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const { action, reason } = chooseAction(state, current, turn, 'hard', 'balanced', turnStartState, nextRival(current), social);
     hintTextEl.textContent = reason;
     if (action?.kind === 'move') {
-      selectedValue = action.move.value;
       selectedPawn = action.move.pawns[0];
       hintedMove = action.move;
     } else {
-      selectedValue = null;
       selectedPawn = null;
       hintedMove = null;
     }
@@ -1033,18 +1090,35 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   $('social-decline').addEventListener('click', () => answerOffer(false));
 
   function onPawn(player: number, pawn: number) {
-    if (phase !== 'act' || historyIndex !== null || player !== current || selectedValue === null) return;
-    const options = movesFor(player, pawn, selectedValue);
+    if (phase !== 'act' || historyIndex !== null || player !== current) return;
+    const options = [...new Set(turn.bank)].flatMap((value) => movesFor(player, pawn, value));
     if (!options.length) return;
-    // A lone option (a single, or a pair that has already left its square) moves at once;
-    // on the pair square, the first tap shows the choice and a second tap moves one pawn.
-    if (selectedPawn === pawn || options.length === 1) {
-      return humanMove(options.find((m) => m.pawns.length === 1) ?? options[0], pawn);
-    }
+    if (turn.bank.length === 1 && options.length === 1) return humanMove(options[0], pawn);
     selectedPawn = pawn;
     hintedMove = null;
     render();
+    choicesEl.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   }
+
+  function closeMovePicker(restoreFocus = false) {
+    const pawn = selectedPawn;
+    selectedPawn = null;
+    hintedMove = null;
+    movePickerEl.hidden = true;
+    marksEl.innerHTML = '';
+    pawnEls[current].forEach((el) => el.classList.remove('picked'));
+    if (restoreFocus && pawn !== null) pawnEls[current][pawn].focus({ preventScroll: true });
+  }
+  $('move-picker-close').addEventListener('click', () => closeMovePicker(true));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !movePickerEl.hidden) {
+      event.preventDefault();
+      closeMovePicker(true);
+    }
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!movePickerEl.hidden && !(event.target as HTMLElement).closest('#move-picker, .pawn')) closeMovePicker();
+  });
 
   function humanMove(move: Move, tapped?: number) {
     if (phase !== 'act' || historyIndex !== null) return;
@@ -1059,7 +1133,6 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const id = gameId;
     const who = seated[move.player];
     const seat = state.players[move.player].seat;
-    selectedValue = null;
     render();
 
     // Hop square by square.
@@ -1209,6 +1282,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       humanColours[i] = input.value;
       showSetup();
     } else if (name === 'humans' || name === 'opponents' || name === 'entry') showSetup();
+    else if (name.startsWith('human-name-') && !input.value.trim()) {
+      input.value = defaultHumanName(Number(name.slice(11)), setupCounts().humans);
+    }
+  });
+  setupEl.addEventListener('input', (e) => {
+    const input = e.target as HTMLInputElement;
+    if (input.name.startsWith('human-name-')) humanNames[Number(input.name.slice(11))] = input.value;
   });
   setupEl.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1219,6 +1299,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     styleHelpToggleEl.setAttribute('aria-expanded', String(!styleHelpBoxEl.hidden));
   });
   $('newgame').addEventListener('click', showSetup);
+  entryToggleEl.addEventListener('click', () => {
+    const show = entryToggleEl.getAttribute('aria-pressed') !== 'true';
+    entryToggleEl.setAttribute('aria-pressed', String(show));
+    entryGuidesEl.setAttribute('visibility', show ? 'visible' : 'hidden');
+  });
 
   $('debug-row').hidden = !debugAllowed;
   showSetup();
@@ -1390,6 +1475,31 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     min-width: 6rem;
   }
 
+  .opponent-rows :global(.human-name) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .opponent-rows :global(.human-name input) {
+    width: 8.5rem;
+    min-width: 0;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    font-size: 0.95rem;
+  }
+
+  .opponent-rows :global(.human-name input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .opponent-rows :global(.style-choice) {
     display: inline-flex;
     align-items: center;
@@ -1429,6 +1539,42 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-size: 0.9rem;
   }
 
+  .entry-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .entry-toggle svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .entry-toggle[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+    color: var(--accent);
+  }
+
+  .entry-guides { pointer-events: none; }
+  .entry-guides :global(path) {
+    fill: none;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.85;
+  }
+  .entry-guides :global(path.entry-shadow) {
+    stroke: #572c20;
+    stroke-width: 7;
+    opacity: 0.55;
+  }
+
   select {
     font: inherit;
     margin-left: 0.3rem;
@@ -1458,7 +1604,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       radial-gradient(ellipse at 42% 28%, rgb(255 255 255 / 0.08), transparent 55%),
       radial-gradient(ellipse at 50% 50%, transparent 55%, rgb(0 0 0 / 0.28)),
       var(--oxide),
-      #933c29;
+      #a74630;
     background-size: auto, auto, 600px 600px, auto;
     box-shadow:
       0 12px 28px rgb(0 0 0 / 0.35),
@@ -1638,6 +1784,26 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     align-items: center;
   }
 
+  .throw-player {
+    display: inline-flex;
+    align-items: center;
+    justify-self: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.6rem 0.2rem 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--player-colour) 65%, transparent);
+    border-radius: 999px;
+    background: rgb(40 8 0 / 0.2);
+    color: #f7ecd9;
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
+
+  .throw-player svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    filter: drop-shadow(0 1px 1px rgb(20 5 0 / 0.4));
+  }
+
   .cowrie {
     width: 1.9rem;
     aspect-ratio: 24 / 32;
@@ -1757,6 +1923,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   .bank :global(.value) {
+    display: grid;
+    place-items: center;
+    line-height: 1;
+    text-align: center;
     min-width: 2.4rem;
     height: 2.4rem;
     border: 2px solid rgb(247 236 217 / 0.5);
@@ -1767,38 +1937,62 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-weight: 700;
   }
 
-  .bank :global(.value.on) {
+  .move-picker {
+    position: absolute;
+    z-index: 10;
+    width: max-content;
+    max-width: min(22rem, calc(100% - 1rem));
+    padding: 0.6rem;
+    border: 1px solid #e2c48f;
+    border-radius: 12px;
+    background: #35251f;
+    color: #f7ecd9;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+    transform: translate(-50%, calc(-100% - 1.2rem));
+  }
+
+  .move-picker[hidden] { display: none; }
+  .move-picker.below { transform: translate(-50%, 1.2rem); }
+  .move-picker-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  .move-picker-heading button {
+    border: 0;
+    padding: 0 0.3rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
+  .choices { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .choices :global(.btn) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.65rem;
     background: #f1d9a8;
     border-color: #f1d9a8;
     color: #4a1f14;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
   }
-
-  .bank :global(.value:disabled) {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .choices {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  .choices:empty {
-    display: none;
-  }
-
-  .choices :global(.btn) {
-    background: rgb(0 0 0 / 0.25);
-    border-color: rgb(247 236 217 / 0.4);
-    color: #f7ecd9;
-  }
-
-  .choices :global(.btn.hinted) {
-    border-color: #f1d9a8;
-    box-shadow: 0 0 0 2px rgb(241 217 168 / 0.25);
-  }
+  .choices :global(.btn:not(:has(small))) { width: 2.75rem; height: 2.75rem; padding: 0; }
+  .choices :global(.throw-value) { display: block; line-height: 1; }
+  .choices :global(.btn small) { font-size: 0.7rem; font-weight: 400; }
+  .choices :global(.btn.hinted) { outline: 2px solid #fff4d6; outline-offset: 2px; }
 
   .status {
     min-height: 1.6em;

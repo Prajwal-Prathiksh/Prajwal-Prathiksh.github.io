@@ -54,9 +54,12 @@ npm run selfplay:benchmark -- --budget=96 --repeats=20
 npm run selfplay:train -- --generations=6 --population=15 --games=24 --entry=mixed
 npm run selfplay:tournament -- --games=160 --players=4 --entry=home
 npm run selfplay:baseline -- --games=180 --players=4 --entry=mixed
+npm run winmodel:train -- --games=6000 --validation-games=1500 --epochs=50
 ```
 
 Training writes the learned weights to `src/data/chowka-bhara-model.json`. Runs are reproducible with `--seed=<number>`. `--workers`, `--players`, `--entry`, and `--budget` can override the defaults. Entry defaults to `mixed`, which rotates through all three setup rules. A positive tournament budget compares the evaluators inside live-style search; zero uses the faster one-ply self-play policy. The baseline command runs four-player games against the frozen Hard AI from commit `a71e7b8` and reports each entry rule separately.
+
+The four-player win outlook uses a separate calibrated softmax model in `src/data/chowka-bhara-win-model.json`. Its training data samples live decision points, including positions immediately after a roll. It considers held values, immediate captures and finishes, remaining throws, streak risk, and the best move currently available. Validation games use separate deterministic seeds and the saved artifact records log loss, Brier score, winner accuracy, and calibration error.
 
 A game built with another tool (plain JS, a canvas engine, WebAssembly) can also go in `public/playroom/<name>/` as static files. Astro copies that folder into the site unchanged.
 

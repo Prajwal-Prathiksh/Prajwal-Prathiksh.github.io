@@ -17,6 +17,7 @@
     "selfplay:train": "node scripts/run-chowka-tool.mjs train",
     "selfplay:tournament": "node scripts/run-chowka-tool.mjs tournament",
     "selfplay:baseline": "node scripts/run-chowka-tool.mjs baseline",
+    "winmodel:train": "node scripts/run-chowka-tool.mjs win-train",
     "astro": "astro"
   },
   "allowScripts": {

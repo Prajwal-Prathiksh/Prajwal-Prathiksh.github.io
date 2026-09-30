@@ -111,6 +111,7 @@ export interface MatchOptions {
   seed?: number;
   maxTurns?: number;
   onTurn?: (state: State, player: number, social: SocialState) => void;
+  onDecision?: (context: MatchContext) => void;
   observeBehaviour?: boolean;
 }
 
@@ -161,6 +162,7 @@ export function playMatch(options: MatchOptions): MatchResult {
       }
       const nextPlayer = active[(active.indexOf(current) + 1) % active.length];
       const context: MatchContext = { state, player: current, turn, turnStart, nextPlayer, social, random };
+      options.onDecision?.(context);
       const action = options.policies[current](context);
       if (!action) break;
       if (options.observeBehaviour !== false) observeAction(social, state, current, turn, action);

@@ -222,6 +222,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         <button type="button" id="hint-button" class="btn hint-button" hidden>Hint</button>
         <p id="hint-text" class="hint-text muted" aria-live="polite"></p>
         <p id="last" class="muted last"></p>
+        <section id="win-outlook" class="win-outlook" aria-label="Estimated chances of winning" hidden>
+          <header>
+            <strong>Win outlook</strong>
+            <span id="win-note" class="win-note"></span>
+            <button type="button" id="win-help-toggle" class="win-help-toggle" aria-label="How are win chances estimated?" aria-controls="win-help" aria-expanded="false">?</button>
+          </header>
+          <div id="win-bar" class="win-bar"></div>
+          <p id="win-help" class="win-help" hidden>Live estimate from self-play. It reads the board, held rolls and best available moves, then updates after every roll and move. Early estimates can change quickly.</p>
+        </section>
         <ol id="players" class="players"></ol>
       </div>
     </div>
@@ -313,6 +322,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   import type { AIRequest, AIResponse } from '../../scripts/chowkaBharaAI.worker';
   import { observeAction, predictedAcceptance } from '../../scripts/chowkaBharaOpponent';
   import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
+  import { outlookStrength, winProbabilities } from '../../scripts/chowkaBharaWin';
   import { recordResult, renderRecord } from '../../scripts/scores';
 
   interface Seated {
@@ -366,6 +376,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const socialNoticeEl = $('social-notice');
   const hintEl = $<HTMLButtonElement>('hint-button');
   const hintTextEl = $('hint-text');
+  const winOutlookEl = $('win-outlook');
+  const winBarEl = $('win-bar');
+  const winNoteEl = $('win-note');
+  const winHelpEl = $('win-help');
+  const winHelpToggleEl = $<HTMLButtonElement>('win-help-toggle');
   const historyEl = $('history-controls');
   const historyBackEl = $<HTMLButtonElement>('history-back');
   const historyForwardEl = $<HTMLButtonElement>('history-forward');
@@ -400,6 +415,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const aiPending = new Map<number, { resolve: (response: AIResponse) => void; reject: (error: Error) => void }>();
   let social: SocialState = newSocial(2);
   let pendingOffers: { from: number; to: number; target: number }[] = [];
+  let outlookCache: { state: State; current: number; turn: string; placings: string; chances: number[] } | null = null;
   const pawnEls: HTMLButtonElement[][] = [];
   const hopping = new Map<string, [number, number]>(); // pawn key -> board point during a hop
 
@@ -797,6 +813,22 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     hintEl.hidden = !human;
     hintTextEl.hidden = reviewing || !hintTextEl.textContent;
 
+    const showOutlook = seated.length === 4 && phase !== 'setup' && !reviewing;
+    const winChances = showOutlook ? currentWinChances() : [];
+    const winPercents = wholePercentages(winChances);
+    winOutlookEl.hidden = !showOutlook;
+    if (showOutlook) {
+      const strength = outlookStrength(winChances);
+      winNoteEl.textContent = placings.length ? 'Final' : strength < 0.04 ? 'Wide open'
+        : strength < 0.12 ? 'Taking shape' : strength < 0.28 ? 'Clear edge' : 'Strong edge';
+      winBarEl.setAttribute('role', 'img');
+      winBarEl.setAttribute('aria-label', seated.map((player, i) => `${player.name} ${winPercents[i]}%`).join(', '));
+      winBarEl.innerHTML = seated.map((player, i) => {
+        const colour = COLOURS.find((entry) => entry.id === player.colour)!.chalk;
+        return `<span style="width:${winChances[i] * 100}%;--chance-colour:${colour}" title="${escapeHtml(player.name)}: ${winPercents[i]}%"></span>`;
+      }).join('');
+    }
+
     const offer = phase === 'act' && seated[current]?.level === null
       ? pendingOffers.find((o) => o.to === current && canOffer(social, state, o.from, o.to, activePlayers()) === o.target)
       : undefined;
@@ -817,7 +849,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         return `<li class="${!reviewing && i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
           <span class="pname">${escapeHtml(p.name)}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
-          <span class="pinfo">${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}
+          <span class="pinfo">${showOutlook ? `<span class="win-chance" title="Estimated chance to win">${winPercents[i]}%</span>` : ''}${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}
           ${pact && !reviewing ? `<span class="truce-tag" title="Truce with ${escapeHtml(seated[ally].name)} against ${escapeHtml(seated[pact.target].name)}">🤝 ${escapeHtml(seated[ally].name)} · vs ${escapeHtml(seated[pact.target].name)}</span>` : ''}
           ${wary ? '<span class="wary-tag" title="Recent betrayal makes a truce unlikely">wary</span>' : ''}
           ${canInvite ? `<button type="button" class="social-action" data-social="offer" data-player="${i}" title="Offer a short truce against the leader">Truce</button>` : ''}
@@ -830,6 +862,26 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   const sameMove = (a: Move, b: Move) =>
     a.value === b.value && a.from === b.from && a.to === b.to && a.pawns.join() === b.pawns.join();
+
+  function wholePercentages(probabilities: number[]): number[] {
+    const exact = probabilities.map((probability) => probability * 100);
+    const rounded = exact.map(Math.floor);
+    const left = 100 - rounded.reduce((sum, value) => sum + value, 0);
+    const order = exact.map((value, index) => ({ index, remainder: value - rounded[index] }))
+      .sort((a, b) => b.remainder - a.remainder);
+    for (let i = 0; i < left; i++) rounded[order[i].index]++;
+    return rounded;
+  }
+
+  function currentWinChances(): number[] {
+    const turnKey = `${turn.bank.join(',')}|${turn.owed}|${turn.streak}|${turn.run.join(',')}`;
+    const placingsKey = placings.join(',');
+    if (outlookCache?.state === state && outlookCache.current === current
+      && outlookCache.turn === turnKey && outlookCache.placings === placingsKey) return outlookCache.chances;
+    const chances = winProbabilities(state, current, turn, turnStartState, placings);
+    outlookCache = { state, current, turn: turnKey, placings: placingsKey, chances };
+    return chances;
+  }
 
   function choiceButton(label: string, move: Move) {
     const b = document.createElement('button');
@@ -1032,7 +1084,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         recordHistory(lastEl.textContent);
         render();
         await wait(DELAY.read);
-      } else recordHistory(`${seated[current].name} threw ${t.value}${t.value === 4 || t.value === 8 ? ' and earned another throw' : ''}.`);
+      } else {
+        recordHistory(`${seated[current].name} threw ${t.value}${t.value === 4 || t.value === 8 ? ' and earned another throw' : ''}.`);
+        render();
+      }
     } else if (action.kind === 'skip') {
       turn.owed--;
       thrownEl.textContent = `${seated[current].name === 'You' ? 'You skip' : `${seated[current].name} skips`} the risky throw.`;
@@ -1110,6 +1165,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       hintedMove = null;
     }
     render();
+  });
+
+  winHelpToggleEl.addEventListener('click', () => {
+    winHelpEl.hidden = !winHelpEl.hidden;
+    winHelpToggleEl.setAttribute('aria-expanded', String(!winHelpEl.hidden));
   });
 
   playersEl.addEventListener('click', (event) => {
@@ -1821,6 +1881,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   /* The throwing circle, chalked on the same floor. */
   .thrower {
     display: grid;
+    min-width: 0;
     gap: 0.5rem;
     align-content: center;
     margin: 0 1rem 1rem;
@@ -1899,6 +1960,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   .throw-actions {
     display: flex;
     flex-wrap: wrap;
+    min-width: 0;
     justify-content: center;
     align-items: center;
     gap: 0.5rem;
@@ -1974,6 +2036,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   .bank {
     display: flex;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    max-height: 6.8rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
     gap: 0.4rem;
   }
 
@@ -2151,6 +2221,79 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-size: 0.9rem;
   }
 
+  .win-outlook {
+    margin-top: 0.2rem;
+    padding: 0.65rem 0.7rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+  }
+
+  .win-outlook header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  .win-outlook header strong {
+    font-size: 0.88rem;
+  }
+
+  .win-note {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .win-help-toggle {
+    display: grid;
+    place-items: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .win-help-toggle[aria-expanded='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .win-bar {
+    display: flex;
+    height: 0.72rem;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 999px;
+    background: var(--bg);
+  }
+
+  .win-bar :global(span) {
+    min-width: 1px;
+    background: var(--chance-colour);
+    box-shadow: inset -1px 0 rgb(0 0 0 / 0.28);
+    transition: width 240ms ease;
+  }
+
+  .win-help {
+    margin: 0.55rem 0 0;
+    color: var(--muted);
+    font-size: 0.76rem;
+    line-height: 1.4;
+  }
+
+  .win-help[hidden] {
+    display: none;
+  }
+
   .players {
     display: grid;
     gap: 0.3rem;
@@ -2209,6 +2352,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   .players :global(.pinfo b) {
     color: var(--fg);
     font-weight: 600;
+  }
+
+  .players :global(.win-chance) {
+    min-width: 2.3rem;
+    color: var(--fg);
+    font-weight: 700;
+    text-align: right;
   }
 
   .players :global(.truce-tag),

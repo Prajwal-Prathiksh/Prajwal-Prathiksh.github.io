@@ -19,6 +19,7 @@ import type { Action, EntryMode, State, Turn } from '../src/scripts/chowkaBhara'
 import { newGame, newTurn, recordThrow } from '../src/scripts/chowkaBhara';
 import { observeAction } from '../src/scripts/chowkaBharaOpponent';
 import { newSocial, styleBelief } from '../src/scripts/chowkaBharaSocial';
+import { winProbabilities } from '../src/scripts/chowkaBharaWin';
 
 interface Trial {
   id: number;
@@ -222,7 +223,27 @@ if (!isMainThread) {
     if (styleBelief(profile, 1, 0)[1] <= 0.15) {
       throw new Error('Opponent profile did not learn from repeated aggressive choices.');
     }
-    console.log(`Self-play smoke test passed: deterministic matches, all entry modes, held-roll sequencing, and opponent learning.`);
+    const outlookState: State = {
+      entry: 'home',
+      players: [
+        { seat: 0, pawns: [1, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
+        { seat: 2, pawns: [1, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
+        { seat: 1, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
+        { seat: 3, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
+      ],
+    };
+    const beforeRoll: Turn = { bank: [], owed: 1, streak: 0, run: [] };
+    const afterEight = copyTurn(beforeRoll);
+    recordThrow(afterEight, 8);
+    const beforeChances = winProbabilities(outlookState, 0, beforeRoll, outlookState);
+    const afterChances = winProbabilities(outlookState, 0, afterEight, outlookState);
+    if (Math.abs(afterChances.reduce((sum, chance) => sum + chance, 0) - 1) > 1e-9) {
+      throw new Error('Win probabilities do not sum to one.');
+    }
+    if (afterChances[0] <= beforeChances[0]) {
+      throw new Error('Win model did not react to a rolled 8 with an immediate capture available.');
+    }
+    console.log(`Self-play smoke test passed: rules, turn sequencing, opponent learning, and roll-aware win probabilities.`);
   } else if (command === 'baseline') {
     if (players !== 4) throw new Error('The original baseline comparison is defined for four players.');
     const modes = entry === 'mixed' ? ['home', 'all', 'each'] as const : [entry] as EntryMode[];

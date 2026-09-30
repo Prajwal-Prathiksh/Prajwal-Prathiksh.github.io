@@ -6,7 +6,7 @@ import InstallGuide from '../../components/InstallGuide.astro';
 import { games } from '../../data/games';
 ---
 
-<Base title="Playroom" description="Small games by Prajwal Prathiksh: heritage board games from Karnataka, puzzles and word games. They run in your browser and work offline.">
+<Base wide title="Playroom" description="Small games by Prajwal Prathiksh: heritage board games from Karnataka, puzzles and word games. They run in your browser and work offline.">
   <h1>Playroom</h1>
   <p class="muted intro">Small games I build for fun, from childhood board games to puzzles. They run entirely in your browser.</p>
 
@@ -30,15 +30,19 @@ import { games } from '../../data/games';
     }
   </ul>
 
-  <InstallGuide />
+  <div class="playroom-details">
+    <InstallGuide />
 
-  <h2>Your data</h2>
-  <p>
-    High scores are saved in this browser's local storage on your device. Nothing is sent to a
-    server, and the site sets no cookies and runs no analytics. Clearing your browser data removes
-    them, or you can use the button below.
-  </p>
-  <p><button class="btn" type="button" id="clear">Clear saved scores</button></p>
+    <section class="data">
+      <h2>Your data</h2>
+      <p>
+        High scores are saved in this browser's local storage on your device. Nothing is sent to a
+        server, and the site sets no cookies and runs no analytics. Clearing your browser data removes
+        them, or you can use the button below.
+      </p>
+      <p><button class="btn" type="button" id="clear">Clear saved scores</button></p>
+    </section>
+  </div>
 </Base>
 
 <script>
@@ -59,6 +63,7 @@ import { games } from '../../data/games';
 
   .intro {
     margin-top: 0;
+    max-width: var(--measure);
   }
 
   .cards {
@@ -130,5 +135,22 @@ import { games } from '../../data/games';
   .blurb {
     font-size: 0.92rem;
     line-height: 1.45;
+  }
+
+  @media (min-width: 70rem) {
+    .cards {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .playroom-details {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 3rem;
+      align-items: start;
+    }
+
+    .data h2 {
+      margin-top: 3rem;
+    }
   }
 </style>

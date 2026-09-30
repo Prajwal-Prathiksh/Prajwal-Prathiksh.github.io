@@ -1,8 +1,11 @@
 import trainedModel from '../data/chowka-bhara-win-model.json';
 import { apply, finished, legalMoves, recordSpend, type State, type Turn } from './chowkaBhara';
 import { FEATURE_NAMES, decisionScore, relativeFeatures, turnFeatures } from './chowkaBharaModel';
+import { resolveTurn, THROW_ODDS } from './chowkaBharaMatch';
 
-export const WIN_FEATURE_NAMES = [...FEATURE_NAMES, 'best-option', 'to-move'] as const;
+export const WIN_FEATURE_NAMES = [
+  ...FEATURE_NAMES, 'best-option', 'to-move', 'held-hit-impact', 'next-roll-hit-impact',
+] as const;
 
 export interface WinModel {
   version: number;
@@ -10,6 +13,7 @@ export interface WinModel {
   temperature: number;
   trainedGames: number;
   validationGames: number;
+  testGames: number;
   seed: number;
   validation: {
     logLoss: number;
@@ -17,6 +21,7 @@ export interface WinModel {
     accuracy: number;
     calibrationError: number;
   };
+  test: { logLoss: number; brier: number; accuracy: number; calibrationError: number };
 }
 
 export const CHOWKA_WIN_MODEL: WinModel = trainedModel;
@@ -35,6 +40,39 @@ function bestOption(state: State, player: number, turn: Turn, turnStart: State):
   return Math.max(-1, Math.min(1, (best - base) / 160));
 }
 
+const impactCache = new WeakMap<State, Map<number, Map<number, number[]>>>();
+
+// Cache legal captures for each throw. winFeatures reads the same board for
+// every seat, and the state itself is immutable after a move.
+function captureImpacts(state: State, current: number, value: number): number[] {
+  let byCurrent = impactCache.get(state);
+  if (!byCurrent) { byCurrent = new Map(); impactCache.set(state, byCurrent); }
+  let byValue = byCurrent.get(current);
+  if (!byValue) { byValue = new Map(); byCurrent.set(current, byValue); }
+  const cached = byValue.get(value);
+  if (cached) return cached;
+  const impact = state.players.map(() => 0);
+  for (const move of legalMoves(state, current, value)) {
+    const { state: after, hits } = apply(state, move);
+    if (!hits.length) continue;
+    impact[current] = 1;
+    for (const player of new Set(hits.map((hit) => hit.player))) {
+      const lost = state.players[player].pawns.reduce((sum, pos) => sum + Math.max(0, pos), 0)
+        - after.players[player].pawns.reduce((sum, pos) => sum + Math.max(0, pos), 0);
+      impact[player] = Math.min(impact[player], -Math.max(0.25, Math.min(1, lost / 24)));
+    }
+  }
+  byValue.set(value, impact);
+  return impact;
+}
+
+// Give the actor credit for an available capture and charge its actual victim.
+// This lets a roll change B's odds relative to C before the move is made.
+function hitImpact(state: State, player: number, current: number, values: number[]): number {
+  const impacts = [...new Set(values)].map((value) => captureImpacts(state, current, value)[player]);
+  return player === current ? Math.max(0, ...impacts) : Math.min(0, ...impacts);
+}
+
 export function winFeatures(
   state: State,
   player: number,
@@ -46,7 +84,12 @@ export function winFeatures(
   const liveTurn = player === current
     ? [...turnFeatures(state, player, turn, turnStart), bestOption(state, player, turn, turnStart)]
     : Array(FEATURE_NAMES.length - board.length + 1).fill(0);
-  return [...board, ...liveTurn, player === current ? 1 : 0];
+  const heldImpact = hitImpact(state, player, current, turn.bank);
+  const nextRollImpact = turn.owed > 0
+    ? THROW_ODDS.reduce((sum, [value, count]) =>
+      sum + count / 16 * hitImpact(state, player, current, [value]), 0)
+    : 0;
+  return [...board, ...liveTurn, player === current ? 1 : 0, heldImpact, nextRollImpact];
 }
 
 export function probabilitiesFromFeatures(features: number[][], model: WinModel = CHOWKA_WIN_MODEL): number[] {
@@ -68,10 +111,12 @@ export function winProbabilities(
   placings: number[] = [],
   model: WinModel = CHOWKA_WIN_MODEL,
 ): number[] {
-  const knownWinner = placings[0] ?? state.players.findIndex((_, player) => finished(state, player));
+  const resolution = resolveTurn(state, current, turn, turnStart);
+  const knownWinner = placings[0] ?? (resolution.over && !resolution.rolledBack
+    ? resolution.state.players.findIndex((_, player) => finished(resolution.state, player)) : -1);
   if (knownWinner >= 0) return state.players.map((_, player) => Number(player === knownWinner));
   return probabilitiesFromFeatures(
-    state.players.map((_, player) => winFeatures(state, player, current, turn, turnStart)),
+    state.players.map((_, player) => winFeatures(resolution.state, player, current, turn, turnStart)),
     model,
   );
 }
@@ -84,7 +129,7 @@ export function outlookStrength(probabilities: number[]): number {
 }
 
 export const validateWinModel = (model: WinModel) =>
-  model.version === 1
+  model.version === 2
   && model.weights.length === WIN_FEATURE_NAMES.length
   && model.weights.every(Number.isFinite)
   && Number.isFinite(model.temperature)

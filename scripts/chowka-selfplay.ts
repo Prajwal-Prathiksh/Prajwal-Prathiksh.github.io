@@ -4,7 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
 import { chooseAction } from '../src/scripts/chowkaBharaAI';
 import { chooseOriginalHardAction } from '../src/scripts/chowkaBharaOriginalAI';
-import { applyKnownAction, copyTurn, playMatch, possibleActions, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
+import { applyKnownAction, copyTurn, playMatch, possibleActions, resolveTurn, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
 import {
   CHOWKA_MODEL,
   FEATURE_NAMES,
@@ -19,7 +19,7 @@ import type { Action, EntryMode, State, Turn } from '../src/scripts/chowkaBhara'
 import { newGame, newTurn, recordThrow } from '../src/scripts/chowkaBhara';
 import { observeAction } from '../src/scripts/chowkaBharaOpponent';
 import { newSocial, styleBelief } from '../src/scripts/chowkaBharaSocial';
-import { winProbabilities } from '../src/scripts/chowkaBharaWin';
+import { WIN_FEATURE_NAMES, winFeatures, winProbabilities } from '../src/scripts/chowkaBharaWin';
 
 interface Trial {
   id: number;
@@ -118,8 +118,7 @@ function runTrial(trial: Trial): TrialResult {
   const places = Array(trial.players).fill(0);
   for (let game = 0; game < trial.games; game++) {
     const candidateSeat = game % trial.players;
-    const entries: EntryMode[] = ['home', 'all', 'each'];
-    const entry = trial.entry === 'mixed' ? entries[Math.floor(game / trial.players) % entries.length] : trial.entry;
+    const entry: EntryMode = 'home';
     const policies = Array.from({ length: trial.players }, (_, seat) => {
       const candidate = seat === candidateSeat;
       if (!candidate && trial.originalOpponent) return originalHardPolicy;
@@ -136,8 +135,9 @@ function runTrial(trial: Trial): TrialResult {
     });
     const place = result.places.indexOf(candidateSeat);
     const placementScore = (trial.players - 1 - place) / (trial.players - 1);
-    score += placementScore;
-    scoreSquares += placementScore * placementScore;
+    const objective = Number(place === 0) * 0.8 + placementScore * 0.2;
+    score += objective;
+    scoreSquares += objective * objective;
     places[place]++;
     if (place === 0) wins++;
     turns += result.turns;
@@ -158,8 +158,8 @@ if (!isMainThread) {
   const workers = Math.max(1, Math.min(numberArg('workers', availableParallelism() - 1), availableParallelism()));
   const games = numberArg('games', command === 'tournament' ? 96 : 16);
   const budget = numberArg('budget', 0);
-  const players = Math.max(2, Math.min(4, numberArg('players', 4)));
-  const entry = (args.get('entry') ?? 'mixed') as EntryMode | 'mixed';
+  const players = 4;
+  const entry = 'home' as const;
 
   const runParallel = async (trials: Trial[]): Promise<TrialResult[]> => {
     const results: TrialResult[] = [];
@@ -182,7 +182,7 @@ if (!isMainThread) {
 
   if (command === 'benchmark') {
     const repeats = numberArg('repeats', 8);
-    const state = newGame(players === 2 ? [0, 2] : players === 3 ? [0, 1, 2] : [0, 1, 2, 3], entry === 'mixed' ? 'home' : entry);
+    const state = newGame([0, 1, 2, 3], entry);
     const turn = newTurn();
     const social = newSocial(players);
     const started = performance.now();
@@ -243,10 +243,56 @@ if (!isMainThread) {
     if (afterChances[0] <= beforeChances[0]) {
       throw new Error('Win model did not react to a rolled 8 with an immediate capture available.');
     }
+    for (const seats of [[0, 2], [0, 1, 2]] as const) {
+      const smaller = newGame([...seats], 'home');
+      const chances = winProbabilities(smaller, 0, newTurn(), smaller);
+      if (chances.length !== seats.length || chances.some((chance) => !Number.isFinite(chance))
+        || Math.abs(chances.reduce((sum, chance) => sum + chance, 0) - 1) > 1e-9) {
+        throw new Error(`${seats.length}-player win outlook is invalid.`);
+      }
+    }
+    const exposedState: State = {
+      entry: 'home',
+      players: [
+        tacticalState.players[0], tacticalState.players[1],
+        { seat: 1, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
+        { seat: 3, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
+      ],
+    };
+    const heldTwo: Turn = { bank: [2], owed: 0, streak: 0, run: [] };
+    const impact = WIN_FEATURE_NAMES.indexOf('held-hit-impact');
+    const victim = winFeatures(exposedState, 1, 0, heldTwo, exposedState)[impact];
+    const bystander = winFeatures(exposedState, 2, 0, heldTwo, exposedState)[impact];
+    if (!(victim < 0 && bystander === 0)) {
+      throw new Error('A held capture did not distinguish its victim from other opponents.');
+    }
+    const beforeCapture = winProbabilities(exposedState, 0, newTurn(), exposedState);
+    const afterCaptureRoll = winProbabilities(exposedState, 0, heldTwo, exposedState);
+    if (afterCaptureRoll[1] / afterCaptureRoll[2] >= beforeCapture[1] / beforeCapture[2]) {
+      throw new Error('The rolled capture did not lower its victim relative to a bystander.');
+    }
+    const turnStart = newGame([0, 2], 'each');
+    turnStart.players[0].pawns[0] = 14;
+    const advanced = newGame([0, 2], 'each');
+    advanced.players[0].pawns[0] = 15;
+    const blocked: Turn = { bank: [1], owed: 0, streak: 0, run: [] };
+    const resolution = resolveTurn(advanced, 0, blocked, turnStart);
+    if (!resolution.over || !resolution.rolledBack || resolution.state !== turnStart) {
+      throw new Error('An unusable final roll did not undo the whole turn.');
+    }
+    const provisionalStart = newGame([0, 1, 2, 3], 'home');
+    provisionalStart.players[0].pawns = [23, 24, 24, 24];
+    provisionalStart.players[0].hasHit = true;
+    const provisionalFinish = newGame([0, 1, 2, 3], 'home');
+    provisionalFinish.players[0].pawns = [24, 24, 24, 24];
+    provisionalFinish.players[0].hasHit = true;
+    if (winProbabilities(provisionalFinish, 0, blocked, provisionalStart)[0] === 1) {
+      throw new Error('A provisional finish was reported as a certain win before rollback.');
+    }
     console.log(`Self-play smoke test passed: rules, turn sequencing, opponent learning, and roll-aware win probabilities.`);
   } else if (command === 'baseline') {
     if (players !== 4) throw new Error('The original baseline comparison is defined for four players.');
-    const modes = entry === 'mixed' ? ['home', 'all', 'each'] as const : [entry] as EntryMode[];
+    const modes = [entry];
     for (const mode of modes) {
       const shards = Math.min(workers, games);
       const results = await runParallel(Array.from({ length: shards }, (_, id) => ({
@@ -315,7 +361,13 @@ if (!isMainThread) {
       const ranked = results.map((result) => ({ result, model: candidates[result.id] }))
         .sort((a, b) => b.result.score - a.result.score);
       const champion = ranked[0];
-      model = {
+      const holdout = runTrial({
+        id: 0, model: champion.model, opponent: model,
+        games: Math.max(96, games * 2), players: 4, entry: 'home',
+        seed: seed ^ (generation + 1) * 0x5f3759df, budget: 0,
+      });
+      const accepted = champion.model !== model && holdout.wins / holdout.games > 0.34;
+      if (accepted) model = {
         version: 2,
         weights: [...champion.model.weights],
         trainedGames,
@@ -323,13 +375,13 @@ if (!isMainThread) {
       };
       sigma *= 0.78;
       const best = champion.result;
-      console.log(`Generation ${generation + 1}: best ${(best.score * 100).toFixed(1)}%, ${best.wins}/${best.games} wins; sigma ${sigma.toFixed(2)}.`);
+      console.log(`Generation ${generation + 1}: best ${best.wins}/${best.games} training wins; holdout ${holdout.wins}/${holdout.games}; ${accepted ? 'accepted' : 'kept incumbent'}; sigma ${sigma.toFixed(2)}.`);
     }
 
     if (!validateModel(model)) throw new Error('Training produced an invalid model.');
     const destination = resolve('src/data/chowka-bhara-model.json');
     await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
-    console.log(`Saved ${trainedGames}-game model to ${destination}.`);
+    console.log(`Saved evaluator with ${model.trainedGames} recorded training games to ${destination}; ${trainedGames - CHOWKA_MODEL.trainedGames} candidate games evaluated this run.`);
     FEATURE_NAMES.forEach((name, index) => console.log(`  ${name.padEnd(18)} ${model.weights[index].toFixed(3)}`));
   }
 }

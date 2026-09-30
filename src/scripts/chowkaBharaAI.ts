@@ -234,15 +234,15 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
     const after = applyKnownAction(s, t, action);
     return scoreDuringTurn(after.state, after.turn, false);
   };
+  const exhausted = Symbol('search budget exhausted');
   const search = (board: State, turn: Turn, depth: number, budget: { left: number }, broken: boolean): number => {
     if (stranded(board, player, turn)) return startScore - 1;
     if (turn.owed === 0 && turn.bank.length === 0) return terminal(board, broken);
-    if (depth === 0 || budget.left-- <= 0) {
-      return scoreDuringTurn(board, turn, broken);
-    }
+    if (depth === 0) return scoreDuringTurn(board, turn, broken);
     const key = `${boardKey(board)}|${turn.bank.slice().sort((a, b) => a - b)}|${turn.owed}|${turn.streak}|${depth}|${+broken}`;
     const known = memo.get(key);
     if (known !== undefined) return known;
+    if (budget.left-- <= 0) throw exhausted;
     let best = -Infinity;
     for (const action of possibleActions(board, player, turn)) {
       let score: number;
@@ -261,7 +261,7 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
       if (score > best) best = score;
     }
     if (best === -Infinity) best = terminal(board, broken);
-    if (budget.left > 0) memo.set(key, best);
+    memo.set(key, best);
     return best;
   };
   const orderedRoot = root.map((action, index) => ({
@@ -270,27 +270,35 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
     score: rootPrior(action),
   })).sort((a, b) => b.score - a.score || a.index - b.index).map(({ action }) => action);
   let chosen = orderedRoot[0];
-  let best = -Infinity;
-  // Share the decision budget fairly across root actions. Sorting moves by
-  // their static score improves useful coverage inside each capped branch.
-  const perActionBudget = Math.max(12, Math.floor(nodeBudget / orderedRoot.length));
-  for (const action of orderedRoot) {
-    const budget = { left: perActionBudget };
-    let score: number;
-    if (action.kind === 'throw') {
-      score = 0;
-      for (const [value, chance] of ODDS) {
-        const after = copyTurn(t);
-        recordThrow(after, value);
-        score += chance * search(s, after, 11, budget, false);
+  // Keep the last *complete* pass. A budget cutoff never makes a late root
+  // action or cowrie outcome look worse merely because it was visited later.
+  for (let depth = 1; depth <= 11; depth++) {
+    memo.clear();
+    const budget = { left: Math.max(1, nodeBudget) };
+    let best = -Infinity;
+    let candidate = chosen;
+    try {
+      for (const action of orderedRoot) {
+        let score: number;
+        if (action.kind === 'throw') {
+          score = 0;
+          for (const [value, chance] of ODDS) {
+            const after = copyTurn(t);
+            recordThrow(after, value);
+            score += chance * search(s, after, depth, budget, false);
+          }
+        } else {
+          const after = applyKnownAction(s, t, action);
+          const effect = socialGain(s, after.state, player, after.hits, social, false);
+          score = effect.gain + search(after.state, after.turn, depth, budget, effect.broke);
+        }
+        if (score > best) { best = score; candidate = action; }
       }
-    } else {
-      const after = applyKnownAction(s, t, action);
-      const effect = socialGain(s, after.state, player, after.hits, social, false);
-      score = effect.gain + search(after.state, after.turn, 11, budget, effect.broke);
+      chosen = candidate;
+    } catch (error) {
+      if (error !== exhausted) throw error;
+      break;
     }
-    score = score * 0.8 + rootPrior(action) * 0.2;
-    if (score > best) { best = score; chosen = action; }
   }
   return chosen;
 }

@@ -40,6 +40,14 @@ export const copyTurn = (turn: Turn): Turn => ({
   bank: [...turn.bank], owed: turn.owed, streak: turn.streak, run: [...turn.run],
 });
 
+// A stranded bank voids the entire turn, including moves already made. Resolve
+// this before checking whether the player has finished or the turn is over.
+export function resolveTurn(state: State, player: number, turn: Turn, turnStart: State) {
+  const rolledBack = stranded(state, player, turn);
+  const board = rolledBack ? turnStart : state;
+  return { state: board, rolledBack, over: rolledBack || turnOver(board, player, turn) };
+}
+
 export function possibleActions(state: State, player: number, turn: Turn): Action[] {
   const moves: Action[] = [...new Set(turn.bank)].flatMap((value) =>
     legalMoves(state, player, value).map((move) => ({ kind: 'move' as const, move })),
@@ -154,12 +162,13 @@ export function playMatch(options: MatchOptions): MatchResult {
         makePact(social, current, offer.to, offer.target);
       }
     }
+    const turnStartSocial = structuredClone(social);
 
-    while (!turnOver(state, current, turn)) {
-      if (stranded(state, current, turn)) {
-        state = turnStart;
-        break;
-      }
+    while (true) {
+      const resolution = resolveTurn(state, current, turn, turnStart);
+      state = resolution.state;
+      if (resolution.rolledBack) Object.assign(social, turnStartSocial);
+      if (resolution.over) break;
       const nextPlayer = active[(active.indexOf(current) + 1) % active.length];
       const context: MatchContext = { state, player: current, turn, turnStart, nextPlayer, social, random };
       options.onDecision?.(context);

@@ -166,7 +166,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             </g>
           </g>
           <g id="yards" class="chalk yards" filter="url(#chalk)"></g>
-          <g id="entry-guides" class="entry-guides" filter="url(#chalk)" visibility="hidden"></g>
+          <g id="entry-guides" class="entry-guides" visibility="hidden"></g>
           <g id="pairs" class="chalk pairmarks" filter="url(#chalk)"></g>
           <g id="marks"></g>
         </svg>
@@ -229,7 +229,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             <button type="button" id="win-help-toggle" class="win-help-toggle" aria-label="How are win chances estimated?" aria-controls="win-help" aria-expanded="false">?</button>
           </header>
           <div id="win-bar" class="win-bar"></div>
-          <p id="win-help" class="win-help" hidden>Live estimate from self-play. It reads the board, held rolls and best available moves, then updates after every roll and move. Early estimates can change quickly.</p>
+          <p id="win-help" class="win-help" hidden>Live estimate from four-player games where every pawn starts at home. It updates after each roll and move. Estimates for other player counts or entry rules have not been calibrated.</p>
         </section>
         <ol id="players" class="players"></ol>
       </div>
@@ -308,9 +308,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     recordSpend,
     recordThrow,
     square,
-    stranded,
     throwShells,
-    turnOver,
     type Action,
     type Move,
     type Turn,
@@ -323,6 +321,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   import { observeAction, predictedAcceptance } from '../../scripts/chowkaBharaOpponent';
   import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
   import { outlookStrength, winProbabilities } from '../../scripts/chowkaBharaWin';
+  import { resolveTurn } from '../../scripts/chowkaBharaMatch';
   import { recordResult, renderRecord } from '../../scripts/scores';
 
   interface Seated {
@@ -334,10 +333,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   const COLOURS = [
-    { id: 'blue', name: 'Blue', chalk: '#b4d5ff' },
-    { id: 'red', name: 'Red', chalk: '#ffb098' },
-    { id: 'yellow', name: 'Yellow', chalk: '#fff3a5' },
-    { id: 'green', name: 'Green', chalk: '#c4f3b3' },
+    { id: 'blue', name: 'Blue', chalk: '#b4d5ff', arrow: '#3f9dff' },
+    { id: 'red', name: 'Red', chalk: '#ffb098', arrow: '#ff6759' },
+    { id: 'yellow', name: 'Yellow', chalk: '#fff3a5', arrow: '#ffd638' },
+    { id: 'green', name: 'Green', chalk: '#c4f3b3', arrow: '#43e384' },
   ];
   const STYLES: { id: Style; name: string }[] = [
     { id: 'balanced', name: 'Balanced' },
@@ -414,6 +413,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let aiWorker: Worker | null = null;
   const aiPending = new Map<number, { resolve: (response: AIResponse) => void; reject: (error: Error) => void }>();
   let social: SocialState = newSocial(2);
+  let turnStartSocial: SocialState = structuredClone(social);
   let pendingOffers: { from: number; to: number; target: number }[] = [];
   let outlookCache: { state: State; current: number; turn: string; placings: string; chances: number[] } | null = null;
   const pawnEls: HTMLButtonElement[][] = [];
@@ -681,7 +681,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const tipX = mx + dx * 22;
       const tipY = my + dy * 22;
       const path = `M${mx - dx * 22} ${my - dy * 22}L${tipX} ${tipY}M${tipX - dx * 9 - dy * 7} ${tipY - dy * 9 + dx * 7}L${tipX} ${tipY}L${tipX - dx * 9 + dy * 7} ${tipY - dy * 9 - dx * 7}`;
-      const colour = COLOURS.find((c) => c.id === seated[i].colour)!.chalk;
+      const colour = COLOURS.find((c) => c.id === seated[i].colour)!.arrow;
       return `<g><path class="entry-shadow" d="${path}"/><path d="${path}" stroke="${colour}"/></g>`;
     }).join('');
   };
@@ -813,7 +813,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     hintEl.hidden = !human;
     hintTextEl.hidden = reviewing || !hintTextEl.textContent;
 
-    const showOutlook = seated.length === 4 && phase !== 'setup' && !reviewing;
+    const showOutlook = seated.length >= 2 && phase !== 'setup' && !reviewing;
     const winChances = showOutlook ? currentWinChances() : [];
     const winPercents = wholePercentages(winChances);
     winOutlookEl.hidden = !showOutlook;
@@ -995,6 +995,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     hintedMove = null;
     thrownEl.textContent = '';
     computerOffer();
+    turnStartSocial = structuredClone(social);
     next();
   }
 
@@ -1002,16 +1003,18 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   async function next() {
     const id = gameId;
     if (gameOver()) return;
-    if (stranded(state, current, turn)) {
+    const resolution = resolveTurn(state, current, turn, turnStartState);
+    if (resolution.rolledBack) {
       const values = turn.bank.join(' + ');
       const hadMoves = state !== turnStartState;
-      state = turnStartState;
+      state = resolution.state;
+      social = structuredClone(turnStartSocial);
       turn = endedTurn();
       selectedPawn = null;
       lastEl.textContent = `No move possible for ${values}.${hadMoves ? ' Moves from this turn were undone.' : ''}`;
       recordHistory(lastEl.textContent);
     }
-    if (turnOver(state, current, turn)) {
+    if (resolution.over) {
       if (finished(state, current)) {
         finishPlayer(current);
         if (gameOver()) return;
@@ -1679,15 +1682,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   .entry-guides { pointer-events: none; }
   .entry-guides :global(path) {
     fill: none;
-    stroke-width: 4;
+    stroke-width: 5.5;
     stroke-linecap: round;
     stroke-linejoin: round;
-    opacity: 0.85;
   }
   .entry-guides :global(path.entry-shadow) {
-    stroke: #572c20;
-    stroke-width: 7;
-    opacity: 0.55;
+    stroke: #432118;
+    stroke-width: 10;
+    opacity: 0.95;
   }
 
   select {

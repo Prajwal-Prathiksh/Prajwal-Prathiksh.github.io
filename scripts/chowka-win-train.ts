@@ -2,10 +2,12 @@ import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
-import { recordThrow, type EntryMode } from '../src/scripts/chowkaBhara';
+import { finished, recordThrow } from '../src/scripts/chowkaBhara';
 import { applyKnownAction, copyTurn, playMatch, possibleActions, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
 import { CHOWKA_MODEL, decisionScore } from '../src/scripts/chowkaBharaModel';
+import { chooseAction, type Style } from '../src/scripts/chowkaBharaAI';
 import {
+  CHOWKA_WIN_MODEL,
   WIN_FEATURE_NAMES,
   validateWinModel,
   winFeatures,
@@ -25,9 +27,13 @@ interface DataResult {
   samples: number;
   features: Float32Array;
   winners: Uint8Array;
+  held: Uint8Array;
 }
 
-const policy: MatchPolicy = (context) => {
+const styles: Style[] = ['balanced', 'aggressive', 'cautious', 'racer'];
+const policy = (style: Style, hard: boolean): MatchPolicy => (context) => {
+  if (hard) return chooseAction(context.state, context.player, context.turn, 'hard', style,
+    context.turnStart, context.nextPlayer, context.social, { nodeBudget: 32 }).action;
   const actions = possibleActions(context.state, context.player, context.turn);
   let best = actions[0] ?? null;
   let bestScore = -Infinity;
@@ -43,7 +49,8 @@ const policy: MatchPolicy = (context) => {
     } else {
       const after = applyKnownAction(context.state, context.turn, action);
       score = decisionScore(after.state, context.player, after.turn, context.turnStart, CHOWKA_MODEL)
-        + after.hits.length * 5;
+        + after.hits.length * (style === 'aggressive' ? 16 : style === 'cautious' ? 2 : 5)
+        + (action.kind === 'move' && action.move.to === 24 && style === 'racer' ? 12 : 0);
     }
     if (score > bestScore) { best = action; bestScore = score; }
   }
@@ -53,28 +60,35 @@ const policy: MatchPolicy = (context) => {
 function generate(job: DataJob): DataResult {
   const rows: number[] = [];
   const winners: number[] = [];
-  const modes: EntryMode[] = ['home', 'all', 'each'];
+  const held: number[] = [];
   for (let game = 0; game < job.games; game++) {
-    const snapshots: number[][][] = [];
+    const snapshots: { features: number[][]; held: number }[] = [];
     const offset = (game * 7 + job.id * 3) % job.sampleEvery;
     let turn = 0;
+    const orderedStyles = styles.map((_, seat) => styles[(seat + game + job.id) % 4]);
+    const hardSeat = game % 20 === 0 ? (game + job.id) % 4 : -1;
     const result = playMatch({
-      policies: [policy, policy, policy, policy],
-      styles: ['balanced', 'aggressive', 'cautious', 'racer'],
-      entry: modes[(game + job.id) % modes.length],
+      policies: orderedStyles.map((style, seat) => policy(style, seat === hardSeat)),
+      styles: orderedStyles,
+      entry: 'home',
       seed: job.seed + game * 0x9e3779b1,
       observeBehaviour: false,
       onDecision: ({ state, player: current, turn: liveTurn, turnStart }) => {
-        if (turn++ % job.sampleEvery === offset) {
-          snapshots.push(state.players.map((_, player) =>
-            winFeatures(state, player, current, liveTurn, turnStart)));
+        if (!state.players.some((_, player) => finished(state, player)) && turn++ % job.sampleEvery === offset) {
+          snapshots.push({
+            features: state.players.map((_, player) =>
+              winFeatures(state, player, current, liveTurn, turnStart)),
+            held: Number(liveTurn.bank.length > 0),
+          });
         }
       },
     });
     const winner = result.places[0];
+    if (!finished(result.state, winner)) continue;
     for (const snapshot of snapshots) {
-      snapshot.forEach((features) => rows.push(...features));
+      snapshot.features.forEach((features) => rows.push(...features));
       winners.push(winner);
+      held.push(snapshot.held);
     }
   }
   return {
@@ -83,12 +97,13 @@ function generate(job: DataJob): DataResult {
     samples: winners.length,
     features: Float32Array.from(rows),
     winners: Uint8Array.from(winners),
+    held: Uint8Array.from(held),
   };
 }
 
 if (!isMainThread) {
   const result = generate(workerData as DataJob);
-  parentPort!.postMessage(result, [result.features.buffer as ArrayBuffer, result.winners.buffer as ArrayBuffer]);
+  parentPort!.postMessage(result, [result.features.buffer as ArrayBuffer, result.winners.buffer as ArrayBuffer, result.held.buffer as ArrayBuffer]);
 } else {
   const args = new Map(process.argv.slice(2).map((arg) => {
     const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
@@ -96,11 +111,12 @@ if (!isMainThread) {
   }));
   const numberArg = (name: string, fallback: number) => Number(args.get(name) ?? fallback);
   const seed = numberArg('seed', 20260930);
-  const games = numberArg('games', 6000);
-  const validationGames = numberArg('validation-games', 1500);
-  const epochs = numberArg('epochs', 50);
+  const games = numberArg('games', 1500);
+  const validationGames = numberArg('validation-games', 300);
+  const testGames = numberArg('test-games', 300);
+  const epochs = numberArg('epochs', 40);
   const sampleEvery = Math.max(4, numberArg('sample-every', 14));
-  const workers = Math.max(1, Math.min(numberArg('workers', availableParallelism() - 1), availableParallelism()));
+  const workers = Math.max(1, Math.min(numberArg('workers', Math.min(8, availableParallelism() - 1)), availableParallelism()));
   const featureCount = WIN_FEATURE_NAMES.length;
 
   const generateParallel = async (totalGames: number, baseSeed: number): Promise<DataResult[]> => {
@@ -129,25 +145,30 @@ if (!isMainThread) {
     return results.sort((a, b) => a.id - b.id);
   };
 
-  console.log(`Generating four-player positions from ${games} training and ${validationGames} validation games on ${workers} workers.`);
+  console.log(`Generating four-player home-entry positions from ${games} training, ${validationGames} calibration and ${testGames} test games on ${workers} workers.`);
   const trainingParts = await generateParallel(games, seed);
   const validationParts = await generateParallel(validationGames, seed ^ 0x5f3759df);
+  const testParts = await generateParallel(testGames, seed ^ 0x3c6ef372);
 
   const combine = (parts: DataResult[]) => {
     const samples = parts.reduce((sum, part) => sum + part.samples, 0);
     const features = new Float32Array(samples * 4 * featureCount);
     const winners = new Uint8Array(samples);
+    const held = new Uint8Array(samples);
     let sampleOffset = 0;
     for (const part of parts) {
       features.set(part.features, sampleOffset * 4 * featureCount);
       winners.set(part.winners, sampleOffset);
+      held.set(part.held, sampleOffset);
       sampleOffset += part.samples;
     }
-    return { samples, features, winners };
+    return { samples, features, winners, held };
   };
   const training = combine(trainingParts);
   const validation = combine(validationParts);
-  console.log(`Collected ${training.samples} training and ${validation.samples} held-out positions.`);
+  const test = combine(testParts);
+  if (!training.samples || !validation.samples || !test.samples) throw new Error('No decided games were sampled in a data split.');
+  console.log(`Collected ${training.samples} training, ${validation.samples} calibration and ${test.samples} test positions.`);
 
   const weights = new Float64Array(featureCount);
   const firstMoment = new Float64Array(featureCount);
@@ -158,13 +179,13 @@ if (!isMainThread) {
   const batchSize = 256;
   const learningRate = 0.025;
 
-  const probabilitiesAt = (data: typeof training, sample: number, temperature: number) => {
+  const probabilitiesAt = (data: typeof training, sample: number, temperature: number, coefficients: ArrayLike<number> = weights) => {
     const logits = [0, 0, 0, 0];
     const base = sample * 4 * featureCount;
     for (let player = 0; player < 4; player++) {
       const offset = base + player * featureCount;
       for (let feature = 0; feature < featureCount; feature++) {
-        logits[player] += data.features[offset + feature] * weights[feature];
+        logits[player] += data.features[offset + feature] * (coefficients[feature] ?? 0);
       }
       logits[player] /= temperature;
     }
@@ -207,13 +228,16 @@ if (!isMainThread) {
     if ((epoch + 1) % 10 === 0 || epoch === 0) console.log(`Epoch ${epoch + 1}/${epochs}`);
   }
 
-  const metricsAt = (data: typeof validation, temperature: number) => {
+  const metricsAt = (data: typeof validation, temperature: number, heldFilter?: number, coefficients?: ArrayLike<number>) => {
     let logLoss = 0;
     let brier = 0;
     let correct = 0;
+    let sampleCount = 0;
     const bins = Array.from({ length: 10 }, () => ({ count: 0, confidence: 0, correct: 0 }));
     for (let sample = 0; sample < data.samples; sample++) {
-      const probabilities = probabilitiesAt(data, sample, temperature);
+      if (heldFilter !== undefined && data.held[sample] !== heldFilter) continue;
+      sampleCount++;
+      const probabilities = probabilitiesAt(data, sample, temperature, coefficients);
       const winner = data.winners[sample];
       logLoss -= Math.log(Math.max(1e-9, probabilities[winner]));
       for (let player = 0; player < 4; player++) {
@@ -221,21 +245,24 @@ if (!isMainThread) {
         brier += error * error;
       }
       const predicted = probabilities.indexOf(Math.max(...probabilities));
-      const confidence = probabilities[predicted];
       const hit = Number(predicted === winner);
       correct += hit;
-      const bin = bins[Math.min(9, Math.floor(confidence * 10))];
-      bin.count++;
-      bin.confidence += confidence;
-      bin.correct += hit;
+      for (let player = 0; player < 4; player++) {
+        const probability = probabilities[player];
+        const bin = bins[Math.min(9, Math.floor(probability * 10))];
+        bin.count++;
+        bin.confidence += probability;
+        bin.correct += Number(player === winner);
+      }
     }
+    if (!sampleCount) throw new Error('No positions for the requested roll phase.');
     const calibrationError = bins.reduce((sum, bin) => bin.count
-      ? sum + bin.count / data.samples * Math.abs(bin.correct / bin.count - bin.confidence / bin.count)
+      ? sum + bin.count / (sampleCount * 4) * Math.abs(bin.correct / bin.count - bin.confidence / bin.count)
       : sum, 0);
     return {
-      logLoss: logLoss / data.samples,
-      brier: brier / data.samples,
-      accuracy: correct / data.samples,
+      logLoss: logLoss / sampleCount,
+      brier: brier / sampleCount,
+      accuracy: correct / sampleCount,
       calibrationError,
     };
   };
@@ -249,21 +276,31 @@ if (!isMainThread) {
       validationMetrics = metrics;
     }
   }
+  const testMetrics = metricsAt(test, temperature);
+  const previousMetrics = metricsAt(test, CHOWKA_WIN_MODEL.temperature, undefined, CHOWKA_WIN_MODEL.weights);
 
   const model: WinModel = {
-    version: 1,
+    version: 2,
     weights: Array.from(weights),
     temperature,
     trainedGames: games,
     validationGames,
+    testGames,
     seed,
     validation: validationMetrics,
+    test: testMetrics,
   };
   if (!validateWinModel(model)) throw new Error('Training produced an invalid win model.');
   const destination = resolve('src/data/chowka-bhara-win-model.json');
   await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
   console.log(`Saved win model to ${destination}.`);
   console.log(`Validation: log loss ${validationMetrics.logLoss.toFixed(4)} (uniform 1.3863), Brier ${validationMetrics.brier.toFixed(4)} (uniform 0.7500), accuracy ${(validationMetrics.accuracy * 100).toFixed(1)}%, calibration error ${(validationMetrics.calibrationError * 100).toFixed(1)}%.`);
+  console.log(`Untouched test: log loss ${testMetrics.logLoss.toFixed(4)}, Brier ${testMetrics.brier.toFixed(4)}, accuracy ${(testMetrics.accuracy * 100).toFixed(1)}%, player calibration error ${(testMetrics.calibrationError * 100).toFixed(1)}%.`);
+  console.log(`Previous model on same test: log loss ${previousMetrics.logLoss.toFixed(4)}, Brier ${previousMetrics.brier.toFixed(4)}, accuracy ${(previousMetrics.accuracy * 100).toFixed(1)}%, player calibration error ${(previousMetrics.calibrationError * 100).toFixed(1)}%.`);
+  for (const [name, phase] of [['before a held roll', 0], ['with held rolls', 1]] as const) {
+    const metrics = metricsAt(test, temperature, phase);
+    console.log(`  ${name}: log loss ${metrics.logLoss.toFixed(4)}, Brier ${metrics.brier.toFixed(4)}, accuracy ${(metrics.accuracy * 100).toFixed(1)}%, calibration error ${(metrics.calibrationError * 100).toFixed(1)}%.`);
+  }
   console.log(`Temperature ${temperature.toFixed(3)}; weights:`);
   WIN_FEATURE_NAMES.forEach((name, index) => console.log(`  ${name.padEnd(18)} ${weights[index].toFixed(4)}`));
 }

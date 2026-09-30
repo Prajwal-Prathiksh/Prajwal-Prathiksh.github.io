@@ -222,14 +222,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         <button type="button" id="hint-button" class="btn hint-button" hidden>Hint</button>
         <p id="hint-text" class="hint-text muted" aria-live="polite"></p>
         <p id="last" class="muted last"></p>
-        <section id="win-outlook" class="win-outlook" aria-label="Estimated chances of winning" hidden>
+        <section id="win-outlook" class="win-outlook" aria-label="Estimated chances of taking the next place" hidden>
           <header>
-            <strong>Win outlook</strong>
+            <strong id="win-heading">1st place outlook</strong>
             <span id="win-note" class="win-note"></span>
             <button type="button" id="win-help-toggle" class="win-help-toggle" aria-label="How are win chances estimated?" aria-controls="win-help" aria-expanded="false">?</button>
           </header>
           <div id="win-bar" class="win-bar"></div>
-          <p id="win-help" class="win-help" hidden>Live estimate from four-player games where every pawn starts at home. It updates after each roll and move. Estimates for other player counts or entry rules have not been calibrated.</p>
+          <p id="win-help" class="win-help" hidden>Live estimate for the next place still open. Finished players leave the bar, and it updates after each roll and move. The model trained on four-player games where every pawn starts at home; other setups have not been calibrated.</p>
         </section>
         <ol id="players" class="players"></ol>
       </div>
@@ -376,6 +376,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const hintEl = $<HTMLButtonElement>('hint-button');
   const hintTextEl = $('hint-text');
   const winOutlookEl = $('win-outlook');
+  const winHeadingEl = $('win-heading');
   const winBarEl = $('win-bar');
   const winNoteEl = $('win-note');
   const winHelpEl = $('win-help');
@@ -813,19 +814,30 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     hintEl.hidden = !human;
     hintTextEl.hidden = reviewing || !hintTextEl.textContent;
 
-    const showOutlook = seated.length >= 2 && phase !== 'setup' && !reviewing;
+    const showOutlook = seated.length >= 2 && phase !== 'setup' && !reviewing
+      && (phase !== 'over' || !watchEl.hidden);
+    const resolution = showOutlook ? resolveTurn(state, current, turn, turnStartState) : null;
+    const provisionalPlace = resolution?.over && !resolution.rolledBack
+      && !placings.includes(current) && finished(resolution.state, current) ? 1 : 0;
+    const target = ordinal(placings.length + provisionalPlace + 1);
+    const placed = new Set([...placings, ...(provisionalPlace ? [current] : [])]);
     const winChances = showOutlook ? currentWinChances() : [];
     const winPercents = wholePercentages(winChances);
     winOutlookEl.hidden = !showOutlook;
     if (showOutlook) {
+      winHeadingEl.textContent = `${target} place outlook`;
+      winOutlookEl.setAttribute('aria-label', `Estimated chances of finishing ${target}`);
       const strength = outlookStrength(winChances);
-      winNoteEl.textContent = placings.length ? 'Final' : strength < 0.04 ? 'Wide open'
+      winNoteEl.textContent = strength < 0.04 ? 'Wide open'
         : strength < 0.12 ? 'Taking shape' : strength < 0.28 ? 'Clear edge' : 'Strong edge';
       winBarEl.setAttribute('role', 'img');
-      winBarEl.setAttribute('aria-label', seated.map((player, i) => `${player.name} ${winPercents[i]}%`).join(', '));
+      winBarEl.setAttribute('aria-label', seated.map((player, i) => placed.has(i)
+        ? '' : `${player.name} ${winPercents[i]}%`).filter(Boolean).join(', '));
       winBarEl.innerHTML = seated.map((player, i) => {
         const colour = COLOURS.find((entry) => entry.id === player.colour)!.chalk;
-        return `<span style="width:${winChances[i] * 100}%;--chance-colour:${colour}" title="${escapeHtml(player.name)}: ${winPercents[i]}%"></span>`;
+        return !placed.has(i)
+          ? `<span style="width:${winChances[i] * 100}%;--chance-colour:${colour}" title="${escapeHtml(player.name)}: ${winPercents[i]}%"></span>`
+          : '';
       }).join('');
     }
 
@@ -849,7 +861,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         return `<li class="${!reviewing && i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
           <span class="pname">${escapeHtml(p.name)}${tag ? ` <small>${tag}</small>` : ''}${place >= 0 ? ` <em class="place">${ordinal(place + 1)}</em>` : ''}</span>
-          <span class="pinfo">${showOutlook ? `<span class="win-chance" title="Estimated chance to win">${winPercents[i]}%</span>` : ''}${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}
+          <span class="pinfo">${showOutlook && !placed.has(i) ? `<span class="win-chance" title="Estimated chance to finish ${target}">${winPercents[i]}%</span>` : ''}${pl.hasHit ? '<b title="Has hit someone, so the inner ring is open">hit ✓</b>' : ''}
           ${pact && !reviewing ? `<span class="truce-tag" title="Truce with ${escapeHtml(seated[ally].name)} against ${escapeHtml(seated[pact.target].name)}">🤝 ${escapeHtml(seated[ally].name)} · vs ${escapeHtml(seated[pact.target].name)}</span>` : ''}
           ${wary ? '<span class="wary-tag" title="Recent betrayal makes a truce unlikely">wary</span>' : ''}
           ${canInvite ? `<button type="button" class="social-action" data-social="offer" data-player="${i}" title="Offer a short truce against the leader">Truce</button>` : ''}
@@ -878,7 +890,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const placingsKey = placings.join(',');
     if (outlookCache?.state === state && outlookCache.current === current
       && outlookCache.turn === turnKey && outlookCache.placings === placingsKey) return outlookCache.chances;
-    const chances = winProbabilities(state, current, turn, turnStartState, placings);
+    const predictionCurrent = placings.includes(current) ? nextRival(current) : current;
+    const predictionTurn = predictionCurrent === current ? turn : newTurn();
+    const chances = winProbabilities(state, predictionCurrent, predictionTurn,
+      predictionCurrent === current ? turnStartState : state, placings);
     outlookCache = { state, current, turn: turnKey, placings: placingsKey, chances };
     return chances;
   }

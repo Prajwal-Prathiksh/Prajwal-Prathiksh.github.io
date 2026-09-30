@@ -251,6 +251,16 @@ if (!isMainThread) {
         throw new Error(`${seats.length}-player win outlook is invalid.`);
       }
     }
+    const placingState = newGame([0, 1, 2, 3], 'home');
+    placingState.players[1].pawns = [24, 24, 24, 24];
+    placingState.players[2].pawns = [24, 24, 24, 24];
+    for (const placed of [[1], [1, 2]]) {
+      const chances = winProbabilities(placingState, 0, newTurn(), placingState, placed);
+      if (placed.some((player) => chances[player] !== 0)
+        || Math.abs(chances.reduce((sum, chance) => sum + chance, 0) - 1) > 1e-9) {
+        throw new Error('The next-place outlook included a finished player.');
+      }
+    }
     const exposedState: State = {
       entry: 'home',
       players: [

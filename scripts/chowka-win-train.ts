@@ -28,6 +28,8 @@ interface DataResult {
   features: Float32Array;
   winners: Uint8Array;
   held: Uint8Array;
+  stages: Uint8Array;
+  activeMasks: Uint8Array;
 }
 
 const styles: Style[] = ['balanced', 'aggressive', 'cautious', 'racer'];
@@ -61,8 +63,10 @@ function generate(job: DataJob): DataResult {
   const rows: number[] = [];
   const winners: number[] = [];
   const held: number[] = [];
+  const stages: number[] = [];
+  const activeMasks: number[] = [];
   for (let game = 0; game < job.games; game++) {
-    const snapshots: { features: number[][]; held: number }[] = [];
+    const snapshots: { features: number[][]; held: number; stage: number; activeMask: number }[] = [];
     const offset = (game * 7 + job.id * 3) % job.sampleEvery;
     let turn = 0;
     const orderedStyles = styles.map((_, seat) => styles[(seat + game + job.id) % 4]);
@@ -74,21 +78,27 @@ function generate(job: DataJob): DataResult {
       seed: job.seed + game * 0x9e3779b1,
       observeBehaviour: false,
       onDecision: ({ state, player: current, turn: liveTurn, turnStart }) => {
-        if (!state.players.some((_, player) => finished(state, player)) && turn++ % job.sampleEvery === offset) {
+        const stage = state.players.filter((_, player) => finished(state, player)).length;
+        if (stage < 3 && turn++ % job.sampleEvery === offset) {
           snapshots.push({
             features: state.players.map((_, player) =>
               winFeatures(state, player, current, liveTurn, turnStart)),
             held: Number(liveTurn.bank.length > 0),
+            stage,
+            activeMask: state.players.reduce((mask, _, player) =>
+              mask | (finished(state, player) ? 0 : 1 << player), 0),
           });
         }
       },
     });
-    const winner = result.places[0];
-    if (!finished(result.state, winner)) continue;
     for (const snapshot of snapshots) {
+      const winner = result.places[snapshot.stage];
+      if (!finished(result.state, winner)) continue;
       snapshot.features.forEach((features) => rows.push(...features));
       winners.push(winner);
       held.push(snapshot.held);
+      stages.push(snapshot.stage);
+      activeMasks.push(snapshot.activeMask);
     }
   }
   return {
@@ -98,12 +108,15 @@ function generate(job: DataJob): DataResult {
     features: Float32Array.from(rows),
     winners: Uint8Array.from(winners),
     held: Uint8Array.from(held),
+    stages: Uint8Array.from(stages),
+    activeMasks: Uint8Array.from(activeMasks),
   };
 }
 
 if (!isMainThread) {
   const result = generate(workerData as DataJob);
-  parentPort!.postMessage(result, [result.features.buffer as ArrayBuffer, result.winners.buffer as ArrayBuffer, result.held.buffer as ArrayBuffer]);
+  parentPort!.postMessage(result, [result.features.buffer as ArrayBuffer, result.winners.buffer as ArrayBuffer,
+    result.held.buffer as ArrayBuffer, result.stages.buffer as ArrayBuffer, result.activeMasks.buffer as ArrayBuffer]);
 } else {
   const args = new Map(process.argv.slice(2).map((arg) => {
     const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
@@ -155,20 +168,28 @@ if (!isMainThread) {
     const features = new Float32Array(samples * 4 * featureCount);
     const winners = new Uint8Array(samples);
     const held = new Uint8Array(samples);
+    const stages = new Uint8Array(samples);
+    const activeMasks = new Uint8Array(samples);
     let sampleOffset = 0;
     for (const part of parts) {
       features.set(part.features, sampleOffset * 4 * featureCount);
       winners.set(part.winners, sampleOffset);
       held.set(part.held, sampleOffset);
+      stages.set(part.stages, sampleOffset);
+      activeMasks.set(part.activeMasks, sampleOffset);
       sampleOffset += part.samples;
     }
-    return { samples, features, winners, held };
+    return { samples, features, winners, held, stages, activeMasks };
   };
   const training = combine(trainingParts);
   const validation = combine(validationParts);
   const test = combine(testParts);
   if (!training.samples || !validation.samples || !test.samples) throw new Error('No decided games were sampled in a data split.');
   console.log(`Collected ${training.samples} training, ${validation.samples} calibration and ${test.samples} test positions.`);
+  const stageCounts = [0, 1, 2].map((stage) => training.stages.reduce((sum, value) => sum + Number(value === stage), 0));
+  if (stageCounts.some((count) => count === 0)) throw new Error('Training is missing a placing stage.');
+  const stageWeights = stageCounts.map((count) => Math.min(4, training.samples / (3 * count)));
+  console.log(`Training positions by place: ${stageCounts.join('/')} (1st/2nd/3rd).`);
 
   const weights = new Float64Array(featureCount);
   const firstMoment = new Float64Array(featureCount);
@@ -183,6 +204,7 @@ if (!isMainThread) {
     const logits = [0, 0, 0, 0];
     const base = sample * 4 * featureCount;
     for (let player = 0; player < 4; player++) {
+      if (!(data.activeMasks[sample] & (1 << player))) { logits[player] = -Infinity; continue; }
       const offset = base + player * featureCount;
       for (let feature = 0; feature < featureCount; feature++) {
         logits[player] += data.features[offset + feature] * (coefficients[feature] ?? 0);
@@ -211,7 +233,7 @@ if (!isMainThread) {
           const error = probabilities[player] - Number(training.winners[sample] === player);
           const offset = base + player * featureCount;
           for (let feature = 0; feature < featureCount; feature++) {
-            gradient[feature] += error * training.features[offset + feature];
+            gradient[feature] += error * training.features[offset + feature] * stageWeights[training.stages[sample]];
           }
         }
       }
@@ -228,17 +250,24 @@ if (!isMainThread) {
     if ((epoch + 1) % 10 === 0 || epoch === 0) console.log(`Epoch ${epoch + 1}/${epochs}`);
   }
 
-  const metricsAt = (data: typeof validation, temperature: number, heldFilter?: number, coefficients?: ArrayLike<number>) => {
+  const metricsAt = (
+    data: typeof validation, temperature: number, heldFilter?: number,
+    coefficients?: ArrayLike<number>, stageFilter?: number,
+  ) => {
     let logLoss = 0;
     let brier = 0;
     let correct = 0;
     let sampleCount = 0;
+    let activeCount = 0;
+    let uniformLogLoss = 0;
     const bins = Array.from({ length: 10 }, () => ({ count: 0, confidence: 0, correct: 0 }));
     for (let sample = 0; sample < data.samples; sample++) {
       if (heldFilter !== undefined && data.held[sample] !== heldFilter) continue;
+      if (stageFilter !== undefined && data.stages[sample] !== stageFilter) continue;
       sampleCount++;
       const probabilities = probabilitiesAt(data, sample, temperature, coefficients);
       const winner = data.winners[sample];
+      uniformLogLoss += Math.log(4 - data.stages[sample]);
       logLoss -= Math.log(Math.max(1e-9, probabilities[winner]));
       for (let player = 0; player < 4; player++) {
         const error = probabilities[player] - Number(player === winner);
@@ -248,6 +277,8 @@ if (!isMainThread) {
       const hit = Number(predicted === winner);
       correct += hit;
       for (let player = 0; player < 4; player++) {
+        if (!(data.activeMasks[sample] & (1 << player))) continue;
+        activeCount++;
         const probability = probabilities[player];
         const bin = bins[Math.min(9, Math.floor(probability * 10))];
         bin.count++;
@@ -257,10 +288,12 @@ if (!isMainThread) {
     }
     if (!sampleCount) throw new Error('No positions for the requested roll phase.');
     const calibrationError = bins.reduce((sum, bin) => bin.count
-      ? sum + bin.count / (sampleCount * 4) * Math.abs(bin.correct / bin.count - bin.confidence / bin.count)
+      ? sum + bin.count / activeCount * Math.abs(bin.correct / bin.count - bin.confidence / bin.count)
       : sum, 0);
     return {
+      samples: sampleCount,
       logLoss: logLoss / sampleCount,
+      uniformLogLoss: uniformLogLoss / sampleCount,
       brier: brier / sampleCount,
       accuracy: correct / sampleCount,
       calibrationError,
@@ -278,9 +311,12 @@ if (!isMainThread) {
   }
   const testMetrics = metricsAt(test, temperature);
   const previousMetrics = metricsAt(test, CHOWKA_WIN_MODEL.temperature, undefined, CHOWKA_WIN_MODEL.weights);
+  const testByPlace = [0, 1, 2].map((stage) => ({ place: stage + 1, ...metricsAt(test, temperature, undefined, undefined, stage) }));
+  const previousByPlace = [0, 1, 2].map((stage) => ({ place: stage + 1,
+    ...metricsAt(test, CHOWKA_WIN_MODEL.temperature, undefined, CHOWKA_WIN_MODEL.weights, stage) }));
 
   const model: WinModel = {
-    version: 2,
+    version: 3,
     weights: Array.from(weights),
     temperature,
     trainedGames: games,
@@ -289,14 +325,20 @@ if (!isMainThread) {
     seed,
     validation: validationMetrics,
     test: testMetrics,
+    testByPlace,
   };
   if (!validateWinModel(model)) throw new Error('Training produced an invalid win model.');
   const destination = resolve('src/data/chowka-bhara-win-model.json');
   await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
   console.log(`Saved win model to ${destination}.`);
-  console.log(`Validation: log loss ${validationMetrics.logLoss.toFixed(4)} (uniform 1.3863), Brier ${validationMetrics.brier.toFixed(4)} (uniform 0.7500), accuracy ${(validationMetrics.accuracy * 100).toFixed(1)}%, calibration error ${(validationMetrics.calibrationError * 100).toFixed(1)}%.`);
+  console.log(`Validation: log loss ${validationMetrics.logLoss.toFixed(4)} (uniform ${validationMetrics.uniformLogLoss.toFixed(4)}), Brier ${validationMetrics.brier.toFixed(4)}, accuracy ${(validationMetrics.accuracy * 100).toFixed(1)}%, calibration error ${(validationMetrics.calibrationError * 100).toFixed(1)}%.`);
   console.log(`Untouched test: log loss ${testMetrics.logLoss.toFixed(4)}, Brier ${testMetrics.brier.toFixed(4)}, accuracy ${(testMetrics.accuracy * 100).toFixed(1)}%, player calibration error ${(testMetrics.calibrationError * 100).toFixed(1)}%.`);
   console.log(`Previous model on same test: log loss ${previousMetrics.logLoss.toFixed(4)}, Brier ${previousMetrics.brier.toFixed(4)}, accuracy ${(previousMetrics.accuracy * 100).toFixed(1)}%, player calibration error ${(previousMetrics.calibrationError * 100).toFixed(1)}%.`);
+  for (let stage = 0; stage < 3; stage++) {
+    const latest = testByPlace[stage];
+    const previous = previousByPlace[stage];
+    console.log(`  ${stage + 1}${stage === 0 ? 'st' : stage === 1 ? 'nd' : 'rd'} place (${latest.samples} positions): log loss ${latest.logLoss.toFixed(4)} vs previous ${previous.logLoss.toFixed(4)}; accuracy ${(latest.accuracy * 100).toFixed(1)}% vs ${(previous.accuracy * 100).toFixed(1)}%.`);
+  }
   for (const [name, phase] of [['before a held roll', 0], ['with held rolls', 1]] as const) {
     const metrics = metricsAt(test, temperature, phase);
     console.log(`  ${name}: log loss ${metrics.logLoss.toFixed(4)}, Brier ${metrics.brier.toFixed(4)}, accuracy ${(metrics.accuracy * 100).toFixed(1)}%, calibration error ${(metrics.calibrationError * 100).toFixed(1)}%.`);

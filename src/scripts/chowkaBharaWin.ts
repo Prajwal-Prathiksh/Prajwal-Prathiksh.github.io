@@ -22,6 +22,7 @@ export interface WinModel {
     calibrationError: number;
   };
   test: { logLoss: number; brier: number; accuracy: number; calibrationError: number };
+  testByPlace?: Array<{ place: number; samples: number; logLoss: number; accuracy: number }>;
 }
 
 export const CHOWKA_WIN_MODEL: WinModel = trainedModel;
@@ -92,12 +93,17 @@ export function winFeatures(
   return [...board, ...liveTurn, player === current ? 1 : 0, heldImpact, nextRollImpact];
 }
 
-export function probabilitiesFromFeatures(features: number[][], model: WinModel = CHOWKA_WIN_MODEL): number[] {
+export function probabilitiesFromFeatures(
+  features: number[][],
+  model: WinModel = CHOWKA_WIN_MODEL,
+  active: boolean[] = features.map(() => true),
+): number[] {
   const scale = Math.max(0.05, model.temperature);
-  const logits = features.map((values) => values.reduce(
-    (score, value, index) => score + value * (model.weights[index] ?? 0), 0,
-  ) / scale);
+  const logits = features.map((values, player) => active[player]
+    ? values.reduce((score, value, index) => score + value * (model.weights[index] ?? 0), 0) / scale
+    : -Infinity);
   const peak = Math.max(...logits);
+  if (peak === -Infinity) return features.map(() => 0);
   const exp = logits.map((logit) => Math.exp(logit - peak));
   const total = exp.reduce((sum, value) => sum + value, 0);
   return exp.map((value) => value / total);
@@ -112,24 +118,29 @@ export function winProbabilities(
   model: WinModel = CHOWKA_WIN_MODEL,
 ): number[] {
   const resolution = resolveTurn(state, current, turn, turnStart);
-  const knownWinner = placings[0] ?? (resolution.over && !resolution.rolledBack
-    ? resolution.state.players.findIndex((_, player) => finished(resolution.state, player)) : -1);
-  if (knownWinner >= 0) return state.players.map((_, player) => Number(player === knownWinner));
+  const placed = [...placings];
+  if (resolution.over && !resolution.rolledBack && finished(resolution.state, current)
+    && !placed.includes(current)) placed.push(current);
+  const active = state.players.map((_, player) => !placed.includes(player));
+  if (active.filter(Boolean).length === 1) return active.map(Number);
   return probabilitiesFromFeatures(
     state.players.map((_, player) => winFeatures(resolution.state, player, current, turn, turnStart)),
     model,
+    active,
   );
 }
 
 export function outlookStrength(probabilities: number[]): number {
-  if (probabilities.length < 2) return 1;
+  const contenders = probabilities.filter((probability) => probability > 0).length;
+  if (contenders < 2) return 1;
   const entropy = -probabilities.reduce((sum, probability) =>
     sum + (probability > 0 ? probability * Math.log(probability) : 0), 0);
-  return Math.max(0, Math.min(1, 1 - entropy / Math.log(probabilities.length)));
+  return Math.max(0, Math.min(1, 1 - entropy / Math.log(contenders)));
 }
 
 export const validateWinModel = (model: WinModel) =>
-  model.version === 2
+  model.version === 3
+  && model.testByPlace?.length === 3
   && model.weights.length === WIN_FEATURE_NAMES.length
   && model.weights.every(Number.isFinite)
   && Number.isFinite(model.temperature)

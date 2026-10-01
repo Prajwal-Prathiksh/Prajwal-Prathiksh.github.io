@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { person } from '../data/site';
+import ThemeToggle from '../components/ThemeToggle.astro';
 
 interface Props {
   title?: string;
@@ -34,8 +35,17 @@ const path = Astro.url.pathname;
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="sitemap" href="/sitemap-index.xml" />
-    <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#121417" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fbfaf8" />
+    <script is:inline>
+      // Apply saved preferences before the first paint on every page.
+      (() => {
+        let theme = 'auto';
+        try { theme = localStorage.getItem('site-theme') || 'auto'; } catch {}
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+        const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#121417' : '#fbfaf8';
+      })();
+    </script>
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -45,10 +55,13 @@ const path = Astro.url.pathname;
   <body>
     <header class:list={['wrap', 'site-header', { wide }]}>
       <a href="/" class="brand">{person.name}</a>
-      <nav aria-label="Main">
-        <a href="/" aria-current={path === '/' ? 'page' : undefined}>About</a>
-        <a href="/playroom/" aria-current={path.startsWith('/playroom') ? 'page' : undefined}>Playroom</a>
-      </nav>
+      <div class="header-actions">
+        <nav aria-label="Main">
+          <a href="/" aria-current={path === '/' ? 'page' : undefined}>About</a>
+          <a href="/playroom/" aria-current={path.startsWith('/playroom') ? 'page' : undefined}>Playroom</a>
+        </nav>
+        <ThemeToggle />
+      </div>
     </header>
     <main class:list={['wrap', { wide }]}>
       <slot />
@@ -99,6 +112,14 @@ const path = Astro.url.pathname;
     justify-content: space-between;
     gap: 1rem;
     padding-block: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
 
   .brand {

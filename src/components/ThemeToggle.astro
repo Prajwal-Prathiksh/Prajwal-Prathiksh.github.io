@@ -1,0 +1,130 @@
+<details class="theme-control" id="theme-control">
+  <summary>
+    <svg class="theme-icon theme-auto" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>
+    <svg class="theme-icon theme-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></svg>
+    <svg class="theme-icon theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z" /></svg>
+    <span class="sr-only">Colour theme: </span><span id="theme-label">Automatic</span>
+    <svg class="theme-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+  </summary>
+  <div class="theme-options" role="group" aria-label="Colour theme">
+    <button type="button" data-theme-option="auto" aria-label="Automatic theme" aria-pressed="true">Automatic<span class="check" aria-hidden="true">✓</span></button>
+    <button type="button" data-theme-option="light" aria-label="Light theme" aria-pressed="false">Light<span class="check" aria-hidden="true">✓</span></button>
+    <button type="button" data-theme-option="dark" aria-label="Dark theme" aria-pressed="false">Dark<span class="check" aria-hidden="true">✓</span></button>
+  </div>
+</details>
+
+<script>
+  import { setupTheme } from '../scripts/theme';
+  setupTheme();
+</script>
+
+<style>
+  .theme-control {
+    position: relative;
+    flex-shrink: 0;
+    color: var(--muted);
+  }
+
+  summary {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 8.25rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 1.55rem 0.35rem 2rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--bg);
+    font-size: 0.8rem;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  summary::-webkit-details-marker { display: none; }
+
+  summary:hover,
+  .theme-control[open] summary {
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+
+  summary svg {
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  .theme-icon { left: 0.7rem; }
+  .theme-chevron { right: 0.55rem; width: 0.8rem; }
+  .theme-light, .theme-dark { display: none; }
+  :global(html[data-theme='light']) .theme-auto,
+  :global(html[data-theme='dark']) .theme-auto { display: none; }
+  :global(html[data-theme='light']) .theme-light,
+  :global(html[data-theme='dark']) .theme-dark { display: block; }
+
+  .theme-options {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    z-index: 70;
+    width: 9rem;
+    padding: 0.25rem;
+    border: 1px solid var(--line);
+    border-radius: 0.85rem;
+    background: var(--surface);
+    box-shadow: 0 10px 28px rgb(0 0 0 / 0.18);
+  }
+
+  .theme-control:not([open]) .theme-options { display: none; }
+
+  .theme-options button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 2.4rem;
+    padding: 0.3rem 0.65rem;
+    border: 0;
+    border-radius: 0.6rem;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-align: left;
+  }
+
+  .theme-options button:hover,
+  .theme-options button[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    color: var(--fg);
+  }
+
+  .check { color: var(--accent); visibility: hidden; }
+  .theme-options button[aria-pressed='true'] .check { visibility: visible; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :global(.zen-on) .theme-control {
+    position: fixed;
+    top: max(0.75rem, env(safe-area-inset-top));
+    left: max(0.75rem, env(safe-area-inset-left));
+    z-index: 51;
+  }
+
+  :global(.zen-on) .theme-options { right: auto; left: 0; }
+</style>

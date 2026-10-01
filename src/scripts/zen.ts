@@ -8,6 +8,9 @@ export function setupZen(): void {
   // A page may show the toggle in more than one place (e.g. setup and match bar).
   const opens = [...area.querySelectorAll<HTMLButtonElement>('[data-zen-open]')];
   const exits = [...area.querySelectorAll<HTMLButtonElement>('[data-zen-exit]')];
+  const themeControl = document.getElementById('theme-control');
+  const themePosition = document.createComment('Theme control position');
+  themeControl?.before(themePosition);
   const visible = (els: HTMLElement[]) => els.find((el) => el.getClientRects().length > 0);
 
   const on = () => area.classList.contains('zen-on');
@@ -16,6 +19,7 @@ export function setupZen(): void {
     if (!on()) return;
     area.classList.remove('zen-on');
     document.documentElement.classList.remove('zen');
+    if (themeControl) themePosition.after(themeControl);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     visible(opens)?.focus();
   };
@@ -23,6 +27,7 @@ export function setupZen(): void {
   const enter = async () => {
     area.classList.add('zen-on');
     document.documentElement.classList.add('zen');
+    if (themeControl) area.append(themeControl);
     visible(exits)?.focus();
     try {
       await area.requestFullscreen?.({ navigationUI: 'hide' });

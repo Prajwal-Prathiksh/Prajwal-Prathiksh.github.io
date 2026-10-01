@@ -125,9 +125,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         </select>
       </label>
       <button type="button" class="btn" id="newgame">New game</button>
-      <button type="button" class="btn entry-toggle" id="entry-toggle" aria-pressed="false" aria-controls="entry-guides" title="Show where each colour enters the inner ring after its first hit">
+      <button type="button" class="btn guide-toggle" id="entry-toggle" aria-pressed="false" aria-controls="entry-guides" title="Show where each colour enters the inner ring after its first hit">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7a6 6 0 0 1 6 6v6m-4-4 4 4 4-4" /></svg>
         Inner-ring entries
+      </button>
+      <button type="button" class="btn guide-toggle" id="home-toggle" aria-pressed="false" aria-controls="home-guides" title="Highlight each player's home square">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 8h8v8H8z" /></svg>
+        Home squares
       </button>
       <ZenToggle />
     </div>
@@ -145,6 +149,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             </filter>
           </defs>
 
+          <g id="home-guides" class="home-guides" visibility="hidden"></g>
           <g class="chalk" filter="url(#chalk)">
             {cells.map(({ r, c }) => <rect x={100 + c * 100} y={100 + r * 100} width="100" height="100" />)}
             <rect x="94" y="94" width="512" height="512" rx="4" />
@@ -396,6 +401,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const pairsEl = document.getElementById('pairs')!;
   const entryGuidesEl = document.getElementById('entry-guides')!;
   const entryToggleEl = $<HTMLButtonElement>('entry-toggle');
+  const homeGuidesEl = document.getElementById('home-guides')!;
+  const homeToggleEl = $<HTMLButtonElement>('home-toggle');
 
   let seated: Seated[] = [];
   let state: State = newGame([0, 2]);
@@ -661,6 +668,16 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         return el;
       });
     });
+    // Tinted insets leave the chalk cell borders and safe-square crosses legible.
+    homeGuidesEl.innerHTML = state.players.map((p, i) => {
+      const [r, c] = square(p.seat, 0);
+      const colour = COLOURS.find((entry) => entry.id === seated[i].colour)!;
+      const x = 107 + c * 100;
+      const y = 107 + r * 100;
+      return `<g><rect class="home-fill" x="${x}" y="${y}" width="86" height="86" rx="12" fill="${colour.arrow}"/>`
+        + `<rect class="home-shadow" x="${x}" y="${y}" width="86" height="86" rx="12"/>`
+        + `<rect class="home-outline" x="${x}" y="${y}" width="86" height="86" rx="12" stroke="${colour.arrow}"/></g>`;
+    }).join('');
     // A chalk outline for each seat's waiting area.
     yardsEl.innerHTML = state.players
       .map((p) => {
@@ -1435,6 +1452,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     entryToggleEl.setAttribute('aria-pressed', String(show));
     entryGuidesEl.setAttribute('visibility', show ? 'visible' : 'hidden');
   });
+  homeToggleEl.addEventListener('click', () => {
+    const show = homeToggleEl.getAttribute('aria-pressed') !== 'true';
+    homeToggleEl.setAttribute('aria-pressed', String(show));
+    homeGuidesEl.setAttribute('visibility', show ? 'visible' : 'hidden');
+  });
 
   $('debug-row').hidden = !debugAllowed;
   showSetup();
@@ -1673,13 +1695,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     font-size: 0.9rem;
   }
 
-  .entry-toggle {
+  .guide-toggle {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
   }
 
-  .entry-toggle svg {
+  .guide-toggle svg {
     width: 1rem;
     height: 1rem;
     fill: none;
@@ -1689,7 +1711,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     stroke-linejoin: round;
   }
 
-  .entry-toggle[aria-pressed='true'] {
+  .guide-toggle[aria-pressed='true'] {
     border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 15%, var(--surface));
     color: var(--accent);
@@ -1706,6 +1728,20 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     stroke: #432118;
     stroke-width: 10;
     opacity: 0.95;
+  }
+
+  .home-guides { pointer-events: none; }
+  .home-guides :global(.home-fill) { opacity: 0.22; }
+  .home-guides :global(.home-shadow) {
+    fill: none;
+    stroke: #432118;
+    stroke-width: 8;
+    opacity: 0.75;
+  }
+  .home-guides :global(.home-outline) {
+    fill: none;
+    stroke-width: 4;
+    opacity: 0.9;
   }
 
   select {

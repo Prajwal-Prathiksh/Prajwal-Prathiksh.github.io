@@ -1,0 +1,73 @@
+---
+import Base from '../../../layouts/Base.astro';
+---
+
+<Base wide title="Chowka Bhara online lobby" description="Invite friends to a private Chowka Bhara room.">
+  <p class="back"><a href="/playroom/chowka-bhara/">← Chowka Bhara</a></p>
+  <h1>Play together</h1>
+  <p class="muted intro">A small room for friends. Share the link, choose seats, and see when everyone connects.</p>
+
+  <div class="lobby-card" id="lobby-card">
+    <div id="entry">
+      <label class="field">Your name <input id="name" maxlength="24" autocomplete="nickname" placeholder="Player" /></label>
+      <div class="actions">
+        <button class="btn primary" id="create" type="button">Create room</button>
+        <button class="btn" id="join" type="button" hidden>Join room</button>
+      </div>
+    </div>
+    <div id="room" hidden>
+      <p class="room-label">Invite link</p>
+      <div class="share"><input id="link" readonly aria-label="Invite link" /><button class="btn" id="copy" type="button">Copy</button></div>
+      <p class="muted note">Anyone with this link can ask to join. Close this tab to end the room.</p>
+      <h2>Seats</h2>
+      <ol id="seats" class="seats"></ol>
+      <label id="bot-control" class="field">Computer players <select id="bots"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select></label>
+      <p id="guest-note" class="muted note" hidden>The host chooses the computer seats.</p>
+      <button class="btn primary" id="start-game" type="button" hidden>Start game</button>
+      <h2>Connections</h2>
+      <div id="requests"></div>
+      <ul id="connections" class="connections"></ul>
+      <p class="muted note">When everyone is connected, the host can start the game. Cowrie rolls, moves, bots, and history stay in sync.</p>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite">Ready to make a room.</p>
+  </div>
+  <div id="match" hidden>
+    <p id="match-note" class="muted note">The host runs this match. Closing the host tab ends it for everyone.</p>
+    <iframe id="game-frame" title="Chowka Bhara online match" allow="fullscreen" loading="eager"></iframe>
+  </div>
+  <p class="muted privacy">No account, cookies, or analytics. The room relay passes connection messages in memory. People in the room share names and seat choices. Direct connections may reveal your network address to other players. Some networks need a TURN relay, which this first version does not have.</p>
+</Base>
+
+<script>
+  import '../../../scripts/chowkaOnlineLobby';
+</script>
+
+<style>
+  .back { margin-top: 1.5rem; }
+  h1 { margin-bottom: .3rem; }
+  .intro { margin-top: 0; max-width: 36rem; }
+  .lobby-card { max-width: 42rem; padding: clamp(1.2rem, 4vw, 2rem); margin: 1.5rem 0; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 12px 35px rgb(0 0 0 / .08); }
+  .field { display: grid; gap: .4rem; max-width: 20rem; }
+  input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .85rem; }
+  input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .actions { display: flex; gap: .7rem; margin-top: 1rem; }
+  .room-label { font-weight: 600; margin-bottom: .5rem; }
+  .share { display: flex; gap: .5rem; }
+  .share input { min-width: 0; flex: 1; }
+  h2 { font-size: 1.1rem; margin: 1.7rem 0 .8rem; }
+  .note, .privacy { font-size: .9rem; line-height: 1.55; }
+  .privacy { max-width: 42rem; }
+  .seats, .connections { padding: 0; list-style: none; display: grid; gap: .5rem; }
+  .seats :global(li), .connections :global(li) { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; border: 1px solid var(--line); border-radius: 14px; padding: .65rem .8rem; }
+  .seats :global(select) { margin-left: auto; padding: .35rem .6rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; }
+  .seats :global(.colour) { width: 1rem; height: 1rem; border-radius: 50%; box-shadow: inset 0 -2px 3px rgb(0 0 0 / .3); }
+  .connections :global(.ready) { color: #2ca461; }
+  .connections :global(.waiting) { color: #c08b2a; }
+  #requests :global(.request) { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; padding: .6rem 0; }
+  .status { margin-bottom: 0; min-height: 1.5em; }
+  .status.error { padding: .8rem 1rem; border: 1px solid light-dark(#dcaa9d, #8a554b); border-radius: 14px; background: light-dark(#fff1ec, #35231f); color: light-dark(#7d3527, #ffcfbf); }
+  #start-game { margin-top: 1rem; }
+  #match { margin: 1rem 0; }
+  #game-frame { display: block; width: 100%; height: 44rem; border: 0; border-radius: 18px; background: var(--bg); }
+  [hidden] { display: none !important; }
+</style>

@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chowka-bhara-signal",
+  "main": "worker/chowka-signal.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    "SITE_ORIGIN": "https://prajwal-prathiksh.github.io"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+}

@@ -111,6 +111,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         <button type="submit" class="btn primary">Start game</button>
         <ZenToggle />
       </div>
+      <p class="hint muted"><a href="/playroom/chowka-bhara/online/">Play online with friends</a> · create a private room and fill the other seats with people or bots.</p>
     </form>
 
     <div id="matchbar" class="matchbar" hidden>
@@ -338,6 +339,27 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     style: Style;
   }
 
+  interface OnlineSnapshot {
+    state: State;
+    current: number;
+    turn: Turn;
+    turnStartState: State;
+    phase: 'setup' | 'act' | 'pick' | 'busy' | 'over';
+    placings: number[];
+    social: SocialState;
+    pendingOffers: { from: number; to: number; target: number }[];
+    watching: boolean;
+    status: string;
+    last: string;
+    thrown: string;
+    socialNotice: string;
+    shellsUp: boolean[];
+    hopping: [string, [number, number]][];
+    historyOffset: number;
+    historyStates: State[];
+    historyLabels: string[];
+  }
+
   const COLOURS = [
     { id: 'blue', name: 'Blue', chalk: '#b4d5ff', arrow: '#3f9dff' },
     { id: 'red', name: 'Red', chalk: '#ffb098', arrow: '#ff6759' },
@@ -427,6 +449,32 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let outlookCache: { state: State; current: number; turn: string; placings: string; chances: number[] } | null = null;
   const pawnEls: HTMLButtonElement[][] = [];
   const hopping = new Map<string, [number, number]>(); // pawn key -> board point during a hop
+  const onlineMode = new URLSearchParams(location.search).has('online') && window.parent !== window;
+  let onlineHosting = false;
+  let onlineSelf = '';
+  let onlineSeat = -1;
+  let onlineOwners: string[] = [];
+  let onlineReady = false;
+  let onlineEnded = false;
+  let onlineHistorySent = 0;
+  let shellsUp = [false, false, false, false];
+  const boardEl = document.querySelector<SVGElement>('.board')!;
+  const sendOnline = (type: string, data: Record<string, unknown> = {}) =>
+    window.parent.postMessage({ source: 'chowka-game', type, ...data }, location.origin);
+
+  function onlineSnapshot() {
+    if (!onlineMode || !onlineHosting || !onlineReady || onlineEnded || phase === 'setup') return;
+    const snapshot: OnlineSnapshot = {
+      state, current, turn, turnStartState, phase, placings, social, pendingOffers, watching,
+      status: statusEl.textContent ?? '', last: lastEl.textContent ?? '', thrown: thrownEl.textContent ?? '',
+      socialNotice: socialNoticeEl.textContent ?? '', shellsUp, hopping: [...hopping],
+      historyOffset: onlineHistorySent,
+      historyStates: positions.slice(onlineHistorySent),
+      historyLabels: historyDescriptions.slice(onlineHistorySent),
+    };
+    onlineHistorySent = positions.length;
+    sendOnline('snapshot', { snapshot });
+  }
 
   // A move can end the game while a caller awaits it, so re-read the phase.
   const gameOver = () => phase === 'over';
@@ -599,6 +647,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     return [3.5 + dx, 3.5 + dy];
   };
 
+  const viewPoint = ([x, y]: [number, number]): [number, number] => {
+    if (!onlineMode || onlineSeat < 0) return [x, y];
+    let dx = x - 3.5;
+    let dy = y - 3.5;
+    const seat = state.players[onlineSeat]?.seat ?? 0;
+    for (let i = 0; i < seat; i++) [dx, dy] = [-dy, dx];
+    return [3.5 + dx, 3.5 + dy];
+  };
+
   const yardSpot = (seat: Seat, pawn: number) => forSeat(seat, [2.4 + pawn * 0.73, 6.5]);
 
   const CLUSTER: [number, number][][] = [
@@ -711,6 +768,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     );
 
   function positionMovePicker(x: number, y: number) {
+    [x, y] = viewPoint([x, y]);
     const boardWidth = pawnsEl.clientWidth;
     const halfWidth = movePickerEl.offsetWidth / 2 + 8;
     movePickerEl.style.left = `${Math.max(halfWidth, Math.min(boardWidth - halfWidth, x / 7 * boardWidth))}px`;
@@ -726,7 +784,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const reviewing = historyIndex !== null;
     const viewState = historyIndex === null ? state : positions[historyIndex];
     const spots = layout(viewState);
-    const human = phase === 'act' && seated[current]?.level === null && !reviewing;
+    const human = phase === 'act' && seated[current]?.level === null && !reviewing && !onlineEnded
+      && (!onlineMode || current === onlineSeat);
     const thrower = seated[current];
     if (thrower) {
       document.getElementById('throw-player-pawn')!.setAttribute('href', `#pawn-${thrower.colour}`);
@@ -742,7 +801,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     }
     seated.forEach((p, i) =>
       pawnEls[i].forEach((el, j) => {
-        const [x, y] = hopping.get(`${i}-${j}`) ?? spots.get(`${i}-${j}`)!;
+        const [x, y] = viewPoint(hopping.get(`${i}-${j}`) ?? spots.get(`${i}-${j}`)!);
         el.style.left = `${(x / 7) * 100}%`;
         el.style.top = `${(y / 7) * 100}%`;
         const pos = viewState.players[i].pawns[j];
@@ -819,7 +878,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       bankEl.append(chip);
     });
 
-    const canReview = phase === 'act' && seated[current]?.level === null && positions.length > 1;
+    const canReview = onlineMode
+      ? onlineReady && positions.length > 1
+      : phase === 'act' && seated[current]?.level === null && positions.length > 1;
     historyEl.hidden = !canReview;
     historyBackEl.disabled = reviewing && historyIndex === 0;
     historyForwardEl.hidden = !reviewing;
@@ -859,7 +920,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       }).join('');
     }
 
-    const offer = phase === 'act' && seated[current]?.level === null
+    const offer = human
       ? pendingOffers.find((o) => o.to === current && canOffer(social, state, o.from, o.to, activePlayers()) === o.target)
       : undefined;
     socialOfferEl.hidden = !offer || reviewing;
@@ -871,10 +932,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         const place = reviewing ? -1 : placings.indexOf(i);
         const pact = pactFor(social, i);
         const ally = pact ? allyOf(pact, i) : -1;
-        const canInvite = !reviewing && phase === 'act' && seated[current]?.level === null && i !== current
+        const canInvite = human && i !== current
           && canOffer(social, state, current, i, activePlayers()) !== null
           && !pendingOffers.some((o) => o.from === current && o.to === i);
-        const canEnd = !reviewing && phase === 'act' && seated[current]?.level === null && i !== current && ally === current;
+        const canEnd = human && i !== current && ally === current;
         const wary = !reviewing && seated[current]?.level === null && i !== current && social.trust[current]?.[i] < 0.36;
         return `<li class="${!reviewing && i === current && phase !== 'over' && phase !== 'setup' ? 'now' : ''}">
           <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
@@ -888,18 +949,20 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       })
       .join('');
     renderRecord(statsEl, RECORD_KEY);
+    onlineSnapshot();
   }
 
   const sameMove = (a: Move, b: Move) =>
     a.value === b.value && a.from === b.from && a.to === b.to && a.pawns.join() === b.pawns.join();
 
   function wholePercentages(probabilities: number[]): number[] {
+    if (!probabilities.length) return [];
     const exact = probabilities.map((probability) => probability * 100);
     const rounded = exact.map(Math.floor);
     const left = 100 - rounded.reduce((sum, value) => sum + value, 0);
     const order = exact.map((value, index) => ({ index, remainder: value - rounded[index] }))
       .sort((a, b) => b.remainder - a.remainder);
-    for (let i = 0; i < left; i++) rounded[order[i].index]++;
+    for (let i = 0; i < Math.min(left, order.length); i++) rounded[order[i].index]++;
     return rounded;
   }
 
@@ -912,8 +975,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const predictionTurn = predictionCurrent === current ? turn : newTurn();
     const chances = winProbabilities(state, predictionCurrent, predictionTurn,
       predictionCurrent === current ? turnStartState : state, placings);
-    outlookCache = { state, current, turn: turnKey, placings: placingsKey, chances };
-    return chances;
+    const total = chances.reduce((sum, chance) => sum + chance, 0);
+    const active = seated.map((_, i) => !placings.includes(i));
+    const normalized = Number.isFinite(total) && total > 0
+      ? chances.map((chance) => chance / total)
+      : active.map((yes) => yes ? 1 / active.filter(Boolean).length : 0);
+    outlookCache = { state, current, turn: turnKey, placings: placingsKey, chances: normalized };
+    return normalized;
   }
 
   function choiceButton(label: string, move: Move) {
@@ -946,6 +1014,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       s.style.setProperty('--dy', `${(Math.random() - 0.5) * 10}px`);
       s.classList.add('landed');
     });
+    shellsUp = [...up];
   }
 
   const bonusName = (v: number) => (v === 4 ? 'Chowka (4)' : 'Bhara (8)');
@@ -1137,6 +1206,16 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     next();
   }
 
+  function humanAction(action: Action) {
+    if (onlineMode && !onlineHosting) {
+      if (current !== onlineSeat || phase !== 'act' || historyIndex !== null || onlineEnded) return;
+      sendOnline('command', { command: action.kind === 'move'
+        ? { type: 'move', move: action.move } : { type: action.kind } });
+      return;
+    }
+    act(action);
+  }
+
   const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n] ?? 'th'}`;
 
   watchEl.addEventListener('click', () => {
@@ -1153,21 +1232,21 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   });
 
   throwEl.addEventListener('click', () => {
-    if ((phase === 'act' && historyIndex === null && turn.owed > 0) || phase === 'pick') act({ kind: 'throw' });
+    if ((phase === 'act' && historyIndex === null && turn.owed > 0) || phase === 'pick') humanAction({ kind: 'throw' });
   });
   pickEl.querySelectorAll<HTMLButtonElement>('[data-throw]').forEach((b) =>
     b.addEventListener('click', () => {
       const value = Number(b.dataset.throw);
-      if ((phase === 'act' && historyIndex === null && turn.owed > 0 && pickThrows) || phase === 'pick') act({ kind: 'throw', value });
+      if ((phase === 'act' && historyIndex === null && turn.owed > 0 && pickThrows) || phase === 'pick') humanAction({ kind: 'throw', value });
     }),
   );
 
   skipEl.addEventListener('click', () => {
-    if (phase === 'act' && historyIndex === null && canSkip(turn)) act({ kind: 'skip' });
+    if (phase === 'act' && historyIndex === null && canSkip(turn)) humanAction({ kind: 'skip' });
   });
 
   historyBackEl.addEventListener('click', () => {
-    if (phase !== 'act' || seated[current].level !== null || positions.length < 2) return;
+    if (onlineMode ? !onlineReady || positions.length < 2 : phase !== 'act' || seated[current].level !== null || positions.length < 2) return;
     selectedPawn = null;
     hintedMove = null;
     historyIndex = historyIndex === null ? positions.length - 2 : Math.max(0, historyIndex - 1);
@@ -1184,7 +1263,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   });
 
   hintEl.addEventListener('click', async () => {
-    if (phase !== 'act' || seated[current].level !== null || historyIndex !== null) return;
+    if (phase !== 'act' || seated[current].level !== null || historyIndex !== null || (onlineMode && current !== onlineSeat)) return;
     const id = gameId;
     hintEl.disabled = true;
     hintEl.textContent = 'Thinking…';
@@ -1210,8 +1289,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   playersEl.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-social]');
-    if (!button || phase !== 'act' || historyIndex !== null || seated[current].level !== null) return;
+    if (!button || phase !== 'act' || historyIndex !== null || seated[current].level !== null || (onlineMode && current !== onlineSeat)) return;
     const other = Number(button.dataset.player);
+    if (onlineMode && !onlineHosting) {
+      sendOnline('command', { command: { type: button.dataset.social === 'offer' ? 'offer' : 'end-truce', other } });
+      return;
+    }
     if (button.dataset.social === 'offer') offerTruce(current, other);
     else if (button.dataset.social === 'end') {
       const pact = pactFor(social, current);
@@ -1222,8 +1305,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     }
   });
 
-  function answerOffer(accept: boolean) {
-    if (phase !== 'act' || historyIndex !== null || seated[current].level !== null) return;
+  function answerOffer(accept: boolean, fromRemote = false) {
+    if (phase !== 'act' || (!fromRemote && historyIndex !== null) || seated[current].level !== null || (onlineMode && current !== onlineSeat && !fromRemote)) return;
+    if (onlineMode && !onlineHosting) { sendOnline('command', { command: { type: 'answer-truce', accept } }); return; }
     const index = pendingOffers.findIndex((o) => o.to === current && canOffer(social, state, o.from, o.to, activePlayers()) === o.target);
     if (index < 0) return;
     const [offer] = pendingOffers.splice(index, 1);
@@ -1241,7 +1325,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   $('social-decline').addEventListener('click', () => answerOffer(false));
 
   function onPawn(player: number, pawn: number) {
-    if (phase !== 'act' || historyIndex !== null || player !== current) return;
+    if (phase !== 'act' || historyIndex !== null || player !== current || (onlineMode && current !== onlineSeat)) return;
     const options = [...new Set(turn.bank)].flatMap((value) => movesFor(player, pawn, value));
     if (!options.length) return;
     if (turn.bank.length === 1 && options.length === 1) return humanMove(options[0], pawn);
@@ -1277,7 +1361,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     if (move.from === WAITING && state.entry === 'each' && tapped !== undefined) move = { ...move, pawns: [tapped] };
     else if (move.from === WAITING && state.entry === 'each' && selectedPawn !== null) move = { ...move, pawns: [selectedPawn] };
     selectedPawn = null;
-    act({ kind: 'move', move });
+    humanAction({ kind: 'move', move });
   }
 
   async function performMove(move: Move) {
@@ -1333,6 +1417,13 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     placings.push(player);
     turn = endedTurn();
     const left = seated.map((_, i) => i).filter((i) => !placings.includes(i));
+    if (onlineMode && left.length >= 2) {
+      watching = true;
+      lastEl.textContent = `${who.name} finishes ${ordinal(placings.length)}.`;
+      recordHistory(lastEl.textContent);
+      render();
+      return;
+    }
     if (!watching) {
       phase = 'over';
       const human = who.level === null;
@@ -1385,6 +1476,105 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     $('thrower').hidden = false;
     buildPawns();
     startTurn();
+  }
+
+  function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[]) {
+    if (players.length < 2 || players.length > 4 || players.some((p) => !COLOURS.some((c) => c.id === p.colour))) return;
+    onlineOwners = players.map((p) => p.id);
+    onlineSeat = onlineOwners.indexOf(onlineSelf);
+    if (onlineSeat < 0) return;
+    seated = players.map((p) => ({ name: p.name.slice(0, 24), colour: p.colour,
+      colourName: COLOURS.find((c) => c.id === p.colour)!.name, level: p.level, style: p.style }));
+    state = newGame(SEATS_FOR[seated.length], 'home');
+    social = newSocial(seated.length);
+    turnStartSocial = structuredClone(social);
+    pendingOffers = [];
+    gameId++;
+    current = 0;
+    turn = newTurn();
+    turnStartState = state;
+    positions = [state];
+    historyDescriptions = ['Game started.'];
+    historyIndex = null;
+    onlineHistorySent = 0;
+    placings = [];
+    watching = false;
+    pickThrows = false;
+    pickFor = null;
+    onlineReady = true;
+    onlineEnded = false;
+    setupEl.hidden = true;
+    matchbarEl.hidden = false;
+    $('newgame').hidden = true;
+    speedEl.closest('label')!.hidden = !onlineHosting;
+    $('thrower').hidden = false;
+    statsEl.hidden = true;
+    boardEl.style.transform = `rotate(${state.players[onlineSeat].seat * 90}deg)`;
+    buildPawns();
+    if (onlineHosting) startTurn();
+    else { phase = 'busy'; statusEl.textContent = 'Waiting for the host to start…'; render(); }
+  }
+
+  function applyOnlineSnapshot(snapshot: OnlineSnapshot) {
+    if (!onlineReady || onlineHosting || onlineEnded || !snapshot || !Array.isArray(snapshot.state?.players)
+      || snapshot.state.players.length !== seated.length || !Number.isInteger(snapshot.current)
+      || snapshot.current < 0 || snapshot.current >= seated.length || !Array.isArray(snapshot.historyStates)
+      || !Array.isArray(snapshot.historyLabels)) return;
+    if (snapshot.historyOffset === 0) {
+      positions = [];
+      historyDescriptions = [];
+    }
+    if (snapshot.historyOffset === positions.length) {
+      positions.push(...snapshot.historyStates);
+      historyDescriptions.push(...snapshot.historyLabels);
+    }
+    state = snapshot.state;
+    current = snapshot.current;
+    turn = snapshot.turn;
+    turnStartState = snapshot.turnStartState;
+    phase = snapshot.phase;
+    placings = snapshot.placings;
+    social = snapshot.social;
+    pendingOffers = snapshot.pendingOffers;
+    watching = snapshot.watching;
+    statusEl.textContent = snapshot.status;
+    lastEl.textContent = snapshot.last;
+    thrownEl.textContent = snapshot.thrown;
+    socialNoticeEl.textContent = snapshot.socialNotice;
+    shellsUp = snapshot.shellsUp;
+    [...shellsEl.querySelectorAll<SVGElement>('.cowrie')].forEach((shell, i) =>
+      shell.querySelector('use')?.setAttribute('href', shellsUp[i] ? '#cowrie-mouth' : '#cowrie-back'));
+    hopping.clear();
+    for (const [key, point] of snapshot.hopping) hopping.set(key, point);
+    if (historyIndex !== null && historyIndex >= positions.length) historyIndex = null;
+    render();
+  }
+
+  function onlineCommand(from: string, command: Record<string, unknown>) {
+    if (!onlineHosting || !onlineReady || onlineEnded || phase !== 'act' || seated[current].level !== null
+      || onlineOwners[current] !== from || !command || typeof command !== 'object') return;
+    if (command.type === 'throw' && turn.owed > 0) { act({ kind: 'throw' }); return; }
+    if (command.type === 'skip' && canSkip(turn)) { act({ kind: 'skip' }); return; }
+    if (command.type === 'move' && command.move && typeof command.move === 'object') {
+      const proposed = command.move as Move;
+      if (proposed.player !== current || ![1, 2, 3, 4, 8].includes(proposed.value)
+        || !Array.isArray(proposed.pawns) || proposed.pawns.length < 1 || proposed.pawns.length > 2
+        || !proposed.pawns.every((pawn) => Number.isInteger(pawn) && pawn >= 0 && pawn < 4)
+        || !Number.isInteger(proposed.from) || !Number.isInteger(proposed.to)
+        || !turn.bank.includes(proposed.value)) return;
+      const move = legalMoves(state, current, proposed.value).find((candidate) => sameMove(candidate, proposed));
+      if (move) act({ kind: 'move', move });
+      return;
+    }
+    if (command.type === 'offer' && Number.isInteger(command.other)) offerTruce(current, command.other as number);
+    else if (command.type === 'answer-truce' && typeof command.accept === 'boolean') answerOffer(command.accept, true);
+    else if (command.type === 'end-truce' && Number.isInteger(command.other)) {
+      const pact = pactFor(social, current);
+      if (!pact || allyOf(pact, current) !== command.other) return;
+      endPact(social, pact, current);
+      announceSocial(`${seated[current].name} ended the truce with ${seated[command.other as number].name}.`);
+      render();
+    }
   }
 
   function showSetup() {
@@ -1460,6 +1650,28 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   $('debug-row').hidden = !debugAllowed;
   showSetup();
+  if (onlineMode) {
+    document.documentElement.dataset.onlineGame = 'true';
+    new ResizeObserver(() => sendOnline('height', { height: document.body.scrollHeight + 8 }))
+      .observe(document.body);
+    window.addEventListener('message', (event) => {
+      if (event.origin !== location.origin || event.source !== window.parent || event.data?.source !== 'chowka-online') return;
+      if (event.data.type === 'init' && !onlineReady && Array.isArray(event.data.players)) {
+        onlineHosting = event.data.hosting === true;
+        onlineSelf = String(event.data.self);
+        startOnlineGame(event.data.players);
+      } else if (event.data.type === 'snapshot') applyOnlineSnapshot(event.data.snapshot);
+      else if (event.data.type === 'command' && typeof event.data.from === 'string') onlineCommand(event.data.from, event.data.command);
+      else if (event.data.type === 'end') {
+        onlineEnded = true;
+        gameId++;
+        phase = 'over';
+        statusEl.textContent = 'The online match has ended.';
+        render();
+      }
+    });
+    sendOnline('ready');
+  }
 </script>
 
 <style>
@@ -2486,4 +2698,17 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   .note {
     font-size: 0.85rem;
   }
+</style>
+
+<style is:global>
+  html[data-online-game] .site-header,
+  html[data-online-game] .site-footer,
+  html[data-online-game] main > .back,
+  html[data-online-game] main > h1,
+  html[data-online-game] main > .intro,
+  html[data-online-game] main > details,
+  html[data-online-game] main > .note,
+  html[data-online-game] main > .stats { display: none !important; }
+  html[data-online-game] main.wrap { max-width: 90rem; padding-top: 1rem; }
+  html[data-online-game] .board { transform-origin: 50% 50%; }
 </style>

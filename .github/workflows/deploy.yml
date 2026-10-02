@@ -24,7 +24,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run signal:check
       - run: npm run build
+        env:
+          PUBLIC_CHOWKA_SIGNAL_URL: ${{ vars.PUBLIC_CHOWKA_SIGNAL_URL }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

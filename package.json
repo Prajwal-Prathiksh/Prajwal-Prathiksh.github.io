@@ -11,7 +11,9 @@
     "dev": "astro dev",
     "build": "astro build && node scripts/build-sw.mjs",
     "preview": "astro preview",
+    "signal:dev": "wrangler dev --ip 127.0.0.1 --port 8787 --var SITE_ORIGIN:http://127.0.0.1:4324",
     "check": "astro check",
+    "signal:check": "tsc -p worker/tsconfig.json",
     "selfplay:smoke": "node scripts/run-chowka-tool.mjs smoke",
     "selfplay:benchmark": "node scripts/run-chowka-tool.mjs benchmark",
     "selfplay:train": "node scripts/run-chowka-tool.mjs train",
@@ -30,8 +32,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@cloudflare/workers-types": "^5.20261002.1",
     "esbuild": "^0.28.2",
     "typescript": "^6.0.3",
-    "workbox-build": "^7.4.1"
+    "workbox-build": "^7.4.1",
+    "wrangler": "^4.147.0"
   }
 }

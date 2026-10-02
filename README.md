@@ -40,7 +40,7 @@ Links from the old Jekyll site (`/publications/`, `/resume/`, `/assets/pdf/*.pdf
 2. Add an entry to `src/data/games.ts`.
 3. Save high scores with `loadScores` and `saveScores` from `src/scripts/scores.ts`.
 
-Scores stay in the visitor's `localStorage` under keys prefixed `pp-games:`. They never leave the device, and the site uses no cookies, analytics, or third-party requests. `/playroom/` has a button that clears them.
+Scores stay in the visitor's `localStorage` under keys prefixed `pp-games:`. They never leave the device, and the site uses no cookies or analytics. `/playroom/` has a button that clears them. The optional Chowka Bhara online lobby uses a small signaling relay; see below.
 
 ### Training Chowka Bhara
 
@@ -64,6 +64,26 @@ The win outlook appears in games with two to four players. After someone finishe
 A game built with another tool (plain JS, a canvas engine, WebAssembly) can also go in `public/playroom/<name>/` as static files. Astro copies that folder into the site unchanged.
 
 GitHub Pages only serves static files. Anything that runs in the browser works. Server code, databases, and online leaderboards do not. The limits are 1 GB per site and 100 MB per file.
+
+### Chowka Bhara online rooms
+
+The online lobby lives at `/playroom/chowka-bhara/online/`. One browser creates a room and shares its link. Up to three friends can ask to join. The host admits them, chooses how many hard, balanced bots fill the remaining seats, and starts the game once everyone is connected. Each person sees their own home square at the bottom. The host runs the rules, cowrie throws, bots, and social play. Guests send commands for their own seat; the host checks each move against the rules and sends state updates after rolls and moves. Each view shows the win outlook and board history. New players cannot join a match already in progress. Closing the host tab or losing a player ends that match; there is no resume yet.
+
+Names, colour choices, commands, and match snapshots travel over WebRTC data channels between browsers. The tiny Cloudflare Worker in `worker/chowka-signal.ts` only introduces browsers and forwards WebRTC setup messages. It holds open sockets in memory and uses no database, cookies, accounts, or analytics. Closing the host tab ends the room.
+
+To test with two browser tabs on this machine:
+
+```sh
+npm install
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4324
+# In another terminal:
+npm run signal:dev
+```
+
+Open `http://127.0.0.1:4324/playroom/chowka-bhara/online/` and create a room. Copy the invite link into a second tab, enter a different name, and join. Admit that request in the host tab, then start the game. Both tabs should show the same throws, moves, and history. Use separate devices on the same network only after changing the preview and relay bind addresses, the allowed origin, and the relay URL.
+
+For public rooms, deploy `wrangler.jsonc` to a Cloudflare account and set the GitHub repository variable `PUBLIC_CHOWKA_SIGNAL_URL` to its `wss://` address. The deploy workflow passes that variable into the static build. Until the Worker is deployed and the variable is set, the public page explains that the relay is unavailable. The Worker allows WebSocket connections only from `https://prajwal-prathiksh.github.io`; change `SITE_ORIGIN` if the site moves. STUN helps direct connections; there is no TURN fallback yet, so some networks will fail to connect. Room codes are random 128-bit values kept in URL fragments, which are not sent in ordinary HTTP requests. The relay sees the room code in its WebSocket path and connection metadata. The participants can also learn one another's network addresses through WebRTC. Online match data is ephemeral and is not saved to a server.
 
 ## Offline and installing
 

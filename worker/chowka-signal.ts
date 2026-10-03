@@ -37,8 +37,10 @@ export class Room implements DurableObject {
     const url = new URL(request.url);
     const role = url.searchParams.get('role');
     if (role !== 'host' && role !== 'guest') return new Response('Invalid role', { status: 400 });
-    const token = url.searchParams.get('token');
-    if (!token || !TOKEN.test(token)) return new Response('Missing room key', { status: 400 });
+    const suppliedToken = url.searchParams.get('token');
+    if (suppliedToken && !TOKEN.test(suppliedToken)) return new Response('Invalid room key', { status: 400 });
+    // Older cached pages do not send a key. Let them play, but they cannot resume.
+    const token = suppliedToken ?? crypto.randomUUID().replaceAll('-', '');
     const peers = this.peers();
     if (role === 'host' && peers.some(({ peer }) => peer.role === 'host')) return new Response('Host already connected', { status: 409 });
     const reservations = await this.state.storage.get<Reservation[]>('reservations') ?? [];

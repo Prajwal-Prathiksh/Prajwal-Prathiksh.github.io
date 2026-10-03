@@ -33,9 +33,16 @@ import Base from '../../../layouts/Base.astro';
   </div>
   <div id="match" hidden>
     <p id="match-note" class="muted note">The host runs this match. Closing the host tab ends it for everyone.</p>
+    <div id="match-alert" class="match-alert" role="status" aria-live="polite" hidden>
+      <p id="match-alert-text"></p>
+      <div id="host-recovery" class="recovery-actions" hidden>
+        <button class="btn" id="continue-bot" type="button">Continue with bot</button>
+        <button class="btn" id="restart-bot" type="button">Restart with bot</button>
+      </div>
+    </div>
     <iframe id="game-frame" title="Chowka Bhara online match" allow="fullscreen" loading="eager"></iframe>
   </div>
-  <p class="muted privacy">No account, cookies, or analytics. The room relay passes connection messages in memory. People in the room share names and seat choices. Direct connections may reveal your network address to other players. Some networks need a TURN relay, which this first version does not have.</p>
+  <p class="muted privacy">No account, cookies, or analytics. Guest browsers keep a private room key so they can reconnect after a refresh. The relay keeps guest seat keys only while the host's room is open; game moves and boards stay between players. People in the room share names and seat choices. Direct connections may reveal your network address to other players. Some networks need a TURN relay, which this first version does not have.</p>
 </Base>
 
 <script>
@@ -66,7 +73,16 @@ import Base from '../../../layouts/Base.astro';
   #requests :global(.request) { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; padding: .6rem 0; }
   .status { margin-bottom: 0; min-height: 1.5em; }
   .status.error { padding: .8rem 1rem; border: 1px solid light-dark(#dcaa9d, #8a554b); border-radius: 14px; background: light-dark(#fff1ec, #35231f); color: light-dark(#7d3527, #ffcfbf); }
-  #start-game { margin-top: 1rem; }
+  #start-game { margin-top: 1rem; min-height: 3.2rem; min-width: 11rem; padding: .7rem 1.35rem; border-color: var(--accent); background: var(--accent); color: light-dark(#fff, #10212c); font-size: 1rem; font-weight: 700; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 22%, transparent); }
+  #start-game::after { content: '→'; margin-left: .55rem; }
+  #start-game:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+  #start-game:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+  #start-game:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .match-alert { position: sticky; top: .75rem; z-index: 2; max-width: 42rem; margin: 1rem 0; padding: 1rem 1.2rem; border: 1px solid var(--accent); border-radius: 18px; background: var(--surface); box-shadow: 0 12px 32px rgb(0 0 0 / .18); }
+  .match-alert p { margin: 0 0 .7rem; }
+  .recovery-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+  #continue-bot { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+  #restart-bot { font-weight: 600; }
   #match { margin: 1rem 0; }
   #game-frame { display: block; width: 100%; height: 44rem; border: 0; border-radius: 18px; background: var(--bg); }
   [hidden] { display: none !important; }

@@ -20,6 +20,9 @@ const connections = $<HTMLUListElement>('connections');
 const startButton = $<HTMLButtonElement>('start-game');
 const frame = $<HTMLIFrameElement>('game-frame');
 const matchNote = $('match-note');
+const matchAlert = $('match-alert');
+const matchAlertText = $('match-alert-text');
+const hostRecovery = $('host-recovery');
 const params = new URLSearchParams(location.hash.slice(1));
 const invitedRoom = params.get('room');
 const reopening = params.has('host');
@@ -38,6 +41,30 @@ let gameStarted = false;
 let gameReady = false;
 let gameConfig: GameConfig | null = null;
 const pendingSnapshots: unknown[] = [];
+const offline = new Set<string>();
+let latestSnapshot: Record<string, unknown> | null = null;
+let fullHistoryStates: unknown[] = [];
+let fullHistoryLabels: string[] = [];
+let retryTimer: number | undefined;
+
+function roomKey(role: 'host' | 'guest') { return `chowka-online:${room}:${role}`; }
+function savedKey(role: 'host' | 'guest') {
+  try {
+    const saved = JSON.parse(localStorage.getItem(roomKey(role)) ?? 'null');
+    if (saved && typeof saved.token === 'string' && /^[a-f0-9]{32}$/.test(saved.token)
+      && Date.now() - saved.time < 86_400_000) return saved.token as string;
+  } catch { /* Private browsing can disable storage. */ }
+  return '';
+}
+function connectionKey(role: 'host' | 'guest') {
+  const existing = role === 'guest' ? savedKey(role) : '';
+  if (existing) return existing;
+  const token = [...crypto.getRandomValues(new Uint8Array(16))].map((n) => n.toString(16).padStart(2, '0')).join('');
+  if (role === 'guest') {
+    try { localStorage.setItem(roomKey(role), JSON.stringify({ token, time: Date.now() })); } catch { /* Reconnection needs storage. */ }
+  }
+  return token;
+}
 
 function say(message: string, error = false) {
   status.textContent = message;
@@ -104,6 +131,19 @@ function broadcast() {
   for (const { channel } of peers.values()) if (channel.readyState === 'open') channel.send(data);
 }
 
+function sendCatchup(channel: RTCDataChannel) {
+  if (!latestSnapshot) return;
+  // Data channels can reject one giant history message late in a long game.
+  // Small ordered chunks let the guest rebuild history before live updates.
+  const chunkSize = 16;
+  for (let offset = 0; offset < fullHistoryStates.length; offset += chunkSize) {
+    channel.send(JSON.stringify({ type: 'snapshot', snapshot: { ...latestSnapshot,
+      historyOffset: offset,
+      historyStates: fullHistoryStates.slice(offset, offset + chunkSize),
+      historyLabels: fullHistoryLabels.slice(offset, offset + chunkSize) } }));
+  }
+}
+
 function setColour(id: string, colour: Colour) {
   if (!colours.includes(colour) || lobby.seats.some((s) => s.id !== id && s.colour === colour)) return;
   const seat = lobby.seats.find((s) => s.id === id);
@@ -125,11 +165,20 @@ function onData(id: string, raw: string) {
     if (data.type === 'colour' && typeof data.colour === 'string') setColour(id, data.colour as Colour);
   } else if (data.type === 'start' && Array.isArray(data.players)) {
     openGame({ players: data.players as GamePlayer[] });
+  } else if (data.type === 'restart' && Array.isArray(data.players)) {
+    openGame({ players: data.players as GamePlayer[] }, true);
+  } else if (data.type === 'pause' && gameStarted) {
+    showOffline(String(data.name ?? 'A player'), false);
+  } else if (data.type === 'resume' && gameStarted) {
+    clearOffline();
+  } else if (data.type === 'players' && gameStarted && Array.isArray(data.players)) {
+    gameConfig = { players: data.players as GamePlayer[] };
+    frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'players', players: gameConfig.players }, location.origin);
   } else if (data.type === 'snapshot' && gameStarted) {
     if (gameReady) frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'snapshot', snapshot: data.snapshot }, location.origin);
     else pendingSnapshots.push(data.snapshot);
   } else if (data.type === 'end' && gameStarted) {
-    endMatch('The match ended because a player disconnected.');
+    endMatch('The host ended the match.');
   } else if (data.type === 'lobby' && Array.isArray(data.seats) && typeof data.bots === 'number') {
     lobby = data as Lobby;
     render();
@@ -151,6 +200,8 @@ async function setRemote(id: string, description: RTCSessionDescriptionInit) {
 }
 
 function createPeer(id: string, initiator: boolean) {
+  peers.get(id)?.pc.close();
+  peers.delete(id);
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }] });
   const channel = initiator ? pc.createDataChannel('lobby') : null;
   const peer = { pc, channel: channel as RTCDataChannel, pending: [] as RTCIceCandidateInit[] };
@@ -162,6 +213,13 @@ function createPeer(id: string, initiator: boolean) {
         const seat = lobby.seats.find((s) => s.id === id);
         if (seat) seat.ready = true;
         broadcast();
+        if (gameStarted && gameConfig) {
+          offline.delete(id);
+          data.send(JSON.stringify({ type: 'start', players: gameConfig.players }));
+          sendCatchup(data);
+          if (offline.size) data.send(JSON.stringify({ type: 'pause', name: offlineNames() }));
+          else if (!offline.size) resumeMatch();
+        }
       } else {
         data.send(JSON.stringify({ type: 'name', name: cleanName() }));
         say('Connected directly to the host. Choose your colour.');
@@ -169,7 +227,12 @@ function createPeer(id: string, initiator: boolean) {
     };
     data.onmessage = (event) => onData(id, String(event.data));
     data.onclose = () => {
-      if (gameStarted) endMatch(hosting ? 'The match ended because a player disconnected.' : 'The host connection ended.');
+      if (peers.get(id)?.pc !== pc) return;
+      if (gameStarted && hosting) markOffline(id);
+      else if (gameStarted) {
+        say('Connection to the host lost. Trying to reconnect…', true);
+        socket?.close();
+      }
       else if (hosting) { const seat = lobby.seats.find((s) => s.id === id); if (seat) { seat.ready = false; broadcast(); } }
       else say('Connection to host ended.');
     };
@@ -208,6 +271,72 @@ function requestJoin(id: string) {
   requests.append(row);
 }
 
+function offlineNames() {
+  return [...offline].map((id) => lobby.seats.find((seat) => seat.id === id)?.name ?? 'A player').join(', ');
+}
+
+function showOffline(name: string, controls: boolean) {
+  matchAlert.hidden = false;
+  matchAlertText.textContent = `${name} is offline. The match is paused while they reconnect.`;
+  hostRecovery.hidden = !controls;
+}
+
+function clearOffline() {
+  matchAlert.hidden = true;
+  hostRecovery.hidden = true;
+}
+
+function tellGuests(message: Record<string, unknown>) {
+  const wire = JSON.stringify(message);
+  for (const { channel } of peers.values()) if (channel.readyState === 'open') channel.send(wire);
+}
+
+function markOffline(id: string) {
+  if (!gameStarted || !lobby.seats.some((seat) => seat.id === id) || offline.has(id)) return;
+  offline.add(id);
+  const seat = lobby.seats.find((entry) => entry.id === id);
+  if (seat) seat.ready = false;
+  showOffline(offlineNames(), true);
+  frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'pause' }, location.origin);
+  tellGuests({ type: 'pause', name: offlineNames() });
+}
+
+function resumeMatch() {
+  if (!gameStarted || offline.size) return;
+  clearOffline();
+  frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'resume' }, location.origin);
+  tellGuests({ type: 'resume' });
+}
+
+function replaceMissingWithBots() {
+  if (!hosting || !gameConfig || !offline.size) return false;
+  const missing = new Set(offline);
+  gameConfig = { players: gameConfig.players.map((player) => missing.has(player.id)
+    ? { ...player, id: '', name: `${player.colour[0].toUpperCase()}${player.colour.slice(1)} bot`, level: 'hard' }
+    : player) };
+  for (const id of missing) {
+    send({ type: 'remove-guest', to: id });
+    peers.get(id)?.pc.close();
+    peers.delete(id);
+    lobby.seats = lobby.seats.filter((seat) => seat.id !== id);
+  }
+  offline.clear();
+  return true;
+}
+
+$<HTMLButtonElement>('continue-bot').onclick = () => {
+  if (!replaceMissingWithBots() || !gameConfig) return;
+  frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'players', players: gameConfig.players }, location.origin);
+  tellGuests({ type: 'players', players: gameConfig.players });
+  resumeMatch();
+};
+
+$<HTMLButtonElement>('restart-bot').onclick = () => {
+  if (!replaceMissingWithBots() || !gameConfig) return;
+  tellGuests({ type: 'restart', players: gameConfig.players });
+  openGame(gameConfig, true);
+};
+
 function endMatch(message: string) {
   if (!gameStarted) return;
   matchNote.textContent = message;
@@ -216,13 +345,21 @@ function endMatch(message: string) {
     if (channel.readyState === 'open') channel.send(JSON.stringify({ type: 'end' }));
   }
   gameStarted = false;
+  offline.clear();
+  clearOffline();
 }
 
-function openGame(config: GameConfig) {
-  if (gameStarted) return;
+function openGame(config: GameConfig, restart = false) {
+  if (gameStarted && !restart) return;
   gameStarted = true;
   gameReady = false;
   gameConfig = config;
+  latestSnapshot = null;
+  fullHistoryStates = [];
+  fullHistoryLabels = [];
+  pendingSnapshots.length = 0;
+  offline.clear();
+  clearOffline();
   $('entry').hidden = true;
   $('room').hidden = true;
   $('lobby-card').hidden = true;
@@ -253,6 +390,17 @@ window.addEventListener('message', (event) => {
     for (const snapshot of pendingSnapshots.splice(0))
       frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'snapshot', snapshot }, location.origin);
   } else if (event.data.type === 'snapshot' && hosting && gameStarted) {
+    const snapshot = event.data.snapshot as Record<string, unknown>;
+    const offset = snapshot?.historyOffset;
+    if (typeof offset === 'number' && Array.isArray(snapshot.historyStates) && Array.isArray(snapshot.historyLabels)) {
+      if (offset === 0) { fullHistoryStates = []; fullHistoryLabels = []; }
+      if (offset === fullHistoryStates.length) {
+        fullHistoryStates.push(...snapshot.historyStates);
+        fullHistoryLabels.push(...snapshot.historyLabels as string[]);
+      }
+      latestSnapshot = { ...snapshot, historyOffset: 0,
+        historyStates: [...fullHistoryStates], historyLabels: [...fullHistoryLabels] };
+    }
     const wire = JSON.stringify({ type: 'snapshot', snapshot: event.data.snapshot });
     for (const { channel } of peers.values()) if (channel.readyState === 'open') channel.send(wire);
   } else if (event.data.type === 'command' && !hosting && gameStarted) {
@@ -266,8 +414,13 @@ window.addEventListener('message', (event) => {
 function connect(role: 'host' | 'guest') {
   if (!relay) { say('The online relay is not configured yet. Use the local test commands in the README.'); return; }
   hosting = role === 'host';
-  const url = `${relay}/room/${room}?role=${role}`;
+  const url = `${relay}/room/${room}?role=${role}&token=${connectionKey(role)}`;
   const failedToConnect = () => {
+    if (gameStarted) {
+      showOffline('The room connection', false);
+      say('Could not reconnect yet. The room may have ended or your seat may have been replaced.', true);
+      return;
+    }
     entry.hidden = false;
     roomView.hidden = true;
     if (role === 'host') {
@@ -292,7 +445,12 @@ function connect(role: 'host' | 'guest') {
     if (socket !== nextSocket) return;
     socket = null;
     closePeers();
-    if (gameStarted) endMatch('The room connection ended.');
+    if (gameStarted && !hosting) {
+      showOffline('The host connection', false);
+      say('Connection lost. Trying to reconnect…', true);
+      window.clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(() => connect('guest'), 2000);
+    } else if (gameStarted) endMatch('The room connection ended.');
     else if (!receivedHello) failedToConnect();
     else say('Room connection ended. Refresh to try again.', true);
   };
@@ -320,11 +478,19 @@ function connect(role: 'host' | 'guest') {
         if (!hosting && !hostId) hostId = message.from;
         await signal(message.from, message.signal as Record<string, unknown>);
       } else if (message.type === 'guest-left' && hosting && message.id) {
-        if (gameStarted) { endMatch('The match ended because a player disconnected.'); return; }
+        if (gameStarted) { markOffline(message.id); return; }
+        send({ type: 'remove-guest', to: message.id });
         peers.get(message.id)?.pc.close(); peers.delete(message.id);
         lobby.seats = lobby.seats.filter((s) => s.id !== message.id);
         lobby.bots = Math.min(3, Math.max(lobby.bots, 2 - lobby.seats.length));
         broadcast();
+      } else if (message.type === 'guest-return' && hosting && message.id) {
+        // The relay kept this person's seat and verified their private room key.
+        if (!gameStarted && !lobby.seats.some((seat) => seat.id === message.id)) {
+          const colour = colours.find((c) => !lobby.seats.some((seat) => seat.colour === c));
+          if (colour) { lobby.seats.push({ id: message.id, name: 'Returning player', colour, ready: false }); broadcast(); }
+        }
+        say(`${lobby.seats.find((seat) => seat.id === message.id)?.name ?? 'A player'} is reconnecting…`);
       } else if (message.type === 'host-left') {
         if (gameStarted) endMatch('The host left. This match has ended.');
         else say('The host left. This room has ended.');
@@ -333,8 +499,10 @@ function connect(role: 'host' | 'guest') {
       else if (message.type === 'host' && message.id) hostId = message.id;
     } catch { say('The connection could not be completed. Refresh and try again.'); }
   };
-  entry.hidden = true;
-  roomView.hidden = false;
+  if (!gameStarted) {
+    entry.hidden = true;
+    roomView.hidden = false;
+  }
   linkInput.value = inviteLink();
   $('bot-control').hidden = !hosting;
   $('guest-note').hidden = hosting;
@@ -360,6 +528,7 @@ $<HTMLButtonElement>('create').onclick = () => {
   connect('host');
 };
 $<HTMLButtonElement>('join').onclick = () => connect('guest');
+if (invitedRoom && roomPattern.test(invitedRoom) && !reopening && savedKey('guest')) connect('guest');
 $<HTMLButtonElement>('copy').onclick = async () => {
   await navigator.clipboard.writeText(inviteLink());
   $<HTMLButtonElement>('copy').textContent = 'Copied';

@@ -456,6 +456,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let onlineOwners: string[] = [];
   let onlineReady = false;
   let onlineEnded = false;
+  let onlinePaused = false;
+  let resumePause: (() => void) | null = null;
+  let pausePromise: Promise<void> | null = null;
   let onlineHistorySent = 0;
   let shellsUp = [false, false, false, false];
   const boardEl = document.querySelector<SVGElement>('.board')!;
@@ -478,7 +481,25 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   // A move can end the game while a caller awaits it, so re-read the phase.
   const gameOver = () => phase === 'over';
-  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * Number(speedEl.value)));
+  const wait = async (ms: number) => {
+    await new Promise<void>((r) => setTimeout(r, ms * Number(speedEl.value)));
+    if (pausePromise) await pausePromise;
+  };
+
+  function pauseOnline() {
+    if (onlinePaused) return;
+    onlinePaused = true;
+    pausePromise = new Promise<void>((resolve) => { resumePause = resolve; });
+  }
+
+  function resumeOnline() {
+    if (!onlinePaused) return;
+    onlinePaused = false;
+    resumePause?.();
+    resumePause = null;
+    pausePromise = null;
+    if (onlineHosting && phase === 'act' && seated[current]?.level !== null) next();
+  }
 
   function askAI(request: Omit<AIRequest, 'id'>): Promise<AIResponse> {
     if (!aiWorker) {
@@ -1155,6 +1176,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     if (id !== gameId) return;
     const { action } = await chooseInWorker(me.level, me.style);
     if (id !== gameId) return;
+    if (pausePromise) await pausePromise;
+    if (id !== gameId) return;
     if (!action) {
       turn = endedTurn();
       next();
@@ -1172,6 +1195,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   async function act(action: Action) {
     const id = gameId;
+    if (pausePromise) await pausePromise;
+    if (id !== gameId) return;
     phase = 'busy';
     hintTextEl.textContent = '';
     hintedMove = null;
@@ -1207,6 +1232,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   function humanAction(action: Action) {
+    if (onlinePaused) return;
     if (onlineMode && !onlineHosting) {
       if (current !== onlineSeat || phase !== 'act' || historyIndex !== null || onlineEnded) return;
       sendOnline('command', { command: action.kind === 'move'
@@ -1503,6 +1529,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     pickFor = null;
     onlineReady = true;
     onlineEnded = false;
+    resumeOnline();
     setupEl.hidden = true;
     matchbarEl.hidden = false;
     $('newgame').hidden = true;
@@ -1551,7 +1578,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   function onlineCommand(from: string, command: Record<string, unknown>) {
-    if (!onlineHosting || !onlineReady || onlineEnded || phase !== 'act' || seated[current].level !== null
+    if (!onlineHosting || !onlineReady || onlineEnded || onlinePaused || phase !== 'act' || seated[current].level !== null
       || onlineOwners[current] !== from || !command || typeof command !== 'object') return;
     if (command.type === 'throw' && turn.owed > 0) { act({ kind: 'throw' }); return; }
     if (command.type === 'skip' && canSkip(turn)) { act({ kind: 'skip' }); return; }
@@ -1575,6 +1602,18 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       announceSocial(`${seated[current].name} ended the truce with ${seated[command.other as number].name}.`);
       render();
     }
+  }
+
+  function updateOnlinePlayers(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[]) {
+    if (!onlineReady || players.length !== seated.length || players.some((p, i) => p.colour !== seated[i].colour)) return;
+    onlineOwners = players.map((p) => p.id);
+    players.forEach((p, i) => {
+      seated[i].name = p.name;
+      seated[i].level = p.level;
+      seated[i].style = p.style;
+    });
+    render();
+    if (onlineHosting && !onlinePaused && phase === 'act' && seated[current].level !== null) next();
   }
 
   function showSetup() {
@@ -1661,6 +1700,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         onlineSelf = String(event.data.self);
         startOnlineGame(event.data.players);
       } else if (event.data.type === 'snapshot') applyOnlineSnapshot(event.data.snapshot);
+      else if (event.data.type === 'pause') pauseOnline();
+      else if (event.data.type === 'resume') resumeOnline();
+      else if (event.data.type === 'players' && Array.isArray(event.data.players)) updateOnlinePlayers(event.data.players);
       else if (event.data.type === 'command' && typeof event.data.from === 'string') onlineCommand(event.data.from, event.data.command);
       else if (event.data.type === 'end') {
         onlineEnded = true;

@@ -13,6 +13,7 @@
     "preview": "astro preview",
     "signal:dev": "wrangler dev --ip 127.0.0.1 --port 8787 --var SITE_ORIGIN:http://127.0.0.1:4324",
     "check": "astro check",
+    "test:gift-exchange": "node --test scripts/gift-exchange-count.test.mjs",
     "signal:check": "tsc -p worker/tsconfig.json",
     "selfplay:smoke": "node scripts/run-chowka-tool.mjs smoke",
     "selfplay:benchmark": "node scripts/run-chowka-tool.mjs benchmark",

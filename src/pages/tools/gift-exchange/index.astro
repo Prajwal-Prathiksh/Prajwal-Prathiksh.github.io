@@ -50,10 +50,68 @@ import Base from '../../../layouts/Base.astro';
       <p id="result-note" class="result-note muted" hidden>Names and pairings stay in this tab. Refreshing clears the draw.</p>
     </section>
   </div>
+
+  <details id="draw-maths" class="draw-maths">
+    <summary>How many draws are possible? <span class="muted">A quick explanation and the maths</span></summary>
+    <div class="maths-body">
+      <dl class="draw-counts">
+        <div><dt>People entered</dt><dd id="people-count">0</dd></div>
+        <div><dt>No exclusions</dt><dd id="unrestricted-count">Add at least two names</dd></div>
+        <div><dt>Exclusion pairs</dt><dd id="exclusion-count">0</dd></div>
+        <div><dt>With these exclusions</dt><dd id="restricted-count">Add at least two names</dd></div>
+      </dl>
+      <p id="count-note" class="muted count-note" role="status" aria-live="polite"></p>
+
+      <section class="explanation" aria-labelledby="plain-heading">
+        <h2 id="plain-heading">The short version</h2>
+        <p>A draw means the whole set of pairings, not one person's pick. Everyone gives once and receives once. The "No exclusions" total rules out self-draws. The other total also rules out any pair you've excluded.</p>
+        <p class="muted">These are counts of possible draws, not odds. The tool finds a valid draw at random, but it does not give every valid draw exactly the same chance.</p>
+      </section>
+
+      <section class="explanation" aria-labelledby="example-heading">
+        <h2 id="example-heading">A four-person example</h2>
+        <p>Say Alex, Blair, Casey, and Devon are exchanging gifts. There are 24 ways to hand out all four names. Once you remove draws where somebody gets their own name, nine remain.</p>
+        <ol class="example-steps">
+          <li><strong>24</strong><span>ways to hand out four names</span></li>
+          <li><strong>9</strong><span>after removing self-draws</span></li>
+          <li><strong>4</strong><span>after also excluding Alex and Blair</span></li>
+        </ol>
+        <p>Why four at the end? Alex and Blair must get Casey and Devon, in either order. Casey and Devon then get Alex and Blair, also in either order. That's 2 × 2 = 4 complete draws.</p>
+        <p class="example-result">One of the four: Alex → Casey, Blair → Devon, Casey → Blair, Devon → Alex.</p>
+        <p class="muted example-caption">This is a fixed example. The totals above use the names and exclusions you entered.</p>
+      </section>
+
+      <details class="technical-details">
+        <summary>Show the formulas <span class="muted">For the mathematically curious</span></summary>
+        <div class="technical-body">
+          <p>Let <i>n</i> be the number of people. Before any restrictions, there are <i>n</i>! assignments. After removing self-draws, the count is called a <a href="https://en.wikipedia.org/wiki/Derangement" target="_blank" rel="noopener noreferrer" aria-label="Derangement on Wikipedia, opens in a new tab">derangement</a>.</p>
+          <div class="formula">
+            <math display="block" aria-label="D sub n equals n factorial times the sum from k equals zero to n of negative one to the k divided by k factorial">
+              <msub><mi>D</mi><mi>n</mi></msub><mo>=</mo><mi>n</mi><mo>!</mo>
+              <munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>0</mn></mrow><mi>n</mi></munderover>
+              <mfrac><msup><mrow><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo></mrow><mi>k</mi></msup><mrow><mi>k</mi><mo>!</mo></mrow></mfrac>
+            </math>
+          </div>
+          <p>For exclusions, mark every self-draw and both directions of each excluded pair as forbidden. Let <i>r</i><sub>k</sub> count the ways to choose <i>k</i> forbidden giver-to-recipient spots without repeating a giver or recipient. <a href="https://en.wikipedia.org/wiki/Inclusion%E2%80%93exclusion_principle" target="_blank" rel="noopener noreferrer" aria-label="Inclusion-exclusion principle on Wikipedia, opens in a new tab">Inclusion-exclusion</a> then counts the valid draws:</p>
+          <div class="formula">
+            <math display="block" aria-label="Valid draws equal the sum from k equals zero to n of negative one to the k times r sub k times n minus k factorial">
+              <mi>N</mi><mo>=</mo>
+              <munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>0</mn></mrow><mi>n</mi></munderover>
+              <msup><mrow><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo></mrow><mi>k</mi></msup>
+              <msub><mi>r</mi><mi>k</mi></msub>
+              <mo>(</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo>)</mo><mo>!</mo>
+            </math>
+          </div>
+          <p class="muted">The overlap matters. A complete draw can break several restrictions at once, so subtracting one fixed amount per exclusion would count some draws more than once.</p>
+        </div>
+      </details>
+    </div>
+  </details>
 </Base>
 
 <script>
   import { drawGiftExchange, type Exclusion } from '../../../scripts/giftExchange';
+  import { countDerangements, countGiftExchangeDraws } from '../../../scripts/giftExchangeCounts';
 
   const form = document.getElementById('draw-form') as HTMLFormElement;
   const eventNameInput = document.getElementById('event-name') as HTMLInputElement;
@@ -67,6 +125,13 @@ import Base from '../../../layouts/Base.astro';
   const emptyResults = document.getElementById('empty-results') as HTMLDivElement;
   const resultNote = document.getElementById('result-note') as HTMLParagraphElement;
   const exclusions = new Set<string>();
+  const maths = document.getElementById('draw-maths') as HTMLDetailsElement;
+  const peopleCount = document.getElementById('people-count') as HTMLElement;
+  const unrestrictedCount = document.getElementById('unrestricted-count') as HTMLElement;
+  const exclusionCount = document.getElementById('exclusion-count') as HTMLElement;
+  const restrictedCount = document.getElementById('restricted-count') as HTMLElement;
+  const countNote = document.getElementById('count-note') as HTMLElement;
+  let countTimer = 0;
 
   const keyFor = (name: string) => name.trim().toLocaleLowerCase();
   const pairKey = (a: string, b: string) => [a, b].sort().join('\u0000');
@@ -83,6 +148,51 @@ import Base from '../../../layouts/Base.astro';
     resultNote.hidden = true;
     emptyResults.hidden = false;
   }
+
+  function updateCounts() {
+    const people = names();
+    const count = people.length;
+    peopleCount.textContent = String(count);
+    exclusionCount.textContent = String(exclusions.size);
+    countNote.textContent = '';
+    if (count < 2) {
+      unrestrictedCount.textContent = 'Add at least two names';
+      restrictedCount.textContent = 'Add at least two names';
+      return;
+    }
+    if (count > 100 || new Set(people.map(keyFor)).size !== count) {
+      unrestrictedCount.textContent = 'Fix the name list first';
+      restrictedCount.textContent = 'Fix the name list first';
+      return;
+    }
+
+    unrestrictedCount.textContent = countDerangements(count).toLocaleString();
+    const indexes = new Map(people.map((name, index) => [keyFor(name), index]));
+    const blocked: Exclusion[] = [...exclusions].map((key) => {
+      const [a, b] = key.split('\u0000');
+      return [indexes.get(a)!, indexes.get(b)!];
+    });
+    const restricted = countGiftExchangeDraws(count, blocked);
+    if (restricted === null) {
+      if (drawGiftExchange(count, blocked) === null) {
+        restrictedCount.textContent = '0';
+        countNote.textContent = 'These exclusions leave no valid draw.';
+      } else {
+        restrictedCount.textContent = 'Too many linked exclusions to count here';
+        countNote.textContent = 'The draw still works. This exact count would take too long in your browser.';
+      }
+    } else {
+      restrictedCount.textContent = restricted.toLocaleString();
+    }
+  }
+
+  function scheduleCount() {
+    if (!maths.open) return;
+    window.clearTimeout(countTimer);
+    countTimer = window.setTimeout(updateCounts, 120);
+  }
+
+  maths.addEventListener('toggle', scheduleCount);
 
   function renderExclusions(people: string[]) {
     exclusionsList.replaceChildren();
@@ -106,6 +216,7 @@ import Base from '../../../layouts/Base.astro';
         renderExclusions(names());
         clearResults();
         setFeedback('');
+        scheduleCount();
       });
       item.append(pair, remove);
       exclusionsList.append(item);
@@ -133,6 +244,7 @@ import Base from '../../../layouts/Base.astro';
     renderExclusions(people);
     clearResults();
     setFeedback('');
+    scheduleCount();
   }
 
   namesInput.addEventListener('input', syncPeople);
@@ -151,6 +263,7 @@ import Base from '../../../layouts/Base.astro';
     renderExclusions(names());
     clearResults();
     setFeedback('');
+    scheduleCount();
   });
 
   form.addEventListener('submit', (event) => {
@@ -272,9 +385,39 @@ import Base from '../../../layouts/Base.astro';
   .results :global(.result-arrow) { color: var(--accent); }
   .results :global(.copy-button) { font-size: .78rem; white-space: nowrap; }
   .result-note { margin: 1rem 0 0; font-size: .82rem; }
+  .draw-maths { max-width: 70rem; margin-top: 1rem; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+  .draw-maths summary { cursor: pointer; padding: 1rem 1.4rem; font-weight: 600; }
+  .draw-maths summary::marker { color: var(--accent); }
+  .draw-maths summary .muted { margin-left: .35rem; font-size: .84rem; font-weight: 400; }
+  .maths-body { border-top: 1px solid var(--line); padding: 1.2rem clamp(1.2rem, 3vw, 1.8rem) 1.6rem; max-width: 54rem; }
+  .draw-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+  .draw-counts div { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem; }
+  .draw-counts dt { color: var(--muted); font-size: .8rem; }
+  .draw-counts dd { margin: .15rem 0 0; font-size: 1.1rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .count-note { min-height: 1.3em; margin: .7rem 0 0; font-size: .85rem; }
+  .explanation { margin-top: 1.7rem; }
+  .maths-body h2 { margin: 0 0 .55rem; }
+  .maths-body p { max-width: 48rem; font-size: .92rem; line-height: 1.6; }
+  .explanation p { margin: .55rem 0; }
+  .example-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; padding: 0; margin: 1rem 0; list-style: none; }
+  .example-steps li { display: grid; align-content: start; gap: .2rem; min-width: 0; padding: .75rem .85rem; border: 1px solid var(--line); border-radius: 10px; }
+  .example-steps strong { color: var(--accent); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .example-steps span { color: var(--muted); font-size: .8rem; line-height: 1.35; }
+  .example-result { padding: .7rem .85rem; border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+  .example-caption { font-size: .8rem !important; }
+  .technical-details { margin-top: 1.5rem; border-top: 1px solid var(--line); }
+  .technical-details summary { padding: 1rem 0; font-size: .92rem; }
+  .technical-details summary .muted { font-size: .82rem; }
+  .technical-body { padding: .1rem 0 .2rem; }
+  .technical-body p:first-child { margin-top: 0; }
+  .formula { overflow-x: auto; padding: .65rem 0; color: var(--fg); }
+  .formula math { font-size: 1.14rem; }
   @media (min-width: 55rem) { .workspace { grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); } }
   @media (max-width: 32rem) {
     .exclusion-picker { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
     .add-button { grid-column: 1 / -1; }
+    .draw-counts { grid-template-columns: 1fr; }
+    .example-steps { grid-template-columns: 1fr; }
+    .draw-maths summary .muted { display: block; margin-left: 1.1rem; }
   }
 </style>

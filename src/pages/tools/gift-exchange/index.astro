@@ -1,0 +1,280 @@
+---
+import Base from '../../../layouts/Base.astro';
+---
+
+<Base wide title="Gift exchange draw" description="Draw random gift exchange pairings with optional exclusions. Everything stays in your browser.">
+  <a class="back" href="/tools/">← Tools</a>
+  <h1>Gift exchange draw</h1>
+  <p class="muted intro">Make a draw for your group, then tell each person who they got.</p>
+
+  <div class="workspace">
+    <form id="draw-form" class="panel">
+      <div class="event-field">
+        <label for="event-name">Event name</label>
+        <input id="event-name" type="text" value="Gift exchange" maxlength="80" autocomplete="off" />
+        <p class="helper muted">Used in copied messages. You can change it after drawing.</p>
+      </div>
+      <div class="step"><span class="step-number">1</span><h2>People</h2></div>
+      <label for="names">One name per line</label>
+      <textarea id="names" rows="9" placeholder="Alex&#10;Blair&#10;Casey&#10;Devon" spellcheck="false" autocomplete="off"></textarea>
+      <p class="helper muted">Use distinct names so you know who is who. Everyone gives and receives one gift.</p>
+
+      <div class="step exclusions-heading"><span class="step-number">2</span><h2>Exclusions <span class="optional">optional</span></h2></div>
+      <p class="helper muted">Keep two people from drawing each other. Useful for partners or housemates.</p>
+      <div class="exclusion-picker">
+        <div class="picker-field"><label for="exclude-a">Person</label><select id="exclude-a" disabled></select></div>
+        <span class="pair-symbol" aria-hidden="true">↔</span>
+        <div class="picker-field"><label for="exclude-b">Cannot draw</label><select id="exclude-b" disabled></select></div>
+        <button class="btn add-button" id="add-exclusion" type="button" disabled>Add</button>
+      </div>
+      <ul id="exclusions" class="exclusion-list" aria-label="Exclusions"></ul>
+
+      <div class="draw-actions">
+        <button class="draw-button" type="submit">Draw names <span aria-hidden="true">↗</span></button>
+        <span class="muted draw-note">A new draw replaces the last one.</span>
+      </div>
+      <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+    </form>
+
+    <section class="panel results-panel" aria-labelledby="results-heading">
+      <div class="step"><span class="step-number">3</span><h2 id="results-heading">Pairings</h2></div>
+      <div id="empty-results" class="empty-results">
+        <svg class="empty-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <path d="M24 5v9m0 20v9M5 24h9m20 0h9M10.6 10.6l6.4 6.4m14 14 6.4 6.4m0-26.8L31 17M17 31l-6.4 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <circle cx="24" cy="24" r="5" stroke="currentColor" stroke-width="2" />
+        </svg>
+        <p>Your pairings will appear here.</p>
+        <p class="muted">Only the person viewing this screen can see them. Share each result yourself.</p>
+      </div>
+      <ol id="results" class="results" hidden></ol>
+      <p id="result-note" class="result-note muted" hidden>Names and pairings stay in this tab. Refreshing clears the draw.</p>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { drawGiftExchange, type Exclusion } from '../../../scripts/giftExchange';
+
+  const form = document.getElementById('draw-form') as HTMLFormElement;
+  const eventNameInput = document.getElementById('event-name') as HTMLInputElement;
+  const namesInput = document.getElementById('names') as HTMLTextAreaElement;
+  const selectA = document.getElementById('exclude-a') as HTMLSelectElement;
+  const selectB = document.getElementById('exclude-b') as HTMLSelectElement;
+  const addButton = document.getElementById('add-exclusion') as HTMLButtonElement;
+  const exclusionsList = document.getElementById('exclusions') as HTMLUListElement;
+  const feedback = document.getElementById('feedback') as HTMLParagraphElement;
+  const results = document.getElementById('results') as HTMLOListElement;
+  const emptyResults = document.getElementById('empty-results') as HTMLDivElement;
+  const resultNote = document.getElementById('result-note') as HTMLParagraphElement;
+  const exclusions = new Set<string>();
+
+  const keyFor = (name: string) => name.trim().toLocaleLowerCase();
+  const pairKey = (a: string, b: string) => [a, b].sort().join('\u0000');
+  const names = () => namesInput.value.split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
+
+  function setFeedback(message: string, error = false) {
+    feedback.textContent = message;
+    feedback.classList.toggle('error', error);
+  }
+
+  function clearResults() {
+    results.replaceChildren();
+    results.hidden = true;
+    resultNote.hidden = true;
+    emptyResults.hidden = false;
+  }
+
+  function renderExclusions(people: string[]) {
+    exclusionsList.replaceChildren();
+    const display = new Map(people.map((name) => [keyFor(name), name]));
+    for (const key of exclusions) {
+      const [a, b] = key.split('\u0000');
+      if (!display.has(a) || !display.has(b)) {
+        exclusions.delete(key);
+        continue;
+      }
+      const item = document.createElement('li');
+      const pair = document.createElement('span');
+      pair.textContent = `${display.get(a)} ↔ ${display.get(b)}`;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn remove-button';
+      remove.textContent = 'Remove';
+      remove.setAttribute('aria-label', `Remove exclusion between ${display.get(a)} and ${display.get(b)}`);
+      remove.addEventListener('click', () => {
+        exclusions.delete(key);
+        renderExclusions(names());
+        clearResults();
+        setFeedback('');
+      });
+      item.append(pair, remove);
+      exclusionsList.append(item);
+    }
+  }
+
+  function syncPeople() {
+    const people = names();
+    const previousA = selectA.value;
+    const previousB = selectB.value;
+    for (const select of [selectA, selectB]) {
+      select.replaceChildren();
+      for (const name of people) {
+        const option = document.createElement('option');
+        option.value = keyFor(name);
+        option.textContent = name;
+        select.append(option);
+      }
+      select.disabled = people.length < 2;
+    }
+    if (people.some((name) => keyFor(name) === previousA)) selectA.value = previousA;
+    if (people.some((name) => keyFor(name) === previousB)) selectB.value = previousB;
+    else if (people.length > 1) selectB.selectedIndex = 1;
+    addButton.disabled = people.length < 2;
+    renderExclusions(people);
+    clearResults();
+    setFeedback('');
+  }
+
+  namesInput.addEventListener('input', syncPeople);
+
+  addButton.addEventListener('click', () => {
+    if (selectA.value === selectB.value) {
+      setFeedback('Choose two different people for an exclusion.', true);
+      return;
+    }
+    const key = pairKey(selectA.value, selectB.value);
+    if (exclusions.has(key)) {
+      setFeedback('That exclusion is already in the list.', true);
+      return;
+    }
+    exclusions.add(key);
+    renderExclusions(names());
+    clearResults();
+    setFeedback('');
+  });
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    clearResults();
+    const people = names();
+    if (people.length < 2) {
+      setFeedback('Add at least two people to make a draw.', true);
+      namesInput.focus();
+      return;
+    }
+    if (people.length > 100) {
+      setFeedback('This draw supports up to 100 people.', true);
+      namesInput.focus();
+      return;
+    }
+    if (people.some((name) => name.length > 60)) {
+      setFeedback('Keep each name to 60 characters or fewer.', true);
+      namesInput.focus();
+      return;
+    }
+    if (new Set(people.map(keyFor)).size !== people.length) {
+      setFeedback('Each name must be unique. Add a surname or initial to repeated names.', true);
+      namesInput.focus();
+      return;
+    }
+
+    const indexes = new Map(people.map((name, index) => [keyFor(name), index]));
+    const blocked: Exclusion[] = [...exclusions].map((key) => {
+      const [a, b] = key.split('\u0000');
+      return [indexes.get(a)!, indexes.get(b)!];
+    });
+    const draw = drawGiftExchange(people.length, blocked);
+    if (!draw) {
+      setFeedback('No valid draw is possible with these exclusions. Remove one or more and try again.', true);
+      return;
+    }
+
+    draw.forEach((recipientIndex, giverIndex) => {
+      const item = document.createElement('li');
+      const pairing = document.createElement('span');
+      pairing.className = 'pairing';
+      const giver = document.createElement('strong');
+      giver.textContent = people[giverIndex];
+      const arrow = document.createElement('span');
+      arrow.className = 'result-arrow';
+      arrow.textContent = '→';
+      arrow.setAttribute('aria-label', 'gives to');
+      const recipient = document.createElement('strong');
+      recipient.textContent = people[recipientIndex];
+      pairing.append(giver, arrow, recipient);
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'btn copy-button';
+      copy.textContent = 'Copy message';
+      copy.setAttribute('aria-label', `Copy message for ${people[giverIndex]}`);
+      copy.addEventListener('click', async () => {
+        try {
+          const eventName = eventNameInput.value.trim() || 'Gift exchange';
+          await navigator.clipboard.writeText(`Hi ${people[giverIndex]}! For ${eventName}, you're giving a gift to ${people[recipientIndex]}.`);
+          copy.textContent = 'Copied';
+          setFeedback(`Copied ${people[giverIndex]}'s message.`);
+          window.setTimeout(() => { copy.textContent = 'Copy message'; }, 2000);
+        } catch {
+          setFeedback('Could not copy. You can select the names from the pairing list instead.', true);
+        }
+      });
+      item.append(pairing, copy);
+      results.append(item);
+    });
+    emptyResults.hidden = true;
+    results.hidden = false;
+    resultNote.hidden = false;
+    setFeedback(`Draw complete for ${people.length} people.`);
+  });
+</script>
+
+<style>
+  .back { display: inline-block; margin-top: 1.5rem; text-decoration: none; font-size: .92rem; }
+  h1 { margin: 1.2rem 0 .3rem; font-size: clamp(2rem, 4vw, 3rem); }
+  .intro { margin: 0 0 1.75rem; }
+  .workspace { display: grid; gap: 1rem; align-items: start; max-width: 70rem; }
+  .panel { min-width: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); padding: clamp(1.15rem, 3vw, 1.8rem); }
+  .event-field { margin-bottom: 2rem; }
+  .step { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
+  .step-number { display: grid; place-items: center; flex: 0 0 1.85rem; height: 1.85rem; border-radius: 50%; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); font-size: .85rem; font-weight: 700; }
+  h2 { margin: 0; color: var(--fg); text-transform: none; letter-spacing: 0; font-size: 1.16rem; }
+  label { display: block; font-weight: 600; font-size: .88rem; margin-bottom: .35rem; }
+  input, textarea, select { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; }
+  input { min-height: 2.75rem; padding: .5rem .8rem; }
+  textarea { display: block; padding: .7rem .8rem; resize: vertical; min-height: 11rem; line-height: 1.65; }
+  textarea::placeholder { color: var(--muted); opacity: .7; }
+  select { height: 2.55rem; padding: 0 .65rem; }
+  .helper { margin: .5rem 0 0; font-size: .84rem; line-height: 1.45; }
+  .exclusions-heading { margin: 2rem 0 .25rem; }
+  .optional { color: var(--muted); font-size: .83rem; font-weight: 400; }
+  .exclusion-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: .55rem; align-items: end; margin-top: 1rem; }
+  .picker-field { min-width: 0; }
+  .pair-symbol { align-self: end; padding-bottom: .5rem; color: var(--muted); }
+  .add-button { min-height: 2.55rem; }
+  button:disabled, select:disabled { cursor: not-allowed; opacity: .55; }
+  .exclusion-list { display: grid; gap: .45rem; padding: 0; margin: .8rem 0 0; list-style: none; }
+  .exclusion-list:empty { display: none; }
+  .exclusion-list :global(li) { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .3rem .35rem .3rem .75rem; border: 1px solid var(--line); border-radius: 10px; font-size: .9rem; }
+  .exclusion-list :global(.remove-button) { font-size: .78rem; padding: .2rem .65rem; }
+  .draw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; margin-top: 2rem; }
+  .draw-button { display: inline-flex; align-items: center; gap: 1.5rem; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: var(--bg); padding: .65rem 1.25rem; font-weight: 700; }
+  .draw-button:hover { filter: brightness(1.12); }
+  .draw-note { font-size: .8rem; }
+  .feedback { min-height: 1.5em; margin: .8rem 0 0; color: var(--accent); font-size: .88rem; }
+  .feedback.error { color: #bd594f; }
+  .empty-results { text-align: center; padding: 3rem 1rem 3.5rem; }
+  .empty-mark { display: block; width: 3rem; height: 3rem; margin-inline: auto; color: var(--accent); }
+  .empty-results p { margin: .8rem 0 0; }
+  .empty-results p:last-child { font-size: .88rem; }
+  .results { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+  .results :global(li) { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem; border: 1px solid var(--line); border-radius: 10px; padding: .65rem .75rem; }
+  .results :global(.pairing) { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem; min-width: 0; overflow-wrap: anywhere; }
+  .results :global(.result-arrow) { color: var(--accent); }
+  .results :global(.copy-button) { font-size: .78rem; white-space: nowrap; }
+  .result-note { margin: 1rem 0 0; font-size: .82rem; }
+  @media (min-width: 55rem) { .workspace { grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); } }
+  @media (max-width: 32rem) {
+    .exclusion-picker { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+    .add-button { grid-column: 1 / -1; }
+  }
+</style>

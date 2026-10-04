@@ -1,0 +1,55 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Tools" description="Small, useful tools that run in your browser without accounts, ads, or tracking.">
+  <h1>Tools</h1>
+  <p class="muted intro">Small things you can use and leave behind. No account, ads, or tracking.</p>
+
+  <a class="tool-card" href="/tools/gift-exchange/">
+    <span class="art" aria-hidden="true">
+      <svg viewBox="0 0 320 190" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="320" height="190" rx="18" fill="#233844" />
+        <circle cx="160" cy="96" r="62" stroke="#8cabb4" stroke-width="1.5" stroke-dasharray="3 8" />
+        <path d="M160 46c-13-18-34-12-28 4 4 11 28 13 28 13s24-2 28-13c6-16-15-22-28-4Z" stroke="#f0b99e" stroke-width="4" stroke-linejoin="round" />
+        <rect x="119" y="72" width="82" height="70" rx="7" fill="#d77865" />
+        <rect x="112" y="64" width="96" height="19" rx="5" fill="#e38d76" />
+        <path d="M153 64h14v78h-14z" fill="#f5d5a0" />
+        <path d="M113 94h94" stroke="#f4bca4" stroke-width="2" opacity=".6" />
+        <circle cx="64" cy="98" r="5" fill="#e8ca9a" /><circle cx="256" cy="98" r="5" fill="#e8ca9a" />
+      </svg>
+    </span>
+    <span class="body">
+      <span class="name">Gift exchange draw</span>
+      <span class="meta">GROUPS · LOCAL</span>
+      <span class="muted">Add names and optional exclusions, then draw a recipient for everyone.</span>
+    </span>
+  </a>
+</Base>
+
+<style>
+  h1 { margin: 1.5rem 0 0.25rem; }
+  .intro { margin-top: 0; }
+  .tool-card {
+    display: grid;
+    max-width: 22rem;
+    margin-top: 1.5rem;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--fg);
+    text-decoration: none;
+    transition: translate .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .tool-card:hover, .tool-card:focus-visible {
+    translate: 0 -3px;
+    border-color: var(--accent);
+    box-shadow: 0 12px 28px rgb(0 0 0 / .15);
+  }
+  .art { display: block; aspect-ratio: 16 / 9.5; background: #233844; }
+  svg { display: block; width: 100%; height: 100%; }
+  .body { display: grid; gap: .2rem; padding: .9rem 1rem 1rem; line-height: 1.45; }
+  .name { font-weight: 600; font-size: 1.1rem; }
+  .meta { color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .05em; }
+</style>

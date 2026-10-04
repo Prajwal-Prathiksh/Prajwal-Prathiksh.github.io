@@ -59,6 +59,7 @@ const path = Astro.url.pathname;
         <nav aria-label="Main">
           <a href="/" aria-current={path === '/' ? 'page' : undefined}>About</a>
           <a href="/playroom/" aria-current={path.startsWith('/playroom') ? 'page' : undefined}>Playroom</a>
+          <a href="/tools/" aria-current={path.startsWith('/tools') ? 'page' : undefined}>Tools</a>
         </nav>
         <ThemeToggle />
       </div>

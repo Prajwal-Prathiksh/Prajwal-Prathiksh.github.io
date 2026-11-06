@@ -1,0 +1,884 @@
+[
+  {
+    "slug": "amul",
+    "name": "Amul girl",
+    "prompt": "A buttery memory",
+    "region": "India",
+    "source": "https://en.wikipedia.org/wiki/Amul_girl",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/amul-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "White dress, red dots and the original finger pose."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/amul-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The dress colors are reversed."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/amul-3.png",
+        "width": 600,
+        "height": 608,
+        "correct": false,
+        "detail": "One lower finger on her raised hand is folded away."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 38,
+        "y": 59,
+        "rx": 15,
+        "ry": 12
+      },
+      {
+        "x": 55,
+        "y": 79,
+        "rx": 33,
+        "ry": 20
+      }
+    ]
+  },
+  {
+    "slug": "parleg",
+    "name": "Parle-G girl",
+    "prompt": "Biscuit break",
+    "region": "India",
+    "source": "https://www.parleproducts.com/brands/parle-g",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/parleg-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "No hair bow, with the original raised fingers."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/parleg-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A red hair bow has been added."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/parleg-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "Only two fingers are raised on her left hand, on your right."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 77,
+        "y": 20,
+        "rx": 15,
+        "ry": 15
+      },
+      {
+        "x": 52,
+        "y": 76,
+        "rx": 18,
+        "ry": 20
+      }
+    ]
+  },
+  {
+    "slug": "nirma",
+    "name": "Nirma girl",
+    "prompt": "Washing powder days",
+    "region": "India",
+    "source": "https://nirma.co.in/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/nirma-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Black shoes and a white hair bow."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/nirma-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "Her shoes are red."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/nirma-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "Her little hair bow is blue."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 50,
+        "y": 8,
+        "rx": 11,
+        "ry": 7
+      },
+      {
+        "x": 51,
+        "y": 86,
+        "rx": 13,
+        "ry": 12
+      }
+    ]
+  },
+  {
+    "slug": "maharaja",
+    "name": "Air India Maharaja",
+    "prompt": "Welcome aboard",
+    "region": "India",
+    "source": "https://www.airindia.com/content/air-india/in/en/newsroom/articles/air-india-maharaja-legacy.html",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/maharaja-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "A feather above the turban jewel, without a monocle."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/maharaja-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A monocle has been added."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/maharaja-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The small feather is missing above the jewel."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 53,
+        "y": 10,
+        "rx": 12,
+        "ry": 10
+      },
+      {
+        "x": 57,
+        "y": 30,
+        "rx": 17,
+        "ry": 12
+      }
+    ]
+  },
+  {
+    "slug": "gattu",
+    "name": "Asian Paints Gattu",
+    "prompt": "The little painter",
+    "region": "India",
+    "source": "https://dsource.in/dcontent/design-india/collection/collection-details2.php?id=615",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/gattu-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "No cap or breast pocket in this reference."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/gattu-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A paper painter cap has been added."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/gattu-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A small breast pocket has been added."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 52,
+        "y": 8,
+        "rx": 16,
+        "ry": 8
+      },
+      {
+        "x": 60,
+        "y": 34,
+        "rx": 13,
+        "ry": 12
+      }
+    ]
+  },
+  {
+    "slug": "mdh",
+    "name": "MDH",
+    "prompt": "Spice cupboard",
+    "region": "India",
+    "source": "https://mdhspices.com/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/mdh-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Both the spectacles and gold necklace are present."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/mdh-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "His spectacles are missing."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/mdh-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "His necklace is missing, but his spectacles remain."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 49,
+        "y": 52,
+        "rx": 24,
+        "ry": 8
+      },
+      {
+        "x": 49,
+        "y": 76,
+        "rx": 22,
+        "ry": 20
+      }
+    ]
+  },
+  {
+    "slug": "thums-up",
+    "name": "Thums Up",
+    "prompt": "Cola break",
+    "region": "India",
+    "source": "https://www.coca-cola.com/in/en/brands/thums-up",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/thums-up-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Thums has no b, and the fist has its original stepped edge."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/thums-up-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "An extra b turns Thums into Thumbs."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/thums-up-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The outer fist edge has one fewer knuckle step."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 49,
+        "y": 53,
+        "rx": 44,
+        "ry": 14
+      },
+      {
+        "x": 83,
+        "y": 64,
+        "rx": 12,
+        "ry": 25
+      }
+    ]
+  },
+  {
+    "slug": "aashirvaad",
+    "name": "Aashirvaad",
+    "prompt": "The atta bag",
+    "region": "India",
+    "source": "https://aashirvaad.com/our-products",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/aashirvaad-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Two initial As and two green leaves."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/aashirvaad-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The name loses its first A."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/aashirvaad-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A third green leaf has been added."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 52,
+        "y": 43,
+        "rx": 13,
+        "ry": 13
+      },
+      {
+        "x": 21,
+        "y": 55,
+        "rx": 17,
+        "ry": 9
+      }
+    ]
+  },
+  {
+    "slug": "goodknight",
+    "name": "Goodknight",
+    "prompt": "Mosquito season",
+    "region": "India",
+    "source": "https://www.goodknight.in/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/goodknight-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Knight includes a k, with the small Godrej signature above."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/goodknight-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The k is missing from knight."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/goodknight-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The little Godrej signature is missing."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 22,
+        "y": 21,
+        "rx": 19,
+        "ry": 11
+      },
+      {
+        "x": 45,
+        "y": 57,
+        "rx": 27,
+        "ry": 17
+      }
+    ]
+  },
+  {
+    "slug": "kissan",
+    "name": "Kissan",
+    "prompt": "The jam jar",
+    "region": "India",
+    "source": "https://www.nepalipasal.com.au/products/kissan-mixed-jam-200g",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/kissan-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Two s letters, with no little sprout above the i."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/kissan-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "One s is missing."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/kissan-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A small leaf sprout has been added above the i."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 48,
+        "y": 52,
+        "rx": 30,
+        "ry": 17
+      },
+      {
+        "x": 33,
+        "y": 40,
+        "rx": 11,
+        "ry": 10
+      }
+    ]
+  },
+  {
+    "slug": "haldirams",
+    "name": "Haldiram’s",
+    "prompt": "The mithai box",
+    "region": "India",
+    "source": "https://www.haldirams.com/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/haldirams-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "An apostrophe before the s and a loop enclosing the monogram."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/haldirams-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The apostrophe is missing."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/haldirams-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The loop around the little monogram is missing."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 53,
+        "y": 40,
+        "rx": 13,
+        "ry": 14
+      },
+      {
+        "x": 79,
+        "y": 51,
+        "rx": 9,
+        "ry": 9
+      }
+    ]
+  },
+  {
+    "slug": "bournvita",
+    "name": "Bournvita",
+    "prompt": "Chocolate malt mornings",
+    "region": "India",
+    "source": "https://en.wikipedia.org/wiki/Bournvita",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/bournvita-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Bourn has no e, with the little milk flourish beside the V."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/bournvita-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "An extra e has been added to Bourn."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/bournvita-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The milk flourish beside the V is missing."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 69,
+        "y": 49,
+        "rx": 23,
+        "ry": 20
+      },
+      {
+        "x": 26,
+        "y": 65,
+        "rx": 15,
+        "ry": 13
+      }
+    ]
+  },
+  {
+    "slug": "britannia",
+    "name": "Britannia",
+    "prompt": "The biscuit tin",
+    "region": "India",
+    "source": "https://www.britannia.co.in/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/britannia-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Two Ns, with yellow on the left and green on the right underneath."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/britannia-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The name has two Ts and only one N."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/britannia-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The lower yellow and green swooshes swap colors."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 51,
+        "y": 46,
+        "rx": 42,
+        "ry": 12
+      },
+      {
+        "x": 51,
+        "y": 59,
+        "rx": 44,
+        "ry": 10
+      }
+    ]
+  },
+  {
+    "slug": "frooti",
+    "name": "Frooti",
+    "prompt": "Mango break",
+    "region": "India",
+    "source": "https://en.wikipedia.org/wiki/Frooti",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/frooti-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Frooti ends in I, above the words MANGO DRINK."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/frooti-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The last letter is Y."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/frooti-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The small subtitle reads MANGO JUICE."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 80,
+        "y": 47,
+        "rx": 13,
+        "ry": 23
+      },
+      {
+        "x": 51,
+        "y": 72,
+        "rx": 30,
+        "ry": 7
+      }
+    ]
+  },
+  {
+    "slug": "monopoly",
+    "name": "Monopoly man",
+    "prompt": "Property tycoon",
+    "region": "World",
+    "source": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/monopoly-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "No monocle, with three waistcoat buttons."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/monopoly-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A monocle has been added."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/monopoly-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The three waistcoat buttons are missing."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 48,
+        "y": 39,
+        "rx": 14,
+        "ry": 10
+      },
+      {
+        "x": 53,
+        "y": 54,
+        "rx": 10,
+        "ry": 10
+      }
+    ]
+  },
+  {
+    "slug": "kitkat",
+    "name": "KitKat",
+    "prompt": "Chocolate break",
+    "region": "World",
+    "source": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/kitkat-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "No hyphen, with the original rounded dot over the i."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/kitkat-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A hyphen has been added."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/kitkat-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The dot over the i is a diamond."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 50,
+        "y": 49,
+        "rx": 18,
+        "ry": 17
+      }
+    ]
+  },
+  {
+    "slug": "skechers",
+    "name": "Skechers",
+    "prompt": "Sneaker check",
+    "region": "World",
+    "source": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/skechers-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "No t, with a silver outer outline on the large S."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/skechers-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "A t has been added to the name."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/skechers-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The silver outer outline of the S is navy blue."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 50,
+        "y": 40,
+        "rx": 33,
+        "ry": 20
+      },
+      {
+        "x": 50,
+        "y": 65,
+        "rx": 42,
+        "ry": 10
+      }
+    ]
+  },
+  {
+    "slug": "oreo",
+    "name": "Oreo Double Stuf",
+    "prompt": "Cookie break",
+    "region": "World",
+    "source": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+    "generated": true,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/oreo-1.png",
+        "width": 600,
+        "height": 600,
+        "correct": true,
+        "detail": "Stuf has one f, with the small red Nabisco corner."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/oreo-2.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "Stuf has an extra f."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/oreo-3.png",
+        "width": 600,
+        "height": 600,
+        "correct": false,
+        "detail": "The small red Nabisco corner is missing."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 27,
+        "y": 33,
+        "rx": 12,
+        "ry": 9
+      },
+      {
+        "x": 49,
+        "y": 43,
+        "rx": 23,
+        "ry": 10
+      }
+    ]
+  },
+  {
+    "slug": "pikachu",
+    "name": "Pikachu",
+    "prompt": "Electric memory",
+    "region": "World",
+    "source": "https://osf.io/7cmwf/",
+    "generated": false,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/pikachu-1.png",
+        "width": 500,
+        "height": 500,
+        "correct": true,
+        "detail": "Yellow tail tip and a brown patch at the base."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/pikachu-2.png",
+        "width": 500,
+        "height": 500,
+        "correct": false,
+        "detail": "A black tail tip replaces the original yellow tip."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/pikachu-3.png",
+        "width": 500,
+        "height": 500,
+        "correct": false,
+        "detail": "The brown patch at the base of the tail is missing."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 77,
+        "y": 63,
+        "rx": 22,
+        "ry": 32
+      }
+    ]
+  },
+  {
+    "slug": "bugs-bunny",
+    "name": "Bugs Bunny",
+    "prompt": "What’s up, doc?",
+    "region": "World",
+    "source": "https://osf.io/7cmwf/",
+    "generated": false,
+    "options": [
+      {
+        "asset": "/logos/logo-lagaan/options/bugs-bunny-1.png",
+        "width": 500,
+        "height": 500,
+        "correct": true,
+        "detail": "White feet, without ankle cuffs."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/bugs-bunny-2.png",
+        "width": 500,
+        "height": 500,
+        "correct": false,
+        "detail": "Small cuffs have been added around the ankles."
+      },
+      {
+        "asset": "/logos/logo-lagaan/options/bugs-bunny-3.png",
+        "width": 500,
+        "height": 500,
+        "correct": false,
+        "detail": "His feet are gray instead of white."
+      }
+    ],
+    "hintRegions": [
+      {
+        "x": 47,
+        "y": 89,
+        "rx": 28,
+        "ry": 10
+      }
+    ]
+  }
+]

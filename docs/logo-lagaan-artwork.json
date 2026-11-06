@@ -1,0 +1,149 @@
+{
+  "tool": "Built-in image_gen; source images reused where available. All generated images are reference-based quiz recreations, not official artwork.",
+  "artwork": [
+    {
+      "slug": "amul",
+      "reference": "https://en.wikipedia.org/wiki/Amul_girl",
+      "pair": "/logos/logo-lagaan/memory/amul-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison image for a visual memory quiz. Exactly TWO equally-sized square panels, on identical plain white backgrounds, with one matching subject centered in each. Both versions must look credible, professionally finished and equally detailed. This is a reference-based comparison, not a redesign. No A/B labels, captions, text, watermarks, dividers, extra decorations or clues. Match the pose, scale and framing between the two halves exactly. LEFT: preserve her correct white dress with red polka dots exactly. RIGHT: change ONLY the dress to red with white polka dots. Keep her white/red bow, blue hair, face, toast and pose identical.",
+      "third": "/logos/logo-lagaan/memory/amul-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a two-panel comparison. Use ONLY the LEFT, correct panel as the edit target. Output ONE SQUARE image matching that left panel exactly in crop, size, framing, drawing quality, lighting and pure white background. Do not output a pair or a triptych. This will be a third plausible option shown next to the two originals. Edit only the specified small detail; do not redraw, restyle, reframe or recolor anything else. No text labels, new borders, captions or watermark. Keep her correct WHITE dress with RED polka dots, blue hair, bow, toast, expression, and all colors. On the hand touching her mouth, subtly fold away ONE of the lower extended fingers so that this hand has one fewer visible extended finger. Keep the fingertip touching her mouth in place. Change ONLY the finger detail. Do not reverse any dress colors or remove a whole hand."
+    },
+    {
+      "slug": "parleg",
+      "reference": "https://www.parleproducts.com/brands/parle-g",
+      "pair": "/logos/logo-lagaan/memory/parleg-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison image for a visual memory quiz. Exactly TWO equally-sized square panels, on identical plain white backgrounds, with one matching subject centered in each. Both versions must look credible, professionally finished and equally detailed. This is a reference-based comparison, not a redesign. No A/B labels, captions, text, watermarks, dividers, extra decorations or clues. Match the pose, scale and framing between the two halves exactly. Use the iconic child portrait from this official Parle-G wrapper as the target. Show a larger clean head-and-shoulders portrait of the exact same child in both panels, including the raised hands and pale clothing, without the wrapper or any lettering. LEFT: no hair bow, like the input. RIGHT: add ONLY a small red ribbon bow clipped into the side of her dark bob. Preserve the face, hair silhouette, eyes, hands and clothing. Do not add a bindi, jewellery or change her expression.",
+      "third": "/logos/logo-lagaan/memory/parleg-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a two-panel comparison. Use ONLY the LEFT, correct panel as the edit target. Output ONE SQUARE image matching that left panel exactly in crop, size, framing, drawing quality, lighting and pure white background. Do not output a pair or a triptych. This will be a third plausible option shown next to the two originals. Edit only the specified small detail; do not redraw, restyle, reframe or recolor anything else. No text labels, new borders, captions or watermark. Keep the original child portrait with NO hair bow. On HER LEFT hand, which is on the VIEWER'S RIGHT, fold the ring finger and little finger gently inward toward the palm, leaving only her index and middle fingers visibly raised. This should be a natural small finger-pose change. Keep the opposite hand, face, expression, clothes, hairstyle, pearl earrings and all other pixels the same. No bow or extra jewellery."
+    },
+    {
+      "slug": "nirma",
+      "reference": "https://nirma.co.in/",
+      "pair": "/logos/logo-lagaan/memory/nirma-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison image for a visual memory quiz. Exactly TWO equally-sized square panels, on identical plain white backgrounds, with one matching subject centered in each. Both versions must look credible, professionally finished and equally detailed. This is a reference-based comparison, not a redesign. No A/B labels, captions, text, watermarks, dividers, extra decorations or clues. Match the pose, scale and framing between the two halves exactly. Duplicate the Nirma girl from the supplied reference, same full figure, dancing pose, white floral dress, white socks, hair bow, hair and face. LEFT: her correct BLACK strapped shoes, as in the reference. RIGHT: make ONLY the shoes RED, leaving their shapes and straps unchanged. All other colors including dress motifs and socks must remain identical.",
+      "third": "/logos/logo-lagaan/memory/nirma-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep her original BLACK shoes and white floral dress. Recolor ONLY the small WHITE hair bow to a soft BLUE hair bow, leaving its shape, hair, earrings, bindi, pose, socks, dress and shoes unchanged."
+    },
+    {
+      "slug": "maharaja",
+      "reference": "https://www.airindia.com/content/air-india/in/en/newsroom/articles/air-india-maharaja-legacy.html",
+      "pair": "/logos/logo-lagaan/memory/maharaja-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison image for a visual memory quiz. Exactly TWO equally-sized square panels, on identical plain white backgrounds, with one matching subject centered in each. Both versions must look credible, professionally finished and equally detailed. This is a reference-based comparison, not a redesign. No A/B labels, captions, text, watermarks, dividers, extra decorations or clues. Match the pose, scale and framing between the two halves exactly. Duplicate the classic Air India Maharaja from the reference, with striped red/gold turban, feather, curled black moustache, red/gold sherwani, namaste pose, closed eyes, shoes and proportions identical. LEFT: no eyewear, matching the source. RIGHT: add ONLY one fine gold monocle with a short gold chain at one eye, plausibly worn by this royal gentleman. Do not change his eyes or smile. Keep the face large enough for the monocle to be seen.",
+      "third": "/logos/logo-lagaan/memory/maharaja-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep NO monocle. Remove ONLY the small upright gray FEATHER from the top of the turban; keep its green jewel, turban stripes, eyes, moustache, namaste hands, red/gold outfit and shoes untouched."
+    },
+    {
+      "slug": "gattu",
+      "reference": "https://dsource.in/dcontent/design-india/collection/collection-details2.php?id=615",
+      "pair": "/logos/logo-lagaan/memory/gattu-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison image for a visual memory quiz. Exactly TWO equally-sized square panels, on identical plain white backgrounds, with one matching subject centered in each. Both versions must look credible, professionally finished and equally detailed. This is a reference-based comparison, not a redesign. No A/B labels, captions, text, watermarks, dividers, extra decorations or clues. Match the pose, scale and framing between the two halves exactly. Duplicate the exact black-and-white classic Gattu mascot, full figure, same paintbrush, paint bucket, messy hair, facial expression, short-sleeved shirt, shorts, bare feet and pose. LEFT: no hat, like the source. RIGHT: add ONLY a small, old-fashioned white painter's cap with black outlines sitting on top of his unruly hair. Keep his original hair visible and unchanged. Do not change any clothing or tools.",
+      "third": "/logos/logo-lagaan/memory/gattu-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep NO painter's cap. Add ONLY a small, simple breast pocket outlined in black on the currently plain shirt, on the viewer's right chest. Keep the hair, face, shirt collar, button, arms, paintbrush, bucket, shorts and bare feet identical."
+    },
+    {
+      "slug": "mdh",
+      "reference": "https://mdhspices.com/",
+      "pair": "/logos/logo-lagaan/memory/mdh-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison image for a visual memory quiz. Exactly TWO equally-sized square panels, on identical plain white backgrounds, with one matching subject centered in each. Both versions must look credible, professionally finished and equally detailed. This is a reference-based comparison, not a redesign. No A/B labels, captions, text, watermarks, dividers, extra decorations or clues. Match the pose, scale and framing between the two halves exactly. From the reference MDH pack, extract/recreate the familiar founder portrait, large head-and-shoulders view inside a gold oval with red turban, white moustache, white clothing and smile. Duplicate the exact same portrait in both panels; omit the rest of the packaging. LEFT: preserve his correct thin wire-rim spectacles as in the reference. RIGHT: remove ONLY his spectacles, showing the same eyes and face underneath. Turban, skin, eyes, smile, moustache, oval, crop, lighting and clothing must match precisely.",
+      "third": "/logos/logo-lagaan/memory/mdh-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a two-panel comparison. Use ONLY the LEFT, correct panel as the edit target. Output ONE SQUARE image matching that left panel exactly in crop, size, framing, drawing quality, lighting and pure white background. Do not output a pair or a triptych. This will be a third plausible option shown next to the two originals. Edit only the specified small detail; do not redraw, restyle, reframe or recolor anything else. No text labels, new borders, captions or watermark. Keep his correct spectacles ON. Remove ONLY the thin GOLD NECKLACE from around his neck and down the white shirt, replacing those pixels with matching plain white cloth. Preserve the face, skin, glasses, moustache, red turban, smile, shirt button, gold oval and framing."
+    },
+    {
+      "slug": "thums-up",
+      "reference": "https://www.coca-cola.com/in/en/brands/thums-up",
+      "pair": "/logos/logo-lagaan/memory/thums-up-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison artwork, exactly TWO equal square panels, for a visual memory quiz. Reuse the supplied real brand as reference. Each panel has the SAME brand mark centered on plain white, large, equally sized, equally credible, sharp and readable. No captions, A/B labels, extra text, watermark or divider. Preserve the same style, colors and artwork. Duplicate this exact red hand/thumb mark with blue/white offset outlines. LEFT brand lettering is correctly 'Thums Up' (no b). RIGHT lettering is 'Thumbs Up' (with b). Same white italic lettering and same logo in both. Only the b differs.",
+      "third": "/logos/logo-lagaan/memory/thums-up-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep the correct 'Thums Up' spelling with NO b. Change ONLY the count of angular knuckle steps on the RIGHT edge of the red fist: make three finger/knuckle steps instead of the original four. Retain the thumb, hand direction, typography, blue/white shadow outline and overall mark size. The mark should still look completely plausible."
+    },
+    {
+      "slug": "aashirvaad",
+      "reference": "https://aashirvaad.com/our-products",
+      "pair": "/logos/logo-lagaan/memory/aashirvaad-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison artwork, exactly TWO equal square panels, for a visual memory quiz. Reuse the supplied real brand as reference. Each panel has the SAME brand mark centered on plain white, large, equally sized, equally credible, sharp and readable. No captions, A/B labels, extra text, watermark or divider. Preserve the same style, colors and artwork. Extract the AASHIRVAAD wordmark and its sprouting-leaves sun emblem from the supplied atta bag, displayed as a clean faithful brand mark on a red rectangular field, same in both panels. No bag, bowl or wood scene. LEFT reads exactly 'AASHIRVAAD'. RIGHT reads exactly 'ASHIRVAAD' with one initial A. Keep the sun, leaves and type style the same.",
+      "third": "/logos/logo-lagaan/memory/aashirvaad-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a two-panel comparison. Use ONLY the LEFT, correct panel as the edit target. Output ONE SQUARE image matching that left panel exactly in crop, size, framing, drawing quality, lighting and pure white background. Do not output a pair or a triptych. This will be a third plausible option shown next to the two originals. Edit only the specified small detail; do not redraw, restyle, reframe or recolor anything else. No text labels, new borders, captions or watermark. Keep the spelling exactly AASHIRVAAD with the two initial A letters. The original top emblem has TWO green leaves. Add ONE extra small green leaf on the same stem so it has THREE green leaves. Preserve the existing two leaves, white rays, orange sun, red background and correct lettering. No other alterations."
+    },
+    {
+      "slug": "goodknight",
+      "reference": "https://www.goodknight.in/",
+      "pair": "/logos/logo-lagaan/memory/goodknight-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison artwork, exactly TWO equal square panels, for a visual memory quiz. Reuse the supplied real brand as reference. Each panel has the SAME brand mark centered on plain white, large, equally sized, equally credible, sharp and readable. No captions, A/B labels, extra text, watermark or divider. Preserve the same style, colors and artwork. Duplicate the exact red round Goodknight logo with silver border and small Godrej signature. LEFT wordmark correctly reads 'Good knight' including k, arranged as in source. RIGHT reads 'Good night' without k. Keep the Godrej signature, red circle, silver outline, white lettering style and flourishes identical. The only change is the k.",
+      "third": "/logos/logo-lagaan/memory/goodknight-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep the correct 'Good knight' lettering INCLUDING k. Remove ONLY the small silver Godrej signature above the red round emblem. Do not remove or alter the silver circular border, white Good knight lettering, red disc, colors or framing."
+    },
+    {
+      "slug": "kissan",
+      "reference": "https://www.nepalipasal.com.au/products/kissan-mixed-jam-200g",
+      "pair": "/logos/logo-lagaan/memory/kissan-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. ONE wide 2:1 comparison artwork, exactly TWO equal square panels, for a visual memory quiz. Reuse the supplied real brand as reference. Each panel has the SAME brand mark centered on plain white, large, equally sized, equally credible, sharp and readable. No captions, A/B labels, extra text, watermark or divider. Preserve the same style, colors and artwork. Use the Kissan wordmark from this jam jar, clean red label with white lowercase lettering, no jar or farmer or secondary wording. Duplicate that same red label in each square. LEFT correctly reads 'kissan' with two s letters. RIGHT reads 'kisan' with one s. Preserve the organic white wordmark letter shapes and red label shape. Only the extra s differs.",
+      "third": "/logos/logo-lagaan/memory/kissan-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep the correct 'kissan' spelling with TWO s letters. Add ONLY a tiny stylized WHITE LEAF sprout above the i, as a plausible food-brand detail. Keep the red label, all original lettering and letter shapes untouched. The added sprout must be visible but small, not an oversized ornament."
+    },
+    {
+      "slug": "haldirams",
+      "reference": "https://www.haldirams.com/",
+      "pair": "/logos/logo-lagaan/memory/haldirams-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. Create ONE wide 2:1 memory-quiz image, exactly two equal square panels. Both panels must show the SAME supplied Indian brand mark centered at equal size on identical plain white backgrounds, large and legible. Faithfully preserve the original design. No A/B labels, captions, divider, watermark, extraneous text or different render styles. Duplicate the exact Haldiram's red oval logo with its HR monogram and white cursive lettering. LEFT reads correctly 'Haldiram’s' with an apostrophe. RIGHT reads 'Haldirams' without an apostrophe. Keep the final s in BOTH. ONLY the apostrophe differs. The red oval, monogram and rest of the lettering must be identical.",
+      "third": "/logos/logo-lagaan/memory/haldirams-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep the correct Haldiram's lettering INCLUDING its apostrophe. Remove ONLY the thin circular enclosing loop AROUND the small HR monogram above the wordmark. Preserve the intertwined HR letters themselves, every wordmark letter, the apostrophe and the red oval."
+    },
+    {
+      "slug": "bournvita",
+      "reference": "https://en.wikipedia.org/wiki/Bournvita",
+      "pair": "/logos/logo-lagaan/memory/bournvita-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. Create ONE wide 2:1 memory-quiz image, exactly two equal square panels. Both panels must show the SAME supplied Indian brand mark centered at equal size on identical plain white backgrounds, large and legible. Faithfully preserve the original design. No A/B labels, captions, divider, watermark, extraneous text or different render styles. Duplicate the supplied Cadbury Bourn Vita brand wordmark, same purple-magenta coloring and drop-shaped V flourish, clean white background, large. LEFT correctly reads 'Bourn' on the first large line and 'Vita' on the second, with Cadbury above. RIGHT reads 'Bourne' on the first line and 'Vita' on the second, with Cadbury above. Only add an e after Bourn in the right panel. Both versions must otherwise match, including capital letters and fonts.",
+      "third": "/logos/logo-lagaan/memory/bournvita-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep the correct Bourn Vita spelling with NO extra e. Remove ONLY the small decorative milk-drop/splash flourish extending to the LEFT of the V in Vita. Preserve the main V strokes, all letters, Cadbury signature, purple-magenta gradient, outlines and layout."
+    },
+    {
+      "slug": "britannia",
+      "reference": "https://www.britannia.co.in/",
+      "pair": "/logos/logo-lagaan/memory/britannia-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. Create ONE wide 2:1 memory-quiz image, exactly two equal square panels. Both panels must show the SAME supplied Indian brand mark centered at equal size on identical plain white backgrounds, large and legible. Faithfully preserve the original design. No A/B labels, captions, divider, watermark, extraneous text or different render styles. Duplicate this exact red Britannia banner with the yellow/green lower swooshes. LEFT correctly reads 'BRITANNIA'. RIGHT reads 'BRITTANIA' (double T, single N), a plausible spelling confusion. Match the white uppercase lettering style, red banner and all swooshes perfectly. This spelling is the only difference. No tagline.",
+      "third": "/logos/logo-lagaan/memory/britannia-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a two-panel comparison. Use ONLY the LEFT, correct panel as the edit target. Output ONE SQUARE image matching that left panel exactly in crop, size, framing, drawing quality, lighting and pure white background. Do not output a pair or a triptych. This will be a third plausible option shown next to the two originals. Edit only the specified small detail; do not redraw, restyle, reframe or recolor anything else. No text labels, new borders, captions or watermark. Keep the spelling exactly BRITANNIA. Swap ONLY the two bottom swoosh colors: the currently yellow left/back swoosh becomes green, and the currently green right/front swoosh becomes yellow. Preserve the original red banner, correct letters, outlines, trademark and shape."
+    },
+    {
+      "slug": "frooti",
+      "reference": "https://en.wikipedia.org/wiki/Frooti",
+      "pair": "/logos/logo-lagaan/memory/frooti-pair.webp",
+      "pairPrompt": "Use case: precise-object-edit. Create ONE wide 2:1 memory-quiz image, exactly two equal square panels. Both panels must show the SAME supplied Indian brand mark centered at equal size on identical plain white backgrounds, large and legible. Faithfully preserve the original design. No A/B labels, captions, divider, watermark, extraneous text or different render styles. Duplicate the exact dark green stencil-style Frooti wordmark and its top/bottom green bars and small MANGO DRINK wording. LEFT correctly reads 'FROOTI', ending with I. RIGHT reads 'FROOTY', ending with Y. The final letter is the only difference. The stencil cuts in all shared letters, green shade, line weights, bars and subtitle must match.",
+      "third": "/logos/logo-lagaan/memory/frooti-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. Input is a TWO-panel image. Copy ONLY its LEFT correct panel, preserving the exact subject scale, crop, rendering style, background and all shared details. Output ONE SQUARE single-panel image, not a pair or triptych. This is a third plausible quiz option. Make ONLY the specified edit. No labels, captions, new borders, watermark or restyling. Keep correct FROOTI lettering, ending I, and all stencil shapes. Change ONLY the small subtitle from MANGO DRINK to MANGO JUICE in the exact same dark green condensed type. Keep the bars, trademark, name, shade and framing identical."
+    },
+    {
+      "slug": "monopoly",
+      "reference": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+      "pair": "/logos/logo-lagaan/memory/monopoly-pair.webp",
+      "pairPrompt": "Existing comparison image from Good Housekeeping, no generation.",
+      "third": "/logos/logo-lagaan/memory/monopoly-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. This reference is a TWO-panel comparison from a magazine. Use ONLY its RIGHT correct panel as target. Output ONE SQUARE image that exactly matches that right panel in subject framing, scale, source drawing/photo style and background, including its pink circular backdrop. Make ONLY the small change specified. Do not sharpen, modernize, redraw, retouch or reframe the rest. No labels, captions, borders, watermarks or extra objects. Keep NO monocle, exactly like the right panel. Remove ONLY the THREE small black waistcoat buttons beneath his bow tie, leaving the same plain white waistcoat there. Keep the bow tie, face, top hat, white hatband, moustache, money bag, dollar sign, hands, legs, pink circle, white rectangular picture backdrop and pose identical."
+    },
+    {
+      "slug": "kitkat",
+      "reference": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+      "pair": "/logos/logo-lagaan/memory/kitkat-pair.webp",
+      "pairPrompt": "Existing comparison image from Good Housekeeping, no generation.",
+      "third": "/logos/logo-lagaan/memory/kitkat-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. This reference is a TWO-panel comparison from a magazine. Use ONLY its RIGHT correct panel as target. Output ONE SQUARE image that exactly matches that right panel in subject framing, scale, source drawing/photo style and background, including its pink circular backdrop. Make ONLY the small change specified. Do not sharpen, modernize, redraw, retouch or reframe the rest. No labels, captions, borders, watermarks or extra objects. Keep the correct KitKat spelling WITHOUT a hyphen. Change ONLY the small dot over the i into a small DIAMOND instead of its original rounded dot. Keep every letter, wrapper, oval border, chocolate-wafer illustration, angle, pink circular backdrop and typography identical. This is a tiny typographic detail, not a wholesale font change."
+    },
+    {
+      "slug": "skechers",
+      "reference": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+      "pair": "/logos/logo-lagaan/memory/skechers-pair.webp",
+      "pairPrompt": "Existing comparison image from Good Housekeeping, no generation.",
+      "third": "/logos/logo-lagaan/memory/skechers-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. This reference is a TWO-panel comparison from a magazine. Use ONLY its RIGHT correct panel as target. Output ONE SQUARE image that exactly matches that right panel in subject framing, scale, source drawing/photo style and background, including its pink circular backdrop. Make ONLY the small change specified. Do not sharpen, modernize, redraw, retouch or reframe the rest. No labels, captions, borders, watermarks or extra objects. Keep correct SKECHERS lettering WITHOUT a t. Recolor ONLY the outer SILVER/GRAY outline behind the large S emblem to the same NAVY BLUE as the S, preserving its exact contours and the narrow white gap. The large S, full wordmark, font, all other colors and pink circular background must remain identical."
+    },
+    {
+      "slug": "oreo",
+      "reference": "https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/",
+      "pair": "/logos/logo-lagaan/memory/oreo-pair.webp",
+      "pairPrompt": "Existing comparison image from Good Housekeeping, no generation.",
+      "third": "/logos/logo-lagaan/memory/oreo-third.webp",
+      "thirdPrompt": "Use case: precise-object-edit. This reference is a TWO-panel comparison from a magazine. Use ONLY its RIGHT correct panel as target. Output ONE SQUARE image that exactly matches that right panel in subject framing, scale, source drawing/photo style and background, including its pink circular backdrop. Make ONLY the small change specified. Do not sharpen, modernize, redraw, retouch or reframe the rest. No labels, captions, borders, watermarks or extra objects. Keep the correct Double Stuf spelling with ONE f, exactly like the right-hand pack. Remove ONLY the little RED NABISCO triangle at the upper-left corner of the blue pack, replacing it with matching blue packaging. Keep the pack angle, cookie, milk, brand lettering, Double Stuf lettering, sealing and all other text and the pink circular background identical."
+    }
+  ]
+}

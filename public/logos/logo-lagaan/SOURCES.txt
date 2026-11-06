@@ -1,0 +1,48 @@
+Logo Lagaan artwork sources
+
+This local, noncommercial memory quiz combines published comparisons with
+reference-based AI recreations and custom alternatives. Custom alternatives
+are not claims of documented collective false memories. The correct answer
+matches the particular reference shown, including older packaging designs.
+Brand names, characters and logos belong to their respective owners.
+
+Indian rounds: reference-based recreations using the links below.
+International Monopoly, KitKat, Skechers and Oreo pairs: Good Housekeeping /
+Hearst, from the article below. Their third alternatives were generated from
+the correct panel. These images are not covered by the study license.
+Generated artwork prompts: docs/logo-lagaan-artwork.json.
+
+Amul girl: https://en.wikipedia.org/wiki/Amul_girl
+Parle-G girl: https://www.parleproducts.com/brands/parle-g
+Nirma girl: https://nirma.co.in/
+Air India Maharaja: https://www.airindia.com/content/air-india/in/en/newsroom/articles/air-india-maharaja-legacy.html
+Asian Paints Gattu: https://dsource.in/dcontent/design-india/collection/collection-details2.php?id=615
+MDH: https://mdhspices.com/
+Thums Up: https://www.coca-cola.com/in/en/brands/thums-up
+Aashirvaad: https://aashirvaad.com/our-products
+Goodknight: https://www.goodknight.in/
+Kissan: https://www.nepalipasal.com.au/products/kissan-mixed-jam-200g
+Haldiram’s: https://www.haldirams.com/
+Bournvita: https://en.wikipedia.org/wiki/Bournvita
+Britannia: https://www.britannia.co.in/
+Frooti: https://en.wikipedia.org/wiki/Frooti
+Monopoly man: https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/
+KitKat: https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/
+Skechers: https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/
+Oreo Double Stuf: https://www.goodhousekeeping.com/entertainment/g28438966/mandela-effect-examples/
+
+Pikachu and Bugs Bunny: existing Original, Manipulation1 and Manipulation2
+images from Deepasri Prasad and Wilma A. Bainbridge (2022), The Visual Mandela
+Effect as Evidence for Shared and Specific False Memories Across People.
+https://doi.org/10.1177/09567976221108944
+Dataset: https://osf.io/7cmwf/
+License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0.
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+Resized and converted from JPEG to WebP, then losslessly exported to PNG. License and original README
+are included in memory/study/. Study license applies only to those six files.
+
+Inspiration: https://www.today.com/life/mandela-effect-examples-rcna81130
+
+Game options are individual PNGs in options/. See docs/logo-lagaan-pngs.json
+for the source and crop of each option. The study license also applies to
+options/pikachu-*.png and options/bugs-bunny-*.png.

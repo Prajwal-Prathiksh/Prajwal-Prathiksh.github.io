@@ -16,6 +16,18 @@ const pebbles = [
 ---
 
 <svg class="thumb" viewBox="0 0 320 200" role="img" aria-hidden="true">
+  {slug === 'logo-lagaan' && (
+    <g>
+      <rect width="320" height="200" fill="#fff2da" />
+      <path d="M0 10Q160 65 320 10" fill="none" stroke="#d19b48" />
+      {[20,55,90,125,160,195,230,265,300].map((x,i) => <ellipse cx={x} cy={18 + Math.sin(i/8*Math.PI)*24} rx="6" ry="10" fill={i%3 ? '#efac32' : '#bb465e'} />)}
+      <g transform="translate(36 57) rotate(-9 40 48)"><rect width="75" height="92" rx="9" fill="#fffdf8" stroke="#d7b990"/><text x="37" y="63" text-anchor="middle" font-family="Georgia,serif" font-size="52" fill="#4c1733">A</text></g>
+      <g transform="translate(123 57) rotate(9 40 48)"><rect width="75" height="92" rx="9" fill="#4c1733"/><text x="37" y="63" text-anchor="middle" font-family="Georgia,serif" font-size="52" fill="#fff2da">B</text></g>
+      <g transform="translate(210 57) rotate(9 40 48)"><rect width="75" height="92" rx="9" fill="#f0d7df" stroke="#d7b990"/><text x="37" y="63" text-anchor="middle" font-family="Georgia,serif" font-size="52" fill="#4c1733">C</text></g>
+      <path d="M143 170q17 22 34 0z" fill="#b65137"/><path d="M160 168q-9-12 1-24q10 15-1 24" fill="#efac32"/>
+      <g fill="#bd3e56"><path d="M41 99l3 8 8 3-8 3-3 8-3-8-8-3 8-3z"/><path d="M276 135l3 8 8 3-8 3-3 8-3-8-8-3 8-3z"/></g>
+    </g>
+  )}
   {
     slug === 'tic-tac-toe' && (
       <g>

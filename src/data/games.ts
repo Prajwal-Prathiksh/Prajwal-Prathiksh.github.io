@@ -1,5 +1,11 @@
 export const games = [
   {
+    slug: 'logo-lagaan',
+    name: 'Logo Lagaan',
+    blurb: 'A Diwali memory game. Three versions, one original. Can you spot the original?',
+    meta: 'Solo or a whole party · 20 rounds',
+  },
+  {
     slug: 'chowka-bhara',
     name: 'Chowka Bhara',
     blurb: 'The cowrie-shell race game, chalked on a red-oxide floor.',

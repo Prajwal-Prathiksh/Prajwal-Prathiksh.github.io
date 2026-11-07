@@ -1,0 +1,309 @@
+.movie-intro {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 145px;
+  gap: 1rem;
+  font-size: 3.2rem;
+}
+.movie-intro span {
+  animation: float 5s ease-in-out infinite;
+}
+.movie-intro span:nth-child(2) {
+  font-size: 5rem;
+  rotate: -10deg;
+  animation-delay: -1.5s;
+}
+.movie-intro span:last-child {
+  font-size: 2.3rem;
+  animation-delay: -3s;
+}
+.movie-mix {
+  font-size: 0.7rem;
+  color: #987352;
+  margin: 1.4rem 0;
+}
+.movie-party .movie-stage {
+  min-width: 0;
+}
+.movie-party .question {
+  padding-inline: 0;
+}
+.emoji-screen {
+  position: relative;
+  min-height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dfc89d;
+  border-radius: 20px;
+  padding: 2.7rem 1.5rem 3rem;
+  background: radial-gradient(ellipse at 50% 45%, #fffdf9, #fff0d0);
+  box-shadow: 0 8px 0 #e9d5af55;
+}
+.emoji-screen::before,
+.emoji-screen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  opacity: 0.35;
+  background: repeating-linear-gradient(
+    to bottom,
+    #c2a479 0 8px,
+    transparent 8px 22px
+  );
+}
+.emoji-screen::before {
+  left: 10px;
+}
+.emoji-screen::after {
+  right: 10px;
+}
+.emoji-clue {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(0.3rem, 1vw, 1.2rem);
+  font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  font-size: clamp(2.5rem, 5vw, 5.5rem);
+  line-height: 1.5;
+}
+.emoji-clue span {
+  display: inline-block;
+  animation: clue-arrive 0.45s ease both;
+  animation-delay: calc(var(--i) * 0.08s);
+  filter: drop-shadow(0 6px 5px #82441f12);
+}
+.screen-star {
+  position: absolute;
+  color: #c49547;
+  font-size: 1.7rem;
+}
+.star-one {
+  left: 10%;
+  top: 12%;
+}
+.star-two {
+  right: 12%;
+  bottom: 16%;
+  font-size: 1rem;
+}
+.screen-number {
+  position: absolute;
+  bottom: 15px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.48rem;
+  letter-spacing: 0.25em;
+  color: #a48454;
+}
+.movie-hint-area {
+  text-align: center;
+  margin: 1rem 0;
+  min-height: 43px;
+}
+.movie-hint-area p {
+  font-size: 0.8rem;
+  color: #805647;
+  line-height: 1.6;
+  margin: 0.6rem 0 0;
+}
+.movie-answer {
+  padding: 0.8rem 0;
+}
+.movie-answer h3 {
+  font:
+    1.7rem/1.2 Georgia,
+    serif;
+  color: var(--plum);
+  margin: 0.3rem 0 0.6rem;
+}
+.movie-answer > p:last-child {
+  color: #89634e;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  margin: 0.3rem 0;
+}
+.movie-party .review-emoji {
+  flex: 0 0 110px;
+  align-self: center;
+  font-size: 1.25rem;
+  line-height: 1.6;
+}
+.movie-party .review-row {
+  align-items: center;
+}
+@keyframes clue-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px) rotate(-8deg) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+@media (min-width: 900px) {
+  .movie-party .emoji-screen {
+    min-height: clamp(230px, 37dvh, 390px);
+  }
+  .movie-party .party-round .question {
+    margin: 0.5rem 0 1rem;
+  }
+  .movie-party .party-round .team-answer {
+    padding: 0.5rem 0.55rem;
+  }
+  .movie-party .party-round .team-answer-heading {
+    margin-bottom: 0.4rem;
+  }
+
+  .movie-party .party-round .movie-answer h3 {
+    font-size: 1.45rem;
+  }
+  .movie-party .party-round .movie-answer {
+    padding: 0.5rem 0;
+  }
+  .movie-party .party-round .movie-answer > p:last-child {
+    font-size: 0.68rem;
+  }
+}
+@media (max-width: 600px) {
+  .movie-intro {
+    height: 115px;
+  }
+  .emoji-screen {
+    min-height: 210px;
+    padding: 2rem 1.2rem;
+  }
+  .emoji-clue {
+    font-size: clamp(2rem, 8.8vw, 3rem);
+    gap: 0.2rem;
+  }
+  .movie-party .review-emoji {
+    flex-basis: 90px;
+    font-size: 1rem;
+  }
+  .movie-party .question h2 {
+    font-size: 2rem;
+  }
+  .movie-party .party-controls {
+    margin-top: 1.3rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .movie-party * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.movie-party .winner-choice,
+.movie-party .party-round .winner-choice {
+  padding: 0;
+  overflow: hidden;
+}
+.team-winner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 54px;
+  padding: 0.65rem 0.8rem;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: var(--plum);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.team-winner strong {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.team-winner .answer-stake {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+}
+.team-winner .team-mascot {
+  width: 27px;
+  height: 27px;
+  flex-basis: 27px;
+}
+.team-winner[aria-pressed="true"] {
+  background: #e6efdc;
+}
+.team-winner[aria-pressed="true"] .answer-stake {
+  font-weight: 800;
+  color: #4f7651;
+}
+.team-winner:hover {
+  background: #f7ebd2;
+}
+.solo-controls {
+  text-align: center;
+  margin: 1rem auto;
+}
+#solo-correct {
+  min-height: 44px;
+  border: 1px solid #d8bb86;
+  border-radius: 26px;
+  padding: 0.7rem 1.1rem;
+  background: #fff7e1;
+  color: var(--plum);
+  font-weight: 700;
+}
+#solo-correct[aria-pressed="true"] {
+  background: #e6efdc;
+  border-color: #72966c;
+}
+.movie-party .movie-answer,
+.movie-party .party-round .movie-answer {
+  margin: 0.6rem 0 0.8rem;
+  padding: 1rem;
+  border: 1px solid #dfbd7e;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff3d2, #fffcf3);
+}
+.movie-answer:not([hidden]) {
+  animation: answer-unfurl 0.65s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.movie-answer:not([hidden]) h3 span {
+  display: inline-block;
+  animation: title-light 0.5s ease both;
+  animation-delay: calc(0.15s + var(--word) * 0.06s);
+}
+.movie-answer:not([hidden]) .eyebrow,
+.movie-answer:not([hidden]) > p:last-child {
+  animation: feedback-rise 0.5s 0.25s both;
+}
+@keyframes answer-unfurl {
+  from {
+    opacity: 0;
+    transform: perspective(700px) rotateX(-12deg) translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(700px) rotateX(0) translateY(0) scale(1);
+  }
+}
+@keyframes title-light {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}

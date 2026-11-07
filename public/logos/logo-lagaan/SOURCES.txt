@@ -38,11 +38,12 @@ https://doi.org/10.1177/09567976221108944
 Dataset: https://osf.io/7cmwf/
 License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0.
 https://creativecommons.org/licenses/by-nc-sa/4.0/
-Resized and converted from JPEG to WebP, then losslessly exported to PNG. License and original README
-are included in memory/study/. Study license applies only to those six files.
+Resized and converted from JPEG to WebP, then losslessly exported to PNG.
+The full study license is included in STUDY-LICENSE.txt and applies to the
+six Pikachu and Bugs Bunny PNGs in options/.
 
 Inspiration: https://www.today.com/life/mandela-effect-examples-rcna81130
 
 Game options are individual PNGs in options/. See docs/logo-lagaan-pngs.json
-for the source and crop of each option. The study license also applies to
-options/pikachu-*.png and options/bugs-bunny-*.png.
+for conversion provenance. Only the 60 PNGs used by the game are retained.
+Unused comparison sheets and intermediate WebP files have been removed.

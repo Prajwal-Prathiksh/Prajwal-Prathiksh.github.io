@@ -1,5 +1,11 @@
 export const games = [
   {
+    slug: 'filmi-phuljhadi',
+    name: 'Filmi Phuljhadi',
+    blurb: 'Guess the movie from emojis. Bollywood, Hollywood and a little Diwali drama.',
+    meta: 'Solo or teams · 30 movies',
+  },
+  {
     slug: 'logo-lagaan',
     name: 'Logo Lagaan',
     blurb: 'A Diwali memory game. Three versions, one original. Can you spot the original?',

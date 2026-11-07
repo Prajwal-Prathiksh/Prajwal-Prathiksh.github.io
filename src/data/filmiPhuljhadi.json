@@ -1,0 +1,465 @@
+[
+  {
+    "id": "movie-01",
+    "title": "3 Idiots",
+    "year": 2009,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🎓",
+      "👨‍🎓",
+      "👨‍🎓",
+      "👨‍🎓",
+      "💡"
+    ],
+    "explanation": "Engineering friends, a campus and a different way to learn.",
+    "hint": "Aamir Khan · engineering college"
+  },
+  {
+    "id": "movie-02",
+    "title": "Dangal",
+    "year": 2016,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👨‍👧‍👧",
+      "🤼‍♀️",
+      "🥇"
+    ],
+    "explanation": "A father trains his daughters to wrestle for gold.",
+    "hint": "Aamir Khan · wrestling"
+  },
+  {
+    "id": "movie-03",
+    "title": "PK",
+    "year": 2014,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👽",
+      "📻",
+      "🌍",
+      "❓"
+    ],
+    "explanation": "A stranded alien carries a radio and asks awkward questions.",
+    "hint": "Aamir Khan · an alien in India"
+  },
+  {
+    "id": "movie-04",
+    "title": "Bajrangi Bhaijaan",
+    "year": 2015,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👧",
+      "🤐",
+      "🚶",
+      "🇵🇰"
+    ],
+    "explanation": "A man helps a girl who cannot speak return home across the border.",
+    "hint": "Salman Khan · a lost child"
+  },
+  {
+    "id": "movie-05",
+    "title": "Taare Zameen Par",
+    "year": 2007,
+    "industry": "Bollywood",
+    "kind": "Title",
+    "emojis": [
+      "⭐",
+      "⭐",
+      "🌍",
+      "👦",
+      "🎨"
+    ],
+    "explanation": "Stars on Earth, with a young artist at the heart of the story.",
+    "hint": "Aamir Khan · a child and his art teacher"
+  },
+  {
+    "id": "movie-06",
+    "title": "Zindagi Na Milegi Dobara",
+    "year": 2011,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👬",
+      "✈️",
+      "🇪🇸",
+      "🪂",
+      "🐂"
+    ],
+    "explanation": "Three friends take a life-changing trip through Spain.",
+    "hint": "Hrithik Roshan · a Spanish road trip"
+  },
+  {
+    "id": "movie-07",
+    "title": "Dilwale Dulhania Le Jayenge",
+    "year": 1995,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🚂",
+      "❤️",
+      "👰",
+      "🌾"
+    ],
+    "explanation": "A train, a romance and a bride in the mustard fields.",
+    "hint": "Shah Rukh Khan · Raj and Simran"
+  },
+  {
+    "id": "movie-08",
+    "title": "Dhurandhar: The Revenge",
+    "year": 2026,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🕵️",
+      "🇵🇰",
+      "🔥",
+      "↩️",
+      "2️⃣"
+    ],
+    "explanation": "An undercover spy returns for the second chapter and revenge.",
+    "hint": "Ranveer Singh · a 2026 spy sequel"
+  },
+  {
+    "id": "movie-09",
+    "title": "Border 2",
+    "year": 2026,
+    "industry": "Bollywood",
+    "kind": "Title",
+    "emojis": [
+      "🇮🇳",
+      "🪖",
+      "🛩️",
+      "⚓",
+      "2️⃣"
+    ],
+    "explanation": "India’s armed forces and a second trip to the border.",
+    "hint": "Sunny Deol · a 2026 war sequel"
+  },
+  {
+    "id": "movie-10",
+    "title": "Andhadhun",
+    "year": 2018,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🎹",
+      "🕶️",
+      "🙈",
+      "🔪"
+    ],
+    "explanation": "A pianist who appears blind becomes entangled in a killing.",
+    "hint": "Ayushmann Khurrana · a pianist"
+  },
+  {
+    "id": "movie-11",
+    "title": "Jawan",
+    "year": 2023,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🚇",
+      "👩‍🦰",
+      "👩‍🦰",
+      "👮",
+      "🩹"
+    ],
+    "explanation": "A bandaged vigilante and his women-led crew take over a metro.",
+    "hint": "Shah Rukh Khan · a metro hijack"
+  },
+  {
+    "id": "movie-12",
+    "title": "Pathaan",
+    "year": 2023,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🕵️",
+      "🇮🇳",
+      "🦠",
+      "💥"
+    ],
+    "explanation": "An Indian agent races to stop a deadly biological attack.",
+    "hint": "Shah Rukh Khan · a spy comeback"
+  },
+  {
+    "id": "movie-13",
+    "title": "Stree 2",
+    "year": 2024,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👩",
+      "👻",
+      "🧑",
+      "❌",
+      "2️⃣"
+    ],
+    "explanation": "The town’s supernatural trouble returns, this time with a headless menace.",
+    "hint": "Rajkummar Rao · Chanderi, again"
+  },
+  {
+    "id": "movie-14",
+    "title": "Bhool Bhulaiyaa 3",
+    "year": 2024,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🏰",
+      "👻",
+      "💃",
+      "💃",
+      "3️⃣"
+    ],
+    "explanation": "A haunted palace, dancing spirits and a third supernatural adventure.",
+    "hint": "Kartik Aaryan · Rooh Baba returns"
+  },
+  {
+    "id": "movie-15",
+    "title": "Chhaava",
+    "year": 2025,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👑",
+      "⚔️",
+      "🦁",
+      "🇮🇳"
+    ],
+    "explanation": "A warrior king, the Maratha legacy and the lion-cub title.",
+    "hint": "Vicky Kaushal · Sambhaji Maharaj"
+  },
+  {
+    "id": "movie-16",
+    "title": "Saiyaara",
+    "year": 2025,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🎤",
+      "✍️",
+      "❤️",
+      "🧠",
+      "🎶"
+    ],
+    "explanation": "A singer and a writer fall in love as memory becomes fragile.",
+    "hint": "Ahaan Panday · a musical love story"
+  },
+  {
+    "id": "movie-17",
+    "title": "Laapataa Ladies",
+    "year": 2024,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👰",
+      "👰",
+      "🚂",
+      "🔀",
+      "🔎"
+    ],
+    "explanation": "Two veiled brides get separated from the right husbands after a train journey.",
+    "hint": "Kiran Rao · two missing brides"
+  },
+  {
+    "id": "movie-18",
+    "title": "12th Fail",
+    "year": 2023,
+    "industry": "Bollywood",
+    "kind": "Plot",
+    "emojis": [
+      "1️⃣",
+      "2️⃣",
+      "❌",
+      "📚",
+      "👮"
+    ],
+    "explanation": "An exam setback begins a determined journey towards the civil services.",
+    "hint": "Vikrant Massey · an IPS dream"
+  },
+  {
+    "id": "movie-19",
+    "title": "Titanic",
+    "year": 1997,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🚢",
+      "🧊",
+      "💔",
+      "🌊"
+    ],
+    "explanation": "An ocean liner, an iceberg and a doomed romance.",
+    "hint": "Leonardo DiCaprio · an ocean voyage"
+  },
+  {
+    "id": "movie-20",
+    "title": "The Lion King",
+    "year": 1994,
+    "industry": "Hollywood",
+    "kind": "Title",
+    "emojis": [
+      "🦁",
+      "👑",
+      "🌅"
+    ],
+    "explanation": "A lion prince finds his way back to his kingdom.",
+    "hint": "Simba · an animated classic"
+  },
+  {
+    "id": "movie-21",
+    "title": "The Super Mario Galaxy Movie",
+    "year": 2026,
+    "industry": "Hollywood",
+    "kind": "Title",
+    "emojis": [
+      "🍄",
+      "👨‍🔧",
+      "🚀",
+      "🌌",
+      "⭐"
+    ],
+    "explanation": "The mushroom-world plumber takes the adventure into the galaxy.",
+    "hint": "Nintendo · a 2026 animated sequel"
+  },
+  {
+    "id": "movie-22",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👨‍🚀",
+      "☀️",
+      "🪨",
+      "🤝",
+      "🌌"
+    ],
+    "explanation": "A space mission to save the Sun brings an unexpected alien friendship.",
+    "hint": "Ryan Gosling · an astronaut and Rocky"
+  },
+  {
+    "id": "movie-23",
+    "title": "Inception",
+    "year": 2010,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "😴",
+      "🪆",
+      "🏙️",
+      "🌀"
+    ],
+    "explanation": "Dreams within dreams, a bending city and a spinning top.",
+    "hint": "Leonardo DiCaprio · dreams within dreams"
+  },
+  {
+    "id": "movie-24",
+    "title": "Interstellar",
+    "year": 2014,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👨‍🚀",
+      "🕳️",
+      "⏳",
+      "👨‍👧"
+    ],
+    "explanation": "A father crosses space and time while his daughter waits on Earth.",
+    "hint": "Matthew McConaughey · space and a father-daughter bond"
+  },
+  {
+    "id": "movie-25",
+    "title": "Barbie",
+    "year": 2023,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👱‍♀️",
+      "🩷",
+      "🏠",
+      "🛼"
+    ],
+    "explanation": "A pink dream world and a doll’s journey into the real world.",
+    "hint": "Margot Robbie · life in plastic"
+  },
+  {
+    "id": "movie-26",
+    "title": "Oppenheimer",
+    "year": 2023,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "👨‍🔬",
+      "⚛️",
+      "🏜️",
+      "💥"
+    ],
+    "explanation": "A physicist and a desert test change the world.",
+    "hint": "Cillian Murphy · the Manhattan Project"
+  },
+  {
+    "id": "movie-27",
+    "title": "Inside Out 2",
+    "year": 2024,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🧠",
+      "😊",
+      "😡",
+      "😰",
+      "2️⃣"
+    ],
+    "explanation": "Anxiety joins the emotions as a teenager’s mind gets busier.",
+    "hint": "Pixar · Riley becomes a teenager"
+  },
+  {
+    "id": "movie-28",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "industry": "Hollywood",
+    "kind": "Plot",
+    "emojis": [
+      "🏜️",
+      "🪱",
+      "👑",
+      "⚔️",
+      "2️⃣"
+    ],
+    "explanation": "Desert worms, a struggle for power and the second chapter on Arrakis.",
+    "hint": "Timothée Chalamet · Arrakis"
+  },
+  {
+    "id": "movie-29",
+    "title": "Deadpool & Wolverine",
+    "year": 2024,
+    "industry": "Hollywood",
+    "kind": "Title",
+    "emojis": [
+      "🔴",
+      "⚔️",
+      "🟡",
+      "🐺"
+    ],
+    "explanation": "The red-suited mercenary teams up with the yellow-suited clawed mutant.",
+    "hint": "Ryan Reynolds and Hugh Jackman"
+  },
+  {
+    "id": "movie-30",
+    "title": "A Minecraft Movie",
+    "year": 2025,
+    "industry": "Hollywood",
+    "kind": "Title",
+    "emojis": [
+      "⛏️",
+      "🟩",
+      "🧱",
+      "🐔"
+    ],
+    "explanation": "Pickaxes, blocks and a very familiar cubic world.",
+    "hint": "Jack Black · a block-building game"
+  }
+]

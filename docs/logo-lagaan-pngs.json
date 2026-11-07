@@ -1,605 +1,605 @@
 {
-  "note": "Each option is an independent PNG, losslessly cropped from the previously used artwork. No neighboring panels are present. Source credits and study licenses still apply.",
+  "note": "Each option is an independent PNG. Source credits and study licenses still apply. Source intermediate filenames record conversion history only; unused intermediate images have been removed.",
   "images": [
     {
       "output": "/logos/logo-lagaan/options/amul-1.png",
-      "source": "/logos/logo-lagaan/memory/amul-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "amul-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/amul-2.png",
-      "source": "/logos/logo-lagaan/memory/amul-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "amul-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/amul-3.png",
-      "source": "/logos/logo-lagaan/memory/amul-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 608
-      }
+      },
+      "sourceIntermediate": "amul-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/parleg-1.png",
-      "source": "/logos/logo-lagaan/memory/parleg-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "parleg-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/parleg-2.png",
-      "source": "/logos/logo-lagaan/memory/parleg-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "parleg-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/parleg-3.png",
-      "source": "/logos/logo-lagaan/memory/parleg-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "parleg-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/nirma-1.png",
-      "source": "/logos/logo-lagaan/memory/nirma-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "nirma-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/nirma-2.png",
-      "source": "/logos/logo-lagaan/memory/nirma-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "nirma-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/nirma-3.png",
-      "source": "/logos/logo-lagaan/memory/nirma-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "nirma-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/maharaja-1.png",
-      "source": "/logos/logo-lagaan/memory/maharaja-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "maharaja-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/maharaja-2.png",
-      "source": "/logos/logo-lagaan/memory/maharaja-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "maharaja-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/maharaja-3.png",
-      "source": "/logos/logo-lagaan/memory/maharaja-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "maharaja-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/gattu-1.png",
-      "source": "/logos/logo-lagaan/memory/gattu-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "gattu-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/gattu-2.png",
-      "source": "/logos/logo-lagaan/memory/gattu-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "gattu-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/gattu-3.png",
-      "source": "/logos/logo-lagaan/memory/gattu-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "gattu-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/mdh-1.png",
-      "source": "/logos/logo-lagaan/memory/mdh-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "mdh-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/mdh-2.png",
-      "source": "/logos/logo-lagaan/memory/mdh-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "mdh-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/mdh-3.png",
-      "source": "/logos/logo-lagaan/memory/mdh-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "mdh-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/thums-up-1.png",
-      "source": "/logos/logo-lagaan/memory/thums-up-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "thums-up-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/thums-up-2.png",
-      "source": "/logos/logo-lagaan/memory/thums-up-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "thums-up-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/thums-up-3.png",
-      "source": "/logos/logo-lagaan/memory/thums-up-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "thums-up-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/aashirvaad-1.png",
-      "source": "/logos/logo-lagaan/memory/aashirvaad-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "aashirvaad-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/aashirvaad-2.png",
-      "source": "/logos/logo-lagaan/memory/aashirvaad-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "aashirvaad-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/aashirvaad-3.png",
-      "source": "/logos/logo-lagaan/memory/aashirvaad-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "aashirvaad-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/goodknight-1.png",
-      "source": "/logos/logo-lagaan/memory/goodknight-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "goodknight-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/goodknight-2.png",
-      "source": "/logos/logo-lagaan/memory/goodknight-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "goodknight-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/goodknight-3.png",
-      "source": "/logos/logo-lagaan/memory/goodknight-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "goodknight-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/kissan-1.png",
-      "source": "/logos/logo-lagaan/memory/kissan-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "kissan-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/kissan-2.png",
-      "source": "/logos/logo-lagaan/memory/kissan-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "kissan-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/kissan-3.png",
-      "source": "/logos/logo-lagaan/memory/kissan-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "kissan-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/haldirams-1.png",
-      "source": "/logos/logo-lagaan/memory/haldirams-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "haldirams-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/haldirams-2.png",
-      "source": "/logos/logo-lagaan/memory/haldirams-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "haldirams-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/haldirams-3.png",
-      "source": "/logos/logo-lagaan/memory/haldirams-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "haldirams-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/bournvita-1.png",
-      "source": "/logos/logo-lagaan/memory/bournvita-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "bournvita-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/bournvita-2.png",
-      "source": "/logos/logo-lagaan/memory/bournvita-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "bournvita-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/bournvita-3.png",
-      "source": "/logos/logo-lagaan/memory/bournvita-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "bournvita-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/britannia-1.png",
-      "source": "/logos/logo-lagaan/memory/britannia-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "britannia-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/britannia-2.png",
-      "source": "/logos/logo-lagaan/memory/britannia-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "britannia-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/britannia-3.png",
-      "source": "/logos/logo-lagaan/memory/britannia-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "britannia-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/frooti-1.png",
-      "source": "/logos/logo-lagaan/memory/frooti-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "frooti-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/frooti-2.png",
-      "source": "/logos/logo-lagaan/memory/frooti-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "frooti-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/frooti-3.png",
-      "source": "/logos/logo-lagaan/memory/frooti-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "frooti-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/monopoly-1.png",
-      "source": "/logos/logo-lagaan/memory/monopoly-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "monopoly-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/monopoly-2.png",
-      "source": "/logos/logo-lagaan/memory/monopoly-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "monopoly-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/monopoly-3.png",
-      "source": "/logos/logo-lagaan/memory/monopoly-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "monopoly-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/kitkat-1.png",
-      "source": "/logos/logo-lagaan/memory/kitkat-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "kitkat-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/kitkat-2.png",
-      "source": "/logos/logo-lagaan/memory/kitkat-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "kitkat-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/kitkat-3.png",
-      "source": "/logos/logo-lagaan/memory/kitkat-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "kitkat-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/skechers-1.png",
-      "source": "/logos/logo-lagaan/memory/skechers-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "skechers-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/skechers-2.png",
-      "source": "/logos/logo-lagaan/memory/skechers-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "skechers-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/skechers-3.png",
-      "source": "/logos/logo-lagaan/memory/skechers-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "skechers-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/oreo-1.png",
-      "source": "/logos/logo-lagaan/memory/oreo-pair.webp",
       "crop": {
         "left": 600,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "oreo-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/oreo-2.png",
-      "source": "/logos/logo-lagaan/memory/oreo-pair.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "oreo-pair.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/oreo-3.png",
-      "source": "/logos/logo-lagaan/memory/oreo-third.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 600,
         "height": 600
-      }
+      },
+      "sourceIntermediate": "oreo-third.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/pikachu-1.png",
-      "source": "/logos/logo-lagaan/memory/study/pikachu-0.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 500,
         "height": 500
-      }
+      },
+      "sourceIntermediate": "pikachu-0.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/pikachu-2.png",
-      "source": "/logos/logo-lagaan/memory/study/pikachu-1.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 500,
         "height": 500
-      }
+      },
+      "sourceIntermediate": "pikachu-1.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/pikachu-3.png",
-      "source": "/logos/logo-lagaan/memory/study/pikachu-2.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 500,
         "height": 500
-      }
+      },
+      "sourceIntermediate": "pikachu-2.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/bugs-bunny-1.png",
-      "source": "/logos/logo-lagaan/memory/study/bugs-bunny-0.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 500,
         "height": 500
-      }
+      },
+      "sourceIntermediate": "bugs-bunny-0.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/bugs-bunny-2.png",
-      "source": "/logos/logo-lagaan/memory/study/bugs-bunny-1.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 500,
         "height": 500
-      }
+      },
+      "sourceIntermediate": "bugs-bunny-1.webp"
     },
     {
       "output": "/logos/logo-lagaan/options/bugs-bunny-3.png",
-      "source": "/logos/logo-lagaan/memory/study/bugs-bunny-2.webp",
       "crop": {
         "left": 0,
         "top": 0,
         "width": 500,
         "height": 500
-      }
+      },
+      "sourceIntermediate": "bugs-bunny-2.webp"
     }
   ]
 }

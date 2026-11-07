@@ -16,7 +16,18 @@ const pebbles = [
 ---
 
 <svg class="thumb" viewBox="0 0 320 200" role="img" aria-hidden="true">
-  {slug === 'logo-lagaan' && (
+  {slug === 'filmi-phuljhadi' && (
+    <g>
+      <rect width="320" height="200" fill="#fff2da" />
+      <path d="M0 10Q160 65 320 10" fill="none" stroke="#d19b48" />
+      <rect x="30" y="51" width="260" height="112" rx="12" fill="#fffaf0" stroke="#d9ba85" />
+      <g fill="#ddcba9">{[61,87,113,139].map(y => <><rect x="35" y={y} width="7" height="10" rx="2" /><rect x="278" y={y} width="7" height="10" rx="2" /></>)}</g>
+      <text x="160" y="124" text-anchor="middle" font-size="40">🍿 🎬 ✨</text>
+      <path d="M143 178q17 18 34 0z" fill="#b65137" /><path d="M160 176q-8-11 1-22q9 14-1 22" fill="#efac32" />
+      <path d="m270 25 3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#bd3e56" />
+    </g>
+  )}
+  {slug === 'logo-lagaan'  && (
     <g>
       <rect width="320" height="200" fill="#fff2da" />
       <path d="M0 10Q160 65 320 10" fill="none" stroke="#d19b48" />

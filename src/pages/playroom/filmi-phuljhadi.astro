@@ -1,0 +1,65 @@
+---
+import Base from '../../layouts/Base.astro';
+import '../../styles/diwali-party.css';
+import '../../styles/filmi-phuljhadi.css';
+---
+<Base wide title="Filmi Phuljhadi" description="Guess Bollywood and Hollywood movies from emoji clues. A Diwali party game with teams, hints and a mascot race.">
+  <p class="back"><a href="/playroom/">← Playroom</a></p>
+  <div class="logo-party movie-party" data-zen>
+    <div class="garland" aria-hidden="true">{Array.from({length:17}, (_,i) => <i style={`--i:${i}`} />)}</div>
+    <header class="party-bar">
+      <a class="party-wordmark" href="/playroom/filmi-phuljhadi/">✦ FILMI PHULJHADI</a>
+      <button type="button" class="zen-open fullscreen-button" data-zen-open aria-label="Full screen"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>Full screen</button>
+      <button type="button" class="zen-exit" data-zen-exit aria-label="Exit full screen">✕ <span>Exit</span></button>
+    </header>
+    <div class="party-content">
+      <section id="setup" class="setup">
+        <div class="movie-intro" aria-hidden="true"><span>🍿</span><span>🎬</span><span>✨</span></div>
+        <h1>Tiny clues.<br /><em>Big pictures.</em></h1>
+        <p class="lede">30 movies. One filmi Diwali.</p>
+        <form id="setup-form" class="setup-panel">
+          <div class="setup-fields"><label>Players<select id="play-mode"><option value="party" selected>Party</option><option value="solo">Solo</option></select></label></div>
+          <div id="team-setup">
+            <label>Teams<select id="team-count"><option value="2">2 teams</option><option value="3">3 teams</option><option value="4">4 teams</option><option value="5">5 teams</option><option value="6">6 teams</option></select></label>
+            <div id="team-name-fields" class="team-name-fields"></div>
+          </div>
+          <p class="scoring-note"><b>3 pts</b> before hints <span>·</span> <b>1 pt</b> with hints</p>
+          <button class="primary start" type="submit">Lights, camera, play <span aria-hidden="true">↗</span></button>
+        </form>
+        <p class="movie-mix">18 Bollywood · 12 Hollywood</p>
+      </section>
+      <section id="round" hidden aria-label="Movie round">
+        <div class="round-meta"><span id="round-number"></span><span id="score"></span><button id="restart" type="button" class="text-button">New game</button></div>
+        <div id="scoreboard" class="party-scoreboard" role="region" aria-label="Team score race" hidden></div>
+        <span id="score-announcement" class="sr-only" role="status"></span>
+        <div id="progress" class="progress" role="progressbar" aria-label="Rounds completed" aria-valuemin="0"><i></i></div>
+        <div class="round-workspace">
+          <div class="round-stage movie-stage">
+            <div class="question"><p id="movie-category" class="eyebrow"></p><h2 id="question-title" tabindex="-1">Name the movie.</h2></div>
+            <div class="emoji-screen"><span class="screen-star star-one" aria-hidden="true">✧</span><div id="emoji-clue" class="emoji-clue" role="img" aria-label="Movie emoji clue"></div><span class="screen-star star-two" aria-hidden="true">✦</span><span class="screen-number" aria-hidden="true">A DIWALI PICTURE</span></div>
+            <div class="movie-hint-area"><button id="hint-toggle" type="button" aria-expanded="false" aria-controls="movie-hint">✧ Hint</button><p id="movie-hint" hidden></p></div>
+            <div id="solo-controls" class="solo-controls" hidden><button id="solo-correct" type="button" aria-pressed="false">Got it · 3 pts</button></div>
+          </div>
+          <div class="round-sidebar">
+            <section id="party-controls" class="party-controls" aria-label="Select the first team with a correct answer" hidden><div class="lock-heading"><h3>First correct</h3></div><div id="team-answers" class="team-answers"></div></section>
+            <div class="answer-area">
+              <div id="movie-answer" class="movie-answer" aria-live="polite" hidden><p id="answer-meta" class="eyebrow"></p><h3 id="answer-title"></h3><p id="answer-explanation"></p></div>
+              <div id="feedback" role="status" aria-live="polite"></div>
+              <button id="reveal" class="primary" type="button">Reveal <span aria-hidden="true">✦</span></button>
+              <button id="next" class="primary" type="button" hidden>Next →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="results" class="results" hidden><div class="result-medal" aria-hidden="true">✦</div><h2 id="result-title" tabindex="-1"></h2><p id="result-copy" class="lede"></p><div id="final-scores" class="final-scores"></div><button id="play-again" type="button" class="primary">Play again ↗</button><details class="review"><summary>The full cast</summary><div id="answer-review"></div></details></section>
+    </div>
+    <footer class="party-footer"><span class="diya" aria-hidden="true"><i></i></span><span>Happy Diwali</span><span class="diya" aria-hidden="true"><i></i></span></footer>
+    <div id="confetti" class="confetti" aria-hidden="true"></div>
+  </div>
+  <details class="credits"><summary>About the clues</summary><p>Original emoji riddles, inspired by movie-emoji quizzes. 60% Bollywood, 40% Hollywood, with classics and releases through 2026. The host selects the first correct team. No selection means no points. <a href="/games/filmi-phuljhadi/sources.txt">Research and sources</a>.</p></details>
+</Base>
+<script>
+  import '../../scripts/filmiPhuljhadi';
+  import { setupZen } from '../../scripts/zen';
+  setupZen();
+</script>

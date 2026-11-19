@@ -106,6 +106,17 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           Also choose throws for
           <select name="pickFor" id="pick-for"><option value="">no computer</option></select>
         </label>
+        <label class="check">
+          Jump to the end, where
+          <select name="endgame">
+            <option value="">off (play from the start)</option>
+            <option value="1">your last move wins 1st</option>
+            <option value="2">your last move takes 2nd</option>
+            <option value="3">your last move takes 3rd</option>
+            <option value="4">a computer's last move leaves you last</option>
+          </select>
+        </label>
+        <p class="hint muted">The jump plays a quick game behind the scenes with one human, then resumes one finishing move before the end.</p>
       </fieldset>
       <div class="setup-actions">
         <button type="submit" class="btn primary">Start game</button>
@@ -238,10 +249,37 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           <div id="win-bar" class="win-bar"></div>
           <p id="win-help" class="win-help" hidden>Live estimate for the next place still open. Finished players leave the bar, and it updates after each roll and move. The model trained on four-player games where every pawn starts at home; other setups have not been calibrated.</p>
         </section>
+        <button type="button" id="trajectory-open" class="btn trajectory-open" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18M4 15l4.5-5 4 3 7.5-8" /></svg>
+          Race replay
+        </button>
         <ol id="players" class="players"></ol>
       </div>
     </div>
   </div>
+
+  <dialog id="trajectory" class="trajectory" aria-labelledby="trajectory-title">
+    <div class="trajectory-card">
+      <header class="trajectory-head">
+        <div>
+          <p class="trajectory-kicker">Race replay</p>
+          <h2 id="trajectory-title">Game over</h2>
+          <p id="trajectory-sub" class="trajectory-sub"></p>
+        </div>
+        <button type="button" class="trajectory-close" data-trajectory-close aria-label="Close race replay">×</button>
+      </header>
+      <ol id="trajectory-standings" class="trajectory-standings"></ol>
+      <div class="trajectory-chart" data-tj="chart" tabindex="0" aria-label="Outlook chart. Use the arrow keys to step through the game."></div>
+      <div class="trajectory-readout" data-tj="readout" aria-live="polite"></div>
+      <ul class="trajectory-moments" data-tj="moments"></ul>
+      <p class="trajectory-hint">Hover, drag, or use the arrow keys to step through the game. Each band is the race for one place; a line ends when its player finishes or the place is taken.</p>
+      <footer class="trajectory-actions">
+        <button type="button" id="trajectory-watch" class="btn primary" hidden>Watch the rest</button>
+        <button type="button" id="trajectory-new" class="btn">New game</button>
+        <button type="button" class="btn" data-trajectory-close>Close</button>
+      </footer>
+    </div>
+  </dialog>
 
   <dl id="stats" class="stats"></dl>
 
@@ -328,7 +366,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   import { observeAction, predictedAcceptance } from '../../scripts/chowkaBharaOpponent';
   import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
   import { outlookStrength, winProbabilities } from '../../scripts/chowkaBharaWin';
-  import { resolveTurn } from '../../scripts/chowkaBharaMatch';
+  import { copyTurn, resolveTurn } from '../../scripts/chowkaBharaMatch';
+  import { rehearseEndgame } from '../../scripts/chowkaBharaEndgame';
+  import { mountTrajectory, type OutlookSample } from '../../scripts/chowkaBharaTrajectory';
   import { recordResult, renderRecord } from '../../scripts/scores';
 
   interface Seated {
@@ -425,6 +465,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const entryToggleEl = $<HTMLButtonElement>('entry-toggle');
   const homeGuidesEl = document.getElementById('home-guides')!;
   const homeToggleEl = $<HTMLButtonElement>('home-toggle');
+  const trajectoryEl = $<HTMLDialogElement>('trajectory');
+  const trajectoryOpenEl = $<HTMLButtonElement>('trajectory-open');
+  const trajectoryWatchEl = $<HTMLButtonElement>('trajectory-watch');
 
   let seated: Seated[] = [];
   let state: State = newGame([0, 2]);
@@ -447,6 +490,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let turnStartSocial: SocialState = structuredClone(social);
   let pendingOffers: { from: number; to: number; target: number }[] = [];
   let outlookCache: { state: State; current: number; turn: string; placings: string; chances: number[] } | null = null;
+  // One outlook sample per history step, for the race replay at the end.
+  let outlookTrail: OutlookSample[] = [];
+  let trajectoryShown = ''; // which ending has already opened the replay
+  let rehearsed = false; // a testing jump to the endgame, kept out of the saved record
+  let unmountTrajectory: (() => void) | null = null;
   const pawnEls: HTMLButtonElement[][] = [];
   const hopping = new Map<string, [number, number]>(); // pawn key -> board point during a hop
   const onlineMode = new URLSearchParams(location.search).has('online') && window.parent !== window;
@@ -914,6 +962,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     hintEl.hidden = !human;
     hintTextEl.hidden = reviewing || !hintTextEl.textContent;
 
+    sampleOutlook();
     const showOutlook = seated.length >= 2 && phase !== 'setup' && !reviewing
       && (phase !== 'over' || !watchEl.hidden);
     const resolution = showOutlook ? resolveTurn(state, current, turn, turnStartState) : null;
@@ -971,6 +1020,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       .join('');
     renderRecord(statsEl, RECORD_KEY);
     onlineSnapshot();
+    maybeShowTrajectory();
   }
 
   const sameMove = (a: Move, b: Move) =>
@@ -987,22 +1037,132 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     return rounded;
   }
 
+  function outlookChances(s: State, player: number, t: Turn, tStart: State, placed: number[]): number[] {
+    const predictionCurrent = placed.includes(player) ? nextRival(player, placed) : player;
+    const predictionTurn = predictionCurrent === player ? t : newTurn();
+    const chances = winProbabilities(s, predictionCurrent, predictionTurn,
+      predictionCurrent === player ? tStart : s, placed);
+    const total = chances.reduce((sum, chance) => sum + chance, 0);
+    const active = seated.map((_, i) => !placed.includes(i));
+    return Number.isFinite(total) && total > 0
+      ? chances.map((chance) => chance / total)
+      : active.map((yes) => yes ? 1 / active.filter(Boolean).length : 0);
+  }
+
+  // The place being contested: the next open one, counting a player who has
+  // just brought their last pawn home before their turn formally ends.
+  function outlookPlace(s: State, player: number, t: Turn, tStart: State, placed: number[]): number {
+    const resolution = resolveTurn(s, player, t, tStart);
+    const provisional = resolution.over && !resolution.rolledBack
+      && !placed.includes(player) && finished(resolution.state, player) ? 1 : 0;
+    return placed.length + provisional;
+  }
+
   function currentWinChances(): number[] {
     const turnKey = `${turn.bank.join(',')}|${turn.owed}|${turn.streak}|${turn.run.join(',')}`;
     const placingsKey = placings.join(',');
     if (outlookCache?.state === state && outlookCache.current === current
       && outlookCache.turn === turnKey && outlookCache.placings === placingsKey) return outlookCache.chances;
-    const predictionCurrent = placings.includes(current) ? nextRival(current) : current;
-    const predictionTurn = predictionCurrent === current ? turn : newTurn();
-    const chances = winProbabilities(state, predictionCurrent, predictionTurn,
-      predictionCurrent === current ? turnStartState : state, placings);
-    const total = chances.reduce((sum, chance) => sum + chance, 0);
-    const active = seated.map((_, i) => !placings.includes(i));
-    const normalized = Number.isFinite(total) && total > 0
-      ? chances.map((chance) => chance / total)
-      : active.map((yes) => yes ? 1 / active.filter(Boolean).length : 0);
+    const normalized = outlookChances(state, current, turn, turnStartState, placings);
     outlookCache = { state, current, turn: turnKey, placings: placingsKey, chances: normalized };
     return normalized;
+  }
+
+  function addOutlookSample(sample: OutlookSample) {
+    const last = outlookTrail.at(-1);
+    if (last && last.step === sample.step && last.place === sample.place) outlookTrail[outlookTrail.length - 1] = sample;
+    else if (!last || sample.step >= last.step) outlookTrail.push(sample);
+  }
+
+  function sampleOutlook() {
+    if (phase === 'setup' || seated.length < 2 || onlineEnded) return;
+    const place = outlookPlace(state, current, turn, turnStartState, placings);
+    if (seated.length - place < 2) return;
+    addOutlookSample({ step: positions.length - 1, place, chances: currentWinChances() });
+  }
+
+  // ---- Race replay ----
+
+  function trajectoryTitle(): { title: string; sub: string } {
+    const finishedAll = placings.length >= seated.length;
+    const winner = placings[0];
+    const me = seated.findIndex((p) => p.level === null);
+    const mine = onlineMode ? onlineSeat : soloHuman() ? me : -1;
+    const steps = positions.length - 1;
+    if (winner === undefined) return { title: 'No one could finish', sub: `Every remaining pawn was stuck after ${steps} steps.` };
+    const myPlace = placings.indexOf(mine);
+    if (finishedAll) {
+      return {
+        title: myPlace === 0 ? 'You won!' : myPlace > 0 ? `You finished ${ordinal(myPlace + 1)}` : 'Final standings',
+        sub: `Every place decided after ${steps} steps.`,
+      };
+    }
+    return {
+      title: mine === winner ? 'You won!' : `${seated[winner].name} won${mine >= 0 ? '' : '!'}`,
+      sub: `1st place decided after ${steps} steps.`,
+    };
+  }
+
+  function openTrajectory() {
+    if (seated.length < 2) return;
+    const { title, sub } = trajectoryTitle();
+    $('trajectory-title').textContent = title;
+    $('trajectory-sub').textContent = sub;
+    $('trajectory-standings').innerHTML = seated.map((_, i) => i)
+      .sort((a, b) => (placings.indexOf(a) + 1 || 9) - (placings.indexOf(b) + 1 || 9))
+      .map((i) => {
+        const place = placings.indexOf(i);
+        const p = seated[i];
+        const you = (onlineMode ? onlineSeat === i : isYou(i)) ? ' you' : '';
+        return `<li class="${place >= 0 ? 'placed' : 'racing'}${you}">
+          <em>${place >= 0 ? ordinal(place + 1) : '…'}</em>
+          <svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${p.colour}"/></svg>
+          <span>${escapeHtml(p.name)}</span>
+        </li>`;
+      }).join('');
+    trajectoryWatchEl.hidden = watchEl.hidden || phase !== 'over';
+    trajectoryWatchEl.textContent = watchEl.textContent;
+    $('trajectory-new').hidden = onlineMode;
+    if (!trajectoryEl.open) {
+      if (onlineMode) trajectoryEl.show();
+      else trajectoryEl.showModal();
+    }
+    unmountTrajectory?.();
+    unmountTrajectory = mountTrajectory(trajectoryEl, {
+      trail: outlookTrail,
+      placings,
+      lastStep: positions.length - 1,
+      descriptions: historyDescriptions,
+      players: seated.map((p, i) => ({
+        name: p.name,
+        colour: p.colour,
+        ink: COLOURS.find((c) => c.id === p.colour)!.chalk,
+        you: onlineMode ? onlineSeat === i : isYou(i),
+      })),
+    });
+  }
+
+  function closeTrajectory() {
+    if (trajectoryEl.open) trajectoryEl.close();
+  }
+
+  // Open once when the first place is decided, and again when watching ends.
+  function maybeShowTrajectory() {
+    trajectoryOpenEl.hidden = phase !== 'over' || outlookTrail.length < 2 || onlineEnded;
+    if (phase !== 'over' || onlineEnded || outlookTrail.length < 2) return;
+    const key = `${gameId}|${placings.join(',')}|${watchEl.hidden}`;
+    if (trajectoryShown === key) return;
+    trajectoryShown = key;
+    const id = gameId;
+    setTimeout(() => {
+      if (id === gameId && phase === 'over' && trajectoryShown === key) openTrajectory();
+    }, 900 * Math.min(1, Number(speedEl.value)));
+  }
+
+  function resetTrajectory() {
+    outlookTrail = [];
+    trajectoryShown = '';
+    closeTrajectory();
   }
 
   function choiceButton(label: string, move: Move) {
@@ -1052,9 +1212,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   // throw, or move. See Turn in chowkaBhara.ts for the counting.
 
   const risky = () => canSkip(turn);
-  const nextRival = (player: number) => {
+  const nextRival = (player: number, placed = placings) => {
     let rival = (player + 1) % seated.length;
-    while (placings.includes(rival) && rival !== player) rival = (rival + 1) % seated.length;
+    while (placed.includes(rival) && rival !== player) rival = (rival + 1) % seated.length;
     return rival;
   };
   const activePlayers = () => seated.map((_, i) => i).filter((i) => !placings.includes(i));
@@ -1102,7 +1262,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '. The rest are stuck for good.';
       } else {
         statusEl.textContent = "Draw: no one can move any more, so the game can't go on.";
-        if (soloHuman()) recordResult(RECORD_KEY, 'draw');
+        if (soloHuman() && !rehearsed) recordResult(RECORD_KEY, 'draw');
       }
       render();
       return;
@@ -1246,6 +1406,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   watchEl.addEventListener('click', () => {
     if (phase !== 'over' || watching) return;
+    closeTrajectory();
     watching = true;
     phase = 'busy'; // the game is running again
     watchEl.hidden = true;
@@ -1456,7 +1617,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       statusEl.textContent = isYou(player)
         ? 'You win! All four pawns are in the centre.'
         : `${who.name} wins${human ? '! All four pawns are in the centre.' : '.'}`;
-      if (soloHuman()) recordResult(RECORD_KEY, human ? 'win' : 'loss');
+      if (soloHuman() && !rehearsed) recordResult(RECORD_KEY, human ? 'win' : 'loss');
       // Play on for the other places if someone is left to watch or play.
       const humansLeft = left.some((i) => seated[i].level === null);
       watchEl.hidden = !(left.length >= 2 && (human || humansLeft));
@@ -1497,11 +1658,72 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     lastEl.textContent = '';
     hintTextEl.textContent = '';
     thrownEl.textContent = '';
+    resetTrajectory();
     setupEl.hidden = true;
     matchbarEl.hidden = false;
     $('thrower').hidden = false;
     buildPawns();
+    const endgame = debugAllowed && soloHuman() && seated[0].level === null ? Number(f.get('endgame')) : 0;
+    rehearsed = false;
+    if (endgame && jumpToEndgame(endgame)) return;
     startTurn();
+  }
+
+  // Testing: replay a quick headless game and resume one finishing move
+  // before the end, so the race replay can be checked without a full match.
+  function jumpToEndgame(place: number): boolean {
+    statusEl.textContent = 'Setting up the endgame…';
+    const rehearsal = rehearseEndgame(seated.length, state.entry, place);
+    if (!rehearsal) {
+      statusEl.textContent = 'Could not find that ending; starting from the beginning.';
+      return false;
+    }
+    const name = (i: number) => seated[i].name;
+    positions = [rehearsal.steps[0].state];
+    historyDescriptions = ['Game started.'];
+    const trail: OutlookSample[] = [];
+    const sample = (s: State, player: number, t: Turn, tStart: State, placed: number[]) => {
+      const place = outlookPlace(s, player, t, tStart, placed);
+      if (seated.length - place >= 2) trail.push({ step: positions.length - 1, place, chances: outlookChances(s, player, t, tStart, placed) });
+    };
+    const first = rehearsal.steps[0];
+    sample(first.state, first.player, first.turn, first.turnStart, first.placings);
+    rehearsal.steps.slice(0, rehearsal.cut).forEach((step, i) => {
+      const who = name(step.player);
+      const { action } = step;
+      let text = '';
+      if (action.kind === 'throw') {
+        text = step.lost ? `${who} lost the turn with a third 4 or 8.`
+          : `${who} threw ${action.value}${action.value === 4 || action.value === 8 ? ' and earned another throw' : ''}.`;
+      } else if (action.kind === 'skip') text = `${who} skips the risky throw.`;
+      else if (action.move.from === WAITING) text = `${who} brought ${action.move.pawns.length === 4 ? 'all four pawns' : 'a pawn'} in.`;
+      else if (step.hits.length) text = `${who} hit ${[...new Set(step.hits.map((h) => name(h.player)))].join(' and ')}! Bonus throw.`;
+      else if (action.move.to === HOME) text = `${who} reached the centre.`;
+      else text = `${who} moved ${action.move.steps}${action.move.pawns.length === 2 ? ' as a pair' : ''}.`;
+      positions.push(step.after);
+      historyDescriptions.push(text);
+      sample(step.after, step.player, step.afterTurn, step.turnStart, step.placings);
+      const following = rehearsal.steps[i + 1];
+      for (const p of following.placings.filter((p) => !step.placings.includes(p))) {
+        positions.push(following.state);
+        historyDescriptions.push(`${name(p)} finishes ${ordinal(following.placings.indexOf(p) + 1)}.`);
+      }
+    });
+    outlookTrail = trail;
+    rehearsed = true;
+    const resume = rehearsal.steps[rehearsal.cut];
+    state = resume.state;
+    current = resume.player;
+    turn = copyTurn(resume.turn);
+    turnStartState = resume.turnStart;
+    social = structuredClone(resume.social);
+    turnStartSocial = structuredClone(resume.social);
+    placings = [...resume.placings];
+    watching = placings.length > 0; // someone already won, so the game is being played on
+    lastEl.textContent = `Jumped to step ${positions.length - 1}. ${current === 0 ? 'Make the finishing move.' : `${name(current)} is about to finish.`}`;
+    recordHistory(lastEl.textContent);
+    next();
+    return true;
   }
 
   function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[]) {
@@ -1523,6 +1745,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     historyDescriptions = ['Game started.'];
     historyIndex = null;
     onlineHistorySent = 0;
+    resetTrajectory();
     placings = [];
     watching = false;
     pickThrows = false;
@@ -1550,6 +1773,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     if (snapshot.historyOffset === 0) {
       positions = [];
       historyDescriptions = [];
+      outlookTrail = [];
     }
     if (snapshot.historyOffset === positions.length) {
       positions.push(...snapshot.historyStates);
@@ -1631,6 +1855,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     placings = [];
     watching = false;
     watchEl.hidden = true;
+    resetTrajectory();
     renderSetupRows();
     // Preview the table with the chosen seats.
     const f = new FormData(setupEl);
@@ -1676,6 +1901,21 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     startGame();
   });
   $('newgame').addEventListener('click', showSetup);
+  trajectoryOpenEl.addEventListener('click', openTrajectory);
+  trajectoryEl.querySelectorAll('[data-trajectory-close]').forEach((button) =>
+    button.addEventListener('click', closeTrajectory));
+  trajectoryEl.addEventListener('click', (event) => {
+    if (event.target === trajectoryEl) closeTrajectory(); // backdrop
+  });
+  trajectoryEl.addEventListener('close', () => {
+    unmountTrajectory?.();
+    unmountTrajectory = null;
+  });
+  trajectoryWatchEl.addEventListener('click', () => watchEl.click());
+  $('trajectory-new').addEventListener('click', () => {
+    closeTrajectory();
+    showSetup();
+  });
   entryToggleEl.addEventListener('click', () => {
     const show = entryToggleEl.getAttribute('aria-pressed') !== 'true';
     entryToggleEl.setAttribute('aria-pressed', String(show));
@@ -2602,6 +2842,26 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     display: none;
   }
 
+  .trajectory-open {
+    display: inline-flex;
+    justify-self: start;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .trajectory-open[hidden] { display: none; }
+
+  .trajectory-open svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   .players {
     display: grid;
     gap: 0.3rem;
@@ -2753,4 +3013,306 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   html[data-online-game] main > .stats { display: none !important; }
   html[data-online-game] main.wrap { max-width: 90rem; padding-top: 1rem; }
   html[data-online-game] .board { transform-origin: 50% 50%; }
+</style>
+
+<style is:global>
+  /* ---- Race replay: chalk on a darker patch of the same red-oxide floor ---- */
+  .trajectory {
+    --cream: #f7ecd9;
+    --tj-blue: #b4d5ff;
+    --tj-red: #ffb098;
+    --tj-yellow: #fff3a5;
+    --tj-green: #c4f3b3;
+    width: min(48rem, 100vw - 1.5rem);
+    max-width: none;
+    max-height: calc(100dvh - 1.5rem);
+    padding: 0;
+    border: 0;
+    border-radius: 20px;
+    background: transparent;
+    color: var(--cream);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .trajectory::backdrop {
+    background: rgb(24 7 3 / 0.62);
+    backdrop-filter: blur(3px);
+  }
+
+  .trajectory[open] { animation: tj-rise 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+
+  html[data-online-game] .trajectory[open] {
+    position: static;
+    margin: 1rem auto 0;
+    max-height: none;
+  }
+
+  .trajectory-card {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1.4rem 1.5rem 1.25rem;
+    border-radius: 20px;
+    outline: 2px dashed rgb(244 238 227 / 0.22);
+    outline-offset: -9px;
+    background:
+      radial-gradient(ellipse at 22% 0%, rgb(255 255 255 / 0.09), transparent 55%),
+      radial-gradient(ellipse at 50% 60%, transparent 45%, rgb(0 0 0 / 0.38)),
+      linear-gradient(160deg, #7a311f, #4a1a10 70%);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 0.45);
+    text-shadow: 0 1px 2px rgb(40 8 0 / 0.45);
+  }
+
+  .trajectory-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .trajectory-kicker {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(247 236 217 / 0.62);
+  }
+
+  .trajectory h2 {
+    margin: 0.1rem 0 0.15rem;
+    font-size: clamp(1.45rem, 1.2rem + 1.2vw, 1.95rem);
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--cream);
+  }
+
+  .trajectory-sub {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgb(247 236 217 / 0.72);
+  }
+
+  .trajectory-close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    border: 1px solid rgb(247 236 217 / 0.35);
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.2);
+    color: var(--cream);
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .trajectory-close:hover { border-color: var(--cream); }
+
+  .trajectory-standings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .trajectory-standings li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.75rem 0.25rem 0.3rem;
+    border: 1px solid rgb(247 236 217 / 0.2);
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.2);
+    font-size: 0.88rem;
+  }
+
+  .trajectory-standings li.you { border-color: rgb(247 236 217 / 0.75); }
+  .trajectory-standings li.racing { opacity: 0.68; }
+
+  .trajectory-standings em {
+    display: grid;
+    place-items: center;
+    min-width: 2.1rem;
+    height: 1.55rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: #f1d9a8;
+    color: #4a1f14;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 800;
+    text-shadow: none;
+  }
+
+  .trajectory-standings li.racing em {
+    background: transparent;
+    border: 1px dashed rgb(247 236 217 / 0.5);
+    color: var(--cream);
+  }
+
+  .trajectory-standings svg { width: 1.35rem; height: 1.35rem; }
+
+  .trajectory-chart {
+    position: relative;
+    min-height: 12rem;
+    border-radius: 14px;
+    background: rgb(20 5 1 / 0.28);
+    box-shadow: inset 0 0 0 1px rgb(247 236 217 / 0.08);
+    touch-action: pan-y;
+    cursor: crosshair;
+  }
+
+  .trajectory-chart:focus-visible { outline: 2px solid #f1d9a8; outline-offset: 3px; }
+
+  .tj-svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .tj-band { fill: rgb(255 255 255 / 0.025); }
+  .tj-band.alt { fill: rgb(255 255 255 / 0.065); }
+  .tj-race {
+    fill: rgb(247 236 217 / 0.72);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .tj-grid { stroke: rgb(247 236 217 / 0.13); stroke-dasharray: 2 5; }
+  .tj-grid.base { stroke: rgb(247 236 217 / 0.35); stroke-dasharray: none; }
+  .tj-axis { fill: rgb(247 236 217 / 0.55); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .tj-line {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    opacity: 0.88;
+  }
+  .tj-line.you { stroke-width: 3.2; opacity: 1; }
+  .tj-glow { fill: none; stroke: var(--ink); stroke-width: 10; stroke-linejoin: round; opacity: 0.16; }
+  .tj-finish { stroke: rgb(247 236 217 / 0.5); stroke-dasharray: 3 4; }
+  .tj-pawn { transform-box: fill-box; transform-origin: center; }
+  .tj-pawn.pop { animation: tj-pop 420ms var(--delay) cubic-bezier(0.2, 0.9, 0.3, 1.5) both; }
+  .tj-lines.draw { animation: tj-draw 1.5s 120ms cubic-bezier(0.45, 0, 0.2, 1) both; }
+  .tj-cursor-line { stroke: rgb(247 236 217 / 0.7); stroke-width: 1; }
+  .tj-cursor circle { fill: var(--ink); stroke: #3d160d; stroke-width: 2; }
+  .tj-hit { fill: transparent; }
+  .tj-empty { margin: 0; padding: 3rem 1rem; text-align: center; color: rgb(247 236 217 / 0.7); }
+
+  .trajectory-readout { display: grid; gap: 0.45rem; min-height: 4.4rem; align-content: start; }
+
+  .tj-where {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.6rem;
+    margin: 0;
+    font-size: 0.92rem;
+  }
+
+  .tj-step {
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.25);
+    color: rgb(247 236 217 / 0.8);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tj-note { color: rgb(247 236 217 / 0.72); font-size: 0.85rem; }
+
+  .tj-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+
+  .tj-chips li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.18rem 0.6rem 0.18rem 0.3rem;
+    border-radius: 8px;
+    border-left: 3px solid var(--ink);
+    background: rgb(0 0 0 / 0.22);
+    font-size: 0.82rem;
+  }
+
+  .tj-chips li.you { background: rgb(247 236 217 / 0.12); }
+  .tj-chips svg { width: 1.1rem; height: 1.1rem; }
+  .tj-chips b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .trajectory-moments {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .trajectory-moments[hidden] { display: none; }
+
+  .trajectory-moments li {
+    display: grid;
+    align-content: start;
+    gap: 0.1rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+    background: rgb(0 0 0 / 0.2);
+    box-shadow: inset 0 0 0 1px rgb(247 236 217 / 0.08);
+  }
+
+  .trajectory-moments strong {
+    color: var(--moment-ink, var(--cream));
+    font-size: 1.55rem;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .trajectory-moments span { font-size: 0.82rem; color: rgb(247 236 217 / 0.85); }
+  .trajectory-moments small { font-size: 0.76rem; color: rgb(247 236 217 / 0.6); }
+
+  .trajectory-hint { margin: 0; font-size: 0.76rem; color: rgb(247 236 217 / 0.55); }
+
+  .trajectory-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+  .trajectory-actions .btn[hidden] { display: none; }
+
+  .trajectory-actions .btn {
+    background: rgb(0 0 0 / 0.25);
+    border-color: rgb(247 236 217 / 0.5);
+    color: var(--cream);
+    cursor: pointer;
+  }
+
+  .trajectory-actions .btn:hover { border-color: var(--cream); }
+
+  .trajectory-actions .btn.primary {
+    background: #f1d9a8;
+    border-color: #f1d9a8;
+    color: #4a1f14;
+    font-weight: 700;
+    text-shadow: none;
+  }
+
+  @media (max-width: 34rem) {
+    .trajectory-card { padding: 1.1rem 1rem 1rem; }
+    .trajectory-moments { grid-template-columns: 1fr 1fr; }
+    .trajectory-moments li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  }
+
+  @keyframes tj-rise {
+    from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  }
+
+  @keyframes tj-draw {
+    from { clip-path: inset(0 100% 0 0); }
+    to { clip-path: inset(0 0 0 0); }
+  }
+
+  @keyframes tj-pop {
+    from { opacity: 0; transform: scale(0.2); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trajectory[open], .tj-lines.draw, .tj-pawn.pop { animation: none; }
+  }
 </style>

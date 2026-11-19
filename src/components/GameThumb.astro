@@ -2,6 +2,8 @@
 // A small illustration of each game for the Playroom cards, drawn to match the
 // game's own board. The Ali Guli Mane and Chowka Bhara pictures use the cowrie
 // shells from <CowrieSprite />, which the page includes once.
+import { boardFor } from '../scripts/chowkaBhara';
+
 interface Props {
   slug: string;
 }
@@ -13,6 +15,25 @@ const pebbles = [
   ['#b5e3a6', '#3d8a4a', '#173f1f'],
   ['#a9c6f2', '#2c5aa0', '#10284f'],
 ];
+
+// Chowka Bhara comes on two boards, drawn from the game's own geometry.
+const chowkaBoards = ([[5, 28, 46, 21.6], [7, 166, 35, 18.6]] as const).map(([size, x, y, cell]) => {
+  const board = boardFor(size);
+  const at = (r: number, c: number) => [x + (c + 0.5) * cell, y + (r + 0.5) * cell];
+  const grid = Array.from({ length: size + 1 }, (_, i) =>
+    `M${x + i * cell} ${y}v${size * cell}M${x} ${y + i * cell}h${size * cell}`).join('');
+  const k = cell * 0.36;
+  const crosses = board.safe
+    .filter(([r, c]) => r !== board.centre[0] || c !== board.centre[1])
+    .map(([r, c]) => { const [cx, cy] = at(r, c); return `M${cx - k} ${cy - k}l${2 * k} ${2 * k}M${cx + k} ${cy - k}l${-2 * k} ${2 * k}`; })
+    .join('');
+  const [cx, cy] = at(board.centre[0], board.centre[1]);
+  // A few pawns along each player's route: two on the outer ring, one further in.
+  const pawns = ([0, 1, 2, 3] as const).flatMap((seat) => [3, board.lastOuter - 4, board.pairSquare + 3]
+    .slice(0, seat % 2 ? 2 : 3)
+    .map((step) => { const [r, c] = board.square(seat, step); const [px, py] = at(r, c); return { x: px, y: py, colour: seat }; }));
+  return { grid, crosses, cx, cy, petal: cell * 0.42, r: cell * 0.36, pawns };
+});
 ---
 
 <svg class="thumb" viewBox="0 0 320 200" role="img" aria-hidden="true">
@@ -162,24 +183,21 @@ const pebbles = [
           </radialGradient>
         </defs>
         <rect width="320" height="200" fill={`url(#${id('floor')})`} />
-        <g fill="none" stroke="#f4eee3" stroke-width="2.4" stroke-linecap="round" opacity="0.85" stroke-dasharray="7 1.5">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <>
-              <path d={`M${85 + i * 30} 25v150`} />
-              <path d={`M85 ${25 + i * 30}h150`} />
-            </>
-          ))}
-          <path d="M149 29l22 22M171 29l-22 22M149 149l22 22M171 149l-22 22M89 89l22 22M111 89l-22 22M209 89l22 22M231 89l-22 22" />
-          <circle cx="160" cy="100" r="9" />
-          {[0, 45, 90, 135].map((a) => (
-            <ellipse cx="160" cy="100" rx="3.5" ry="11" transform={`rotate(${a} 160 100)`} />
-          ))}
-        </g>
-        {[[130, 70, 0], [190, 130, 1], [220, 70, 2], [100, 160, 3], [196, 132, 1]].map(([x, y, i]) => (
-          <circle cx={x} cy={y} r="9" fill={`url(#${id(`p${i}`)})`} />
+        {chowkaBoards.map((b) => (
+          <g fill="none" stroke="#f4eee3" stroke-width="1.9" stroke-linecap="round" opacity="0.85" stroke-dasharray="6 1.4">
+            <path d={b.grid} />
+            <path d={b.crosses} stroke-dasharray="none" />
+            <circle cx={b.cx} cy={b.cy} r={b.petal * 0.55} stroke-dasharray="none" />
+            {[0, 45, 90, 135].map((a) => (
+              <ellipse cx={b.cx} cy={b.cy} rx={b.petal * 0.3} ry={b.petal} transform={`rotate(${a} ${b.cx} ${b.cy})`} stroke-dasharray="none" />
+            ))}
+          </g>
         ))}
-        {[[34, 90, 20], [52, 104, 150], [270, 86, 70], [286, 110, 110]].map(([x, y, r], i) => (
-          <use href={i % 2 ? '#cowrie-back' : '#cowrie-mouth'} x={x - 8} y={y - 11} width="16" height="22" transform={`rotate(${r} ${x} ${y})`} />
+        {chowkaBoards.flatMap((b) => b.pawns.map((p) => (
+          <circle cx={p.x} cy={p.y} r={b.r} fill={`url(#${id(`p${p.colour}`)})`} />
+        )))}
+        {[[150, 70, 20], [154, 98, 150], [149, 126, 70]].map(([x, y, r], i) => (
+          <use href={i % 2 ? '#cowrie-back' : '#cowrie-mouth'} x={x - 6} y={y - 8.5} width="12" height="17" transform={`rotate(${r} ${x} ${y})`} />
         ))}
       </g>
     )

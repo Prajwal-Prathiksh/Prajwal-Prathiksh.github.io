@@ -1,5 +1,6 @@
-import trainedModel from '../data/chowka-bhara-win-model.json';
-import { apply, finished, legalMoves, recordSpend, type State, type Turn } from './chowkaBhara';
+import trainedModel5 from '../data/chowka-bhara-win-model.json';
+import trainedModel7 from '../data/chowka-bhara-win-model-7x7.json';
+import { apply, boardOf, finished, legalMoves, recordSpend, type BoardSize, type State, type Turn } from './chowkaBhara';
 import { FEATURE_NAMES, decisionScore, relativeFeatures, turnFeatures } from './chowkaBharaModel';
 import { resolveTurn, THROW_ODDS } from './chowkaBharaMatch';
 
@@ -9,6 +10,8 @@ export const WIN_FEATURE_NAMES = [
 
 export interface WinModel {
   version: number;
+  board?: number; // 5 when absent
+  borrowedFrom?: number; // weights copied from another board, not yet trained on this one
   weights: number[];
   temperature: number;
   trainedGames: number;
@@ -25,7 +28,13 @@ export interface WinModel {
   testByPlace?: Array<{ place: number; samples: number; logLoss: number; accuracy: number }>;
 }
 
-export const CHOWKA_WIN_MODEL: WinModel = trainedModel;
+// `npm run winmodel:train -- --board=5|7` replaces these checked-in artifacts.
+export const CHOWKA_WIN_MODELS: Record<BoardSize, WinModel> = { 5: trainedModel5, 7: trainedModel7 };
+export const WIN_MODEL_FILES: Record<BoardSize, string> = {
+  5: 'src/data/chowka-bhara-win-model.json',
+  7: 'src/data/chowka-bhara-win-model-7x7.json',
+};
+export const winModelFor = (state: State): WinModel => CHOWKA_WIN_MODELS[boardOf(state).size];
 
 function bestOption(state: State, player: number, turn: Turn, turnStart: State): number {
   const base = decisionScore(state, player, turn, turnStart);
@@ -60,7 +69,7 @@ function captureImpacts(state: State, current: number, value: number): number[] 
     for (const player of new Set(hits.map((hit) => hit.player))) {
       const lost = state.players[player].pawns.reduce((sum, pos) => sum + Math.max(0, pos), 0)
         - after.players[player].pawns.reduce((sum, pos) => sum + Math.max(0, pos), 0);
-      impact[player] = Math.min(impact[player], -Math.max(0.25, Math.min(1, lost / 24)));
+      impact[player] = Math.min(impact[player], -Math.max(0.25, Math.min(1, lost / boardOf(state).home)));
     }
   }
   byValue.set(value, impact);
@@ -95,7 +104,7 @@ export function winFeatures(
 
 export function probabilitiesFromFeatures(
   features: number[][],
-  model: WinModel = CHOWKA_WIN_MODEL,
+  model: WinModel,
   active: boolean[] = features.map(() => true),
 ): number[] {
   const scale = Math.max(0.05, model.temperature);
@@ -115,7 +124,7 @@ export function winProbabilities(
   turn: Turn,
   turnStart: State,
   placings: number[] = [],
-  model: WinModel = CHOWKA_WIN_MODEL,
+  model: WinModel = winModelFor(state),
 ): number[] {
   const resolution = resolveTurn(state, current, turn, turnStart);
   const placed = [...placings];

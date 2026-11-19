@@ -3,7 +3,7 @@
 // that point are real, so the end-of-game chart can be checked without
 // playing a full match by hand.
 
-import { finished, recordThrow, type Action, type EntryMode, type Hit, type State, type Turn } from './chowkaBhara';
+import { finished, recordThrow, type Action, type BoardSize, type EntryMode, type Hit, type State, type Turn } from './chowkaBhara';
 import { chooseAction } from './chowkaBharaAI';
 import { applyKnownAction, copyTurn, playMatch, randomThrow, seededRandom } from './chowkaBharaMatch';
 import type { SocialState } from './chowkaBharaSocial';
@@ -28,7 +28,7 @@ export interface Endgame {
   places: number[];
 }
 
-function playOnce(players: number, entry: EntryMode, seed: number) {
+function playOnce(players: number, entry: EntryMode, size: BoardSize, seed: number) {
   const random = seededRandom(seed);
   const steps: EndgameStep[] = [];
   const placed: number[] = [];
@@ -57,7 +57,7 @@ function playOnce(players: number, entry: EntryMode, seed: number) {
     });
     return action;
   };
-  const result = playMatch({ policies: Array(players).fill(policy), entry, seed });
+  const result = playMatch({ policies: Array(players).fill(policy), entry, size, seed });
   return { steps, result };
 }
 
@@ -67,10 +67,12 @@ const finishingStep = (steps: EndgameStep[], player: number) => steps.findLastIn
 // Seat 0 finishes in `place` (1-based; the player count or more means last).
 // The cut is seat 0's finishing move, or for last place the move that fills
 // the second-to-last place.
-export function rehearseEndgame(players: number, entry: EntryMode, place: number, seed = Date.now(), tries = 120): Endgame | null {
+export function rehearseEndgame(
+  players: number, entry: EntryMode, size: BoardSize, place: number, seed = Date.now(), tries = 120,
+): Endgame | null {
   const wanted = Math.min(Math.max(1, place), players);
   for (let i = 0; i < tries; i++) {
-    const { steps, result } = playOnce(players, entry, seed + i * 7919);
+    const { steps, result } = playOnce(players, entry, size, seed + i * 7919);
     if (result.draw || result.places.indexOf(0) + 1 !== wanted) continue;
     const decider = wanted < players ? 0 : result.places[players - 2];
     const cut = finishingStep(steps, decider);

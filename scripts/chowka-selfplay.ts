@@ -6,8 +6,9 @@ import { chooseAction } from '../src/scripts/chowkaBharaAI';
 import { chooseOriginalHardAction } from '../src/scripts/chowkaBharaOriginalAI';
 import { applyKnownAction, copyTurn, playMatch, possibleActions, resolveTurn, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
 import {
-  CHOWKA_MODEL,
+  CHOWKA_MODELS,
   FEATURE_NAMES,
+  MODEL_FILES,
   decisionScore,
   randomModel,
   modelScore,
@@ -15,8 +16,8 @@ import {
   validateModel,
   type EvaluationModel,
 } from '../src/scripts/chowkaBharaModel';
-import type { Action, EntryMode, State, Turn } from '../src/scripts/chowkaBhara';
-import { newGame, newTurn, recordThrow } from '../src/scripts/chowkaBhara';
+import type { Action, BoardSize, EntryMode, State, Turn } from '../src/scripts/chowkaBhara';
+import { BOARD_SIZES, boardFor, legalMoves, newGame, newTurn, recordThrow } from '../src/scripts/chowkaBhara';
 import { observeAction } from '../src/scripts/chowkaBharaOpponent';
 import { newSocial, styleBelief } from '../src/scripts/chowkaBharaSocial';
 import { WIN_FEATURE_NAMES, winFeatures, winProbabilities } from '../src/scripts/chowkaBharaWin';
@@ -27,6 +28,7 @@ interface Trial {
   games: number;
   players: number;
   entry: EntryMode | 'mixed';
+  size: BoardSize;
   seed: number;
   budget: number;
   opponent: EvaluationModel;
@@ -130,6 +132,7 @@ function runTrial(trial: Trial): TrialResult {
       policies,
       styles: Array(trial.players).fill('balanced'),
       entry,
+      size: trial.size,
       seed: trial.seed + Math.floor(game / trial.players) * 0x9e3779b1,
       observeBehaviour: trial.budget > 0 || trial.originalOpponent,
     });
@@ -160,6 +163,10 @@ if (!isMainThread) {
   const budget = numberArg('budget', 0);
   const players = 4;
   const entry = 'home' as const;
+  // --board=5 (default) or --board=7 picks the board to play, train and save.
+  const size = numberArg('board', 5) as BoardSize;
+  if (!BOARD_SIZES.includes(size)) throw new Error(`--board must be one of ${BOARD_SIZES.join(', ')}.`);
+  const CHOWKA_MODEL = CHOWKA_MODELS[size];
 
   const runParallel = async (trials: Trial[]): Promise<TrialResult[]> => {
     const results: TrialResult[] = [];
@@ -182,7 +189,7 @@ if (!isMainThread) {
 
   if (command === 'benchmark') {
     const repeats = numberArg('repeats', 8);
-    const state = newGame([0, 1, 2, 3], entry);
+    const state = newGame([0, 1, 2, 3], entry, size);
     const turn = newTurn();
     const social = newSocial(players);
     const started = performance.now();
@@ -190,9 +197,55 @@ if (!isMainThread) {
       chooseAction(state, 0, turn, 'hard', 'balanced', state, 1, social, { nodeBudget: budget || 240 });
     }
     const elapsed = performance.now() - started;
-    console.log(`${repeats} Hard decisions at budget ${budget || 240}: ${elapsed.toFixed(1)} ms total, ${(elapsed / repeats).toFixed(1)} ms each.`);
+    console.log(`${repeats} Hard decisions on ${size}x${size} at budget ${budget || 240}: ${elapsed.toFixed(1)} ms total, ${(elapsed / repeats).toFixed(1)} ms each.`);
   } else if (command === 'smoke') {
-    const trial = { id: 0, model: CHOWKA_MODEL, opponent: CHOWKA_MODEL, games: 4, players: 2, entry: 'home' as const, seed, budget: 0 };
+    // The 5x5 path must stay exactly as it was before boards became sizeable.
+    const classic = [
+      [4, 2], [4, 3], [4, 4], [3, 4], [2, 4], [1, 4], [0, 4], [0, 3], [0, 2], [0, 1], [0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [4, 1],
+      [3, 1], [2, 1], [1, 1], [1, 2], [1, 3], [2, 3], [3, 3], [3, 2], [2, 2],
+    ];
+    if (JSON.stringify(boardFor(5).path(0)) !== JSON.stringify(classic)) throw new Error('The 5x5 path changed.');
+    for (const board of BOARD_SIZES.map(boardFor)) {
+      const n = board.size;
+      for (let seat = 0 as 0 | 1 | 2 | 3; seat < 4; seat++) {
+        const path = board.path(seat);
+        if (path.length !== n * n || new Set(path.map(board.key)).size !== n * n) {
+          throw new Error(`${n}x${n} path for seat ${seat} does not visit every square once.`);
+        }
+        // Every step is to a neighbouring square; only the last step into the centre may be diagonal.
+        path.slice(1).forEach(([r, c], i) => {
+          const [pr, pc] = path[i];
+          const far = Math.max(Math.abs(r - pr), Math.abs(c - pc));
+          const straight = Math.abs(r - pr) + Math.abs(c - pc) === 1;
+          if (!(straight || (i + 1 === board.home && far === 1))) throw new Error(`${n}x${n} path jumps at step ${i + 1}.`);
+        });
+      }
+      if (board.pawns !== n - 1 || board.home !== n * n - 1 || board.lastOuter !== 4 * (n - 1) - 1
+        || board.pairSquare !== board.lastOuter + 1 || board.safe.length !== (n === 5 ? 5 : 9)) {
+        throw new Error(`${n}x${n} board constants are wrong.`);
+      }
+      const gate = newGame([0, 2], 'home', n);
+      gate.players[0].pawns[0] = board.lastOuter - 1;
+      if (legalMoves(gate, 0, 2).some((move) => move.to > board.lastOuter)) throw new Error(`${n}x${n} inner ring opened before a hit.`);
+      gate.players[0].hasHit = true;
+      if (!legalMoves(gate, 0, 2).some((move) => move.to === board.pairSquare)) throw new Error(`${n}x${n} inner ring stayed shut after a hit.`);
+    }
+    for (const n of BOARD_SIZES.filter((board) => board !== 5)) {
+      const trial7 = { id: 0, model: CHOWKA_MODELS[n], opponent: CHOWKA_MODELS[n], games: 2, players: 2, entry: 'home' as const, size: n, seed, budget: 0 };
+      const once = runTrial(trial7);
+      if (once.games !== 2 || once.turns <= 0) throw new Error(`${n}x${n} headless matches did not finish.`);
+      if (JSON.stringify(once) !== JSON.stringify(runTrial(trial7))) throw new Error(`Seeded ${n}x${n} self-play was not reproducible.`);
+      for (const mode of ['all', 'each'] as const) {
+        const varied = runTrial({ ...trial7, games: 1, players: 3, entry: mode, seed: seed + mode.length });
+        if (varied.games !== 1 || varied.turns <= 0) throw new Error(`${n}x${n} ${mode} entry simulation failed.`);
+      }
+      const opening = newGame([0, 1, 2, 3], 'home', n);
+      const chances = winProbabilities(opening, 0, newTurn(), opening);
+      if (chances.some((chance) => !Number.isFinite(chance)) || Math.abs(chances.reduce((sum, chance) => sum + chance, 0) - 1) > 1e-9) {
+        throw new Error(`${n}x${n} win outlook is invalid.`);
+      }
+    }
+    const trial = { id: 0, model: CHOWKA_MODELS[5], opponent: CHOWKA_MODELS[5], games: 4, players: 2, entry: 'home' as const, size: 5 as const, seed, budget: 0 };
     const result = runTrial(trial);
     const repeated = runTrial(trial);
     if (result.games !== 4 || result.turns <= 0) throw new Error('Headless matches did not finish.');
@@ -206,6 +259,7 @@ if (!isMainThread) {
     // the learned evaluator is intended to preserve.
     const tacticalState: State = {
       entry: 'home',
+      size: 5,
       players: [
         { seat: 0, pawns: [0, 24, 24, 24], partner: [-1, -1, -1, -1], hasHit: false },
         { seat: 2, pawns: [10, 24, 24, 24], partner: [-1, -1, -1, -1], hasHit: true },
@@ -225,6 +279,7 @@ if (!isMainThread) {
     }
     const outlookState: State = {
       entry: 'home',
+      size: 5,
       players: [
         { seat: 0, pawns: [1, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
         { seat: 2, pawns: [1, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
@@ -263,6 +318,7 @@ if (!isMainThread) {
     }
     const exposedState: State = {
       entry: 'home',
+      size: 5,
       players: [
         tacticalState.players[0], tacticalState.players[1],
         { seat: 1, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
@@ -299,7 +355,7 @@ if (!isMainThread) {
     if (winProbabilities(provisionalFinish, 0, blocked, provisionalStart)[0] === 1) {
       throw new Error('A provisional finish was reported as a certain win before rollback.');
     }
-    console.log(`Self-play smoke test passed: rules, turn sequencing, opponent learning, and roll-aware win probabilities.`);
+    console.log(`Self-play smoke test passed: ${BOARD_SIZES.map((n) => `${n}x${n}`).join(' and ')} boards, rules, turn sequencing, opponent learning, and roll-aware win probabilities.`);
   } else if (command === 'baseline') {
     if (players !== 4) throw new Error('The original baseline comparison is defined for four players.');
     const modes = [entry];
@@ -312,6 +368,7 @@ if (!isMainThread) {
         games: Math.floor(games / shards) + (id < games % shards ? 1 : 0),
         players: 4,
         entry: mode,
+        size,
         seed: seed + id * 100003 + modes.indexOf(mode) * 10000019,
         budget: budget || 96,
         originalOpponent: true,
@@ -328,7 +385,7 @@ if (!isMainThread) {
       const places = Array.from({ length: 4 }, (_, place) =>
         results.reduce((sum, result) => sum + result.places[place], 0));
       const turns = results.reduce((sum, result) => sum + result.turns, 0);
-      console.log(`${mode}: final AI vs three original Hard opponents`);
+      console.log(`${mode}, ${size}x${size}: final AI vs three original Hard opponents`);
       console.log(`  placement ${(score * 100).toFixed(1)}% ± ${(scoreMargin * 100).toFixed(1)}%; wins ${wins}/${totalGames} (${(winRate * 100).toFixed(1)}% ± ${(winMargin * 100).toFixed(1)}%)`);
       console.log(`  places ${places.join('/')} (1st/2nd/3rd/4th); ${turns} turns; ${shards} workers`);
     }
@@ -342,6 +399,7 @@ if (!isMainThread) {
       games: Math.floor(games / shards) + (id < games % shards ? 1 : 0),
       players,
       entry,
+      size,
       seed: seed + id * 100003,
       budget,
       positionOpponent: true,
@@ -351,7 +409,7 @@ if (!isMainThread) {
     const wins = results.reduce((sum, result) => sum + result.wins, 0);
     const turns = results.reduce((sum, result) => sum + result.turns, 0);
     console.log(`Learned evaluator vs initial evaluator: ${(score * 100).toFixed(1)}% placement score, ${wins}/${totalGames} wins.`);
-    console.log(`Seed ${seed}; ${players} players; ${entry} entry; ${turns} turns; ${shards} workers.`);
+    console.log(`Seed ${seed}; ${size}x${size}; ${players} players; ${entry} entry; ${turns} turns; ${shards} workers.`);
   } else {
     const generations = numberArg('generations', 6);
     const population = Math.max(4, numberArg('population', Math.min(16, workers * 2)));
@@ -360,11 +418,11 @@ if (!isMainThread) {
     let trainedGames = model.trainedGames;
     const random = seededRandom(seed);
 
-    console.log(`Training ${FEATURE_NAMES.length} weights with ${workers} workers (${population} candidates × ${generations} generations).`);
+    console.log(`Training ${FEATURE_NAMES.length} weights for the ${size}x${size} board with ${workers} workers (${population} candidates × ${generations} generations).`);
     for (let generation = 0; generation < generations; generation++) {
       const candidates = [model, ...Array.from({ length: population - 1 }, () => randomModel(model, random, sigma))];
       const trials = candidates.map((candidate, id) => ({
-        id, model: candidate, opponent: model, games, players, entry, seed: seed + generation * 100003, budget,
+        id, model: candidate, opponent: model, games, players, entry, size, seed: seed + generation * 100003, budget,
       }));
       const results = await runParallel(trials);
       trainedGames += population * games;
@@ -373,12 +431,13 @@ if (!isMainThread) {
       const champion = ranked[0];
       const holdout = runTrial({
         id: 0, model: champion.model, opponent: model,
-        games: Math.max(96, games * 2), players: 4, entry: 'home',
+        games: Math.max(96, games * 2), players: 4, entry: 'home', size,
         seed: seed ^ (generation + 1) * 0x5f3759df, budget: 0,
       });
       const accepted = champion.model !== model && holdout.wins / holdout.games > 0.34;
       if (accepted) model = {
         version: 2,
+        board: size,
         weights: [...champion.model.weights],
         trainedGames,
         seed,
@@ -389,7 +448,8 @@ if (!isMainThread) {
     }
 
     if (!validateModel(model)) throw new Error('Training produced an invalid model.');
-    const destination = resolve('src/data/chowka-bhara-model.json');
+    // A borrowed model stays marked as borrowed until a candidate trained on this board replaces it.
+    const destination = resolve(MODEL_FILES[size]);
     await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
     console.log(`Saved evaluator with ${model.trainedGames} recorded training games to ${destination}; ${trainedGames - CHOWKA_MODEL.trainedGames} candidate games evaluated this run.`);
     FEATURE_NAMES.forEach((name, index) => console.log(`  ${name.padEnd(18)} ${model.weights[index].toFixed(3)}`));

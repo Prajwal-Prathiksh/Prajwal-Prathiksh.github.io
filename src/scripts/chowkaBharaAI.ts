@@ -1,17 +1,14 @@
 import {
-  HOME,
-  LAST_OUTER,
-  PAIR_SQUARE,
   WAITING,
   apply,
+  boardOf,
   canSkip,
+  classicSteps,
   finished,
   isPotentialPair,
-  isSafe,
-  keyOf,
   legalMoves,
+  pawnWord,
   recordThrow,
-  square,
   stranded,
   type Action,
   type Hit,
@@ -19,7 +16,7 @@ import {
   type State,
   type Turn,
 } from './chowkaBhara';
-import { CHOWKA_MODEL, decisionScore, modelScore, type EvaluationModel } from './chowkaBharaModel';
+import { decisionScore, modelFor, modelScore, type EvaluationModel } from './chowkaBharaModel';
 import { applyKnownAction, copyTurn, possibleActions, THROW_ODDS } from './chowkaBharaMatch';
 import { inferredStyleWeights } from './chowkaBharaOpponent';
 import { allyOf, pactFor, relayValue, threat, type SocialState } from './chowkaBharaSocial';
@@ -37,29 +34,32 @@ const WEIGHTS: Record<Style, { progress: number; centre: number; safe: number; p
 };
 
 const boardKey = (s: State) => s.players.map((p) => `${p.pawns.join(',')}/${p.partner.join(',')}/${+p.hasHit}`).join('|');
+// Progress counts on the classic 5x5 scale, so these hand-tuned weights carry
+// over to the 7x7 board.
 function playerScore(s: State, player: number, style: Style): number {
+  const b = boardOf(s);
   const p = s.players[player];
   const w = WEIGHTS[style];
   let score = p.hasHit ? w.hit : 0;
   let gateCount = 0;
   p.pawns.forEach((pos, pawn) => {
     if (pos === WAITING) { score -= 12; return; }
-    if (pos === HOME) { score += HOME * w.progress + w.centre; return; }
-    score += pos * w.progress;
-    if (isSafe(square(p.seat, pos))) score += w.safe;
-    if (pos >= 13 && pos <= LAST_OUTER && !p.hasHit) gateCount++;
-    if (pos > LAST_OUTER) {
-      const left = HOME - pos;
+    if (pos === b.home) { score += 24 * w.progress + w.centre; return; }
+    score += classicSteps(b, pos) * w.progress;
+    if (b.isSafe(b.square(p.seat, pos))) score += w.safe;
+    if (pos >= b.lastOuter - 2 && pos <= b.lastOuter && !p.hasHit) gateCount++;
+    if (pos > b.lastOuter) {
+      const left = b.home - pos;
       if ([1, 2, 3, 4, 8].includes(left)) score += 6;
       else if (left < 8) score -= 3;
     }
     if (p.partner[pawn] > pawn) {
-      score += pos === PAIR_SQUARE ? w.pair * 0.35 : w.pair;
-      if (pos > PAIR_SQUARE) {
+      score += pos === b.pairSquare ? w.pair * 0.35 : w.pair;
+      if (pos > b.pairSquare) {
         const wall = s.players.some((other, i) => i !== player && other.pawns.some((from) => {
-          if (from < 0 || from >= HOME) return false;
+          if (from < 0 || from >= b.home) return false;
           return [1, 2, 3, 4, 8].some((v) =>
-            from + v < HOME && keyOf(square(other.seat, from + v)) === keyOf(square(p.seat, pos)));
+            from + v < b.home && b.key(b.square(other.seat, from + v)) === b.key(b.square(p.seat, pos)));
         }));
         if (wall) score += w.pair * 0.7;
       }
@@ -92,7 +92,7 @@ function boardScore(
   style: Style,
   social: SocialState,
   broken = false,
-  model: EvaluationModel | null = CHOWKA_MODEL,
+  model: EvaluationModel | null = modelFor(s),
 ): number {
   if (!model) return heuristicBoardScore(s, player, style, social, broken);
   // Self-play learns the balanced positional judgement. Styles remain visible
@@ -193,11 +193,12 @@ function actionReason(s: State, action: Action, social: SocialState, nextPlayer:
       return result.hits.some((h) => h.player === m.player)
         && relayValue(result.state, nextPlayer, pact.target) >= 12;
     }))) return `Leave a pawn open for your ally: their hit could earn a throw that reaches the leader.`;
-  if (m.to === HOME) return `Use ${m.value} to bring ${m.pawns.length === 2 ? 'the pair' : 'a pawn'} to the centre.`;
-  if (m.from === WAITING) return `Use ${m.value} to bring ${m.pawns.length === 4 ? 'all four pawns' : 'a pawn'} onto the board.`;
+  const b = boardOf(s);
+  if (m.to === b.home) return `Use ${m.value} to bring ${m.pawns.length === 2 ? 'the pair' : 'a pawn'} to the centre.`;
+  if (m.from === WAITING) return `Use ${m.value} to bring ${m.pawns.length > 1 ? `all ${pawnWord(m.pawns.length)} pawns` : 'a pawn'} onto the board.`;
   if (!isPotentialPair(s, m.player, m.pawns[0]) && isPotentialPair(after, m.player, m.pawns[0])) return `Use ${m.value} to line up a possible pair.`;
   if (m.pawns.length === 2) return `Move the pair ${m.steps} squares with ${m.value}.`;
-  if (isSafe(square(s.players[m.player].seat, m.to))) return `Use ${m.value} to land on a safe square.`;
+  if (b.isSafe(b.square(s.players[m.player].seat, m.to))) return `Use ${m.value} to land on a safe square.`;
   return `Use ${m.value} to move pawn ${m.pawns[0] + 1} forward.`;
 }
 
@@ -325,7 +326,7 @@ export function chooseAction(
   s: State, player: number, t: Turn, level: Level, style: Style, turnStart: State, nextPlayer: number, social: SocialState,
   options: { model?: EvaluationModel | null; nodeBudget?: number } = {},
 ): { action: Action | null; reason: string } {
-  const model = options.model === undefined ? CHOWKA_MODEL : options.model;
+  const model = options.model === undefined ? modelFor(s) : options.model;
   const action = level === 'hard'
     ? hardAction(s, player, t, style, turnStart, nextPlayer, social, model, options.nodeBudget ?? 96)
     : easyAction(s, player, t, style, social, model);

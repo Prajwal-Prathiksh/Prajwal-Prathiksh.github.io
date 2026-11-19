@@ -1,10 +1,8 @@
 import {
-  HOME,
   apply,
+  boardOf,
   isPotentialPair,
-  isSafe,
   legalMoves,
-  square,
   type Action,
   type Move,
   type State,
@@ -42,17 +40,18 @@ function exposed(state: State, player: number): number {
 }
 
 function moveFeatures(state: State, move: Move): number[] {
+  const b = boardOf(state);
   const before = state.players[move.player];
   const result = apply(state, move);
   const after = result.state.players[move.player];
   const pawn = move.pawns[0];
-  const progress = move.to === HOME ? 4 : Math.min(4, move.steps) / 2;
+  const progress = move.to === b.home ? 4 : Math.min(4, move.steps) / 2;
   const captures = new Set(result.hits.map((hit) => hit.player)).size;
-  const safe = move.to !== HOME && isSafe(square(before.seat, move.to)) ? 1 : 0;
+  const safe = move.to !== b.home && b.isSafe(b.square(before.seat, move.to)) ? 1 : 0;
   const madePair = !isPotentialPair(state, move.player, pawn)
     && isPotentialPair(result.state, move.player, pawn) ? 1 : 0;
-  const finish = after.pawns.filter((pos) => pos === HOME).length
-    - before.pawns.filter((pos) => pos === HOME).length;
+  const finish = after.pawns.filter((pos) => pos === b.home).length
+    - before.pawns.filter((pos) => pos === b.home).length;
   return [progress, captures, safe, madePair, finish, exposed(result.state, move.player)];
 }
 

@@ -1,18 +1,17 @@
 import {
-  HOME,
-  LAST_OUTER,
   WAITING,
   apply,
+  boardOf,
   isPaired,
   isPotentialPair,
-  isSafe,
   legalMoves,
-  square,
+  type BoardSize,
   type State,
   type Turn,
 } from './chowkaBhara';
 import { THROW_ODDS } from './chowkaBharaMatch';
-import trainedModel from '../data/chowka-bhara-model.json';
+import trainedModel5 from '../data/chowka-bhara-model.json';
+import trainedModel7 from '../data/chowka-bhara-model-7x7.json';
 
 export const BOARD_FEATURE_NAMES = [
   'progress', 'home', 'waiting', 'inner-ring-open', 'safe', 'gate-congestion',
@@ -29,6 +28,8 @@ export const FEATURE_NAMES = [...BOARD_FEATURE_NAMES, ...TURN_FEATURE_NAMES] as 
 
 export interface EvaluationModel {
   version: number;
+  board?: number; // 5 when absent
+  borrowedFrom?: number; // weights copied from another board, not yet trained on this one
   weights: number[];
   trainedGames: number;
   seed: number;
@@ -41,9 +42,16 @@ export const INITIAL_MODEL: EvaluationModel = {
   seed: 20260930,
 };
 
-// `npm run selfplay:train` replaces this checked-in artifact through
-// reproducible self-play.
-export const CHOWKA_MODEL: EvaluationModel = trainedModel;
+// `npm run selfplay:train -- --board=5|7` replaces these checked-in
+// artifacts through reproducible self-play. Features are scaled by pawn count
+// and path length, so the 7x7 board starts from the 5x5 weights until it has
+// been trained on its own games.
+export const CHOWKA_MODELS: Record<BoardSize, EvaluationModel> = { 5: trainedModel5, 7: trainedModel7 };
+export const MODEL_FILES: Record<BoardSize, string> = {
+  5: 'src/data/chowka-bhara-model.json',
+  7: 'src/data/chowka-bhara-model-7x7.json',
+};
+export const modelFor = (state: State): EvaluationModel => CHOWKA_MODELS[boardOf(state).size];
 
 const chanceOf = (value: number) => (THROW_ODDS.find(([throwValue]) => throwValue === value)?.[1] ?? 0) / 16;
 const featureCache = new WeakMap<State, Map<number, number[]>>();
@@ -74,6 +82,7 @@ function tacticalFeatures(state: State) {
 export function playerFeatures(state: State, player: number): number[] {
   const cached = featureCache.get(state)?.get(player);
   if (cached) return cached;
+  const b = boardOf(state);
   const p = state.players[player];
   let progress = 0;
   let home = 0;
@@ -86,13 +95,13 @@ export function playerFeatures(state: State, player: number): number[] {
 
   p.pawns.forEach((pos, pawn) => {
     if (pos === WAITING) { waiting++; return; }
-    if (pos === HOME) { home++; progress += 1; return; }
-    progress += pos / HOME;
-    if (isSafe(square(p.seat, pos))) safe++;
-    if (!p.hasHit && pos >= 13 && pos <= LAST_OUTER) gate++;
+    if (pos === b.home) { home++; progress += 1; return; }
+    progress += pos / b.home;
+    if (b.isSafe(b.square(p.seat, pos))) safe++;
+    if (!p.hasHit && pos >= b.lastOuter - 2 && pos <= b.lastOuter) gate++;
     if (isPotentialPair(state, player, pawn) && p.partner[pawn] > pawn) potentialPairs++;
     if (isPaired(state, player, pawn) && p.partner[pawn] > pawn) committedPairs++;
-    const left = HOME - pos;
+    const left = b.home - pos;
     const needed = isPaired(state, player, pawn) ? left * 2 : left;
     finishChance += chanceOf(needed);
   });
@@ -100,20 +109,21 @@ export function playerFeatures(state: State, player: number): number[] {
   let mobility = 0;
   for (const [value, count] of THROW_ODDS) {
     const moves = legalMoves(state, player, value);
-    mobility += count / 16 * Math.min(1, moves.length / 4);
+    mobility += count / 16 * Math.min(1, moves.length / b.pawns);
   }
   const tactical = tacticalFeatures(state);
+  const n = b.pawns;
 
   const features = [
-    progress / 4,
-    home / 4,
-    waiting / 4,
+    progress / n,
+    home / n,
+    waiting / n,
     p.hasHit ? 1 : 0,
-    safe / 4,
-    gate / 4,
-    potentialPairs / 2,
-    committedPairs / 2,
-    finishChance / 4,
+    safe / n,
+    gate / n,
+    potentialPairs / (n / 2),
+    committedPairs / (n / 2),
+    finishChance / n,
     mobility,
     tactical.capture[player],
     tactical.exposure[player],
@@ -135,7 +145,7 @@ export function relativeFeatures(state: State, player: number): number[] {
   return own.map((value, feature) => value - average[feature] * 0.55 - leader[feature] * 0.45);
 }
 
-export function modelScore(state: State, player: number, model: EvaluationModel = CHOWKA_MODEL): number {
+export function modelScore(state: State, player: number, model: EvaluationModel = modelFor(state)): number {
   const features = relativeFeatures(state, player);
   let score = 0;
   for (let i = 0; i < Math.min(features.length, model.weights.length); i++) score += features[i] * model.weights[i];
@@ -153,7 +163,7 @@ export function turnFeatures(state: State, player: number, turn: Turn, turnStart
     const moves = legalMoves(state, player, value);
     if (moves.length) usable++;
     if (moves.some((move) => apply(state, move).hits.length)) capturing++;
-    if (moves.some((move) => move.to === HOME)) finishing++;
+    if (moves.some((move) => move.to === boardOf(state).home)) finishing++;
   }
   const bankSize = Math.min(1, turn.bank.length / 6);
   const gain = playerFeatures(state, player)[0] + playerFeatures(state, player)[1]
@@ -180,7 +190,7 @@ export function decisionScore(
   player: number,
   turn: Turn,
   turnStart: State,
-  model: EvaluationModel = CHOWKA_MODEL,
+  model: EvaluationModel = modelFor(state),
 ): number {
   const features = [...relativeFeatures(state, player), ...turnFeatures(state, player, turn, turnStart)];
   let score = 0;

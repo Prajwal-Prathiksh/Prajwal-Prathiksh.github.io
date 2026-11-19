@@ -2,6 +2,16 @@
 import Base from '../../layouts/Base.astro';
 import ZenToggle from '../../components/ZenToggle.astro';
 import CowrieSprite from '../../components/CowrieSprite.astro';
+import { chalkBoard } from '../../scripts/chowkaBharaBoard';
+import { boardFor, type BoardSize } from '../../scripts/chowkaBhara';
+
+// A small chalk picture of each board for the setup choice.
+const miniBoard = (size: BoardSize) => {
+  const b = boardFor(size);
+  const lines = Array.from({ length: size + 1 }, (_, i) => `M${i} 0V${size}M0 ${i}H${size}`).join('');
+  const crosses = b.safe.map(([r, c]) => `M${c + 0.2} ${r + 0.2}l.6 .6m0 -.6l-.6 .6`).join('');
+  return `<svg viewBox="-0.3 -0.3 ${size + 0.6} ${size + 0.6}"><rect x="-0.3" y="-0.3" width="${size + 0.6}" height="${size + 0.6}" rx="0.6" class="mini-floor"/><path d="${lines}" class="mini-grid"/><path d="${crosses}" class="mini-cross"/></svg>`;
+};
 
 const COLOURS = [
   { id: 'blue', name: 'Blue', light: '#b4d5ff', mid: '#3277cf', dark: '#123d80' },
@@ -10,12 +20,6 @@ const COLOURS = [
   { id: 'green', name: 'Green', light: '#c4f3b3', mid: '#38a65a', dark: '#196235' },
 ];
 
-// Board squares in 7x7 units: the 5x5 grid sits inside a one-unit margin
-// that holds each player's waiting pawns.
-const cells = Array.from({ length: 25 }, (_, i) => ({ r: Math.floor(i / 5), c: i % 5 }));
-const SAFE = new Set(['4,2', '2,4', '0,2', '2,0']);
-const petals = Array.from({ length: 8 }, (_, i) => i * 45);
-const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 ---
 
 <Base title="Chowka Bhara" description="Chowka Bhara, the cowrie-shell race game, chalked on a red-oxide floor. Play against up to three computer players.">
@@ -70,6 +74,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       <fieldset>
         <legend id="colour-legend">Your colour</legend>
         <div id="human-rows" class="opponent-rows"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Board</legend>
+        <div class="chips">
+          <label class="chip board-chip"><input type="radio" name="board" value="5" checked /><span class="mini-board" aria-hidden="true"><Fragment set:html={miniBoard(5)} /></span>5×5 · four pawns each</label>
+          <label class="chip board-chip"><input type="radio" name="board" value="7" /><span class="mini-board" aria-hidden="true"><Fragment set:html={miniBoard(7)} /></span>7×7 · six pawns each</label>
+        </div>
+        <p id="board-hint" class="hint muted">The classic board: an outer ring and one inner ring round the centre.</p>
       </fieldset>
       <fieldset>
         <legend>Entering the board</legend>
@@ -137,7 +149,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         </select>
       </label>
       <button type="button" class="btn" id="newgame">New game</button>
-      <button type="button" class="btn guide-toggle" id="entry-toggle" aria-pressed="false" aria-controls="entry-guides" title="Show where each colour enters the inner ring after its first hit">
+      <button type="button" class="btn guide-toggle" id="entry-toggle" aria-pressed="false" aria-controls="entry-guides" title="Show where each colour turns into the next ring in, once it has hit someone">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7a6 6 0 0 1 6 6v6m-4-4 4 4 4-4" /></svg>
         Inner-ring entries
       </button>
@@ -162,27 +174,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           </defs>
 
           <g id="home-guides" class="home-guides" visibility="hidden"></g>
-          <g class="chalk" filter="url(#chalk)">
-            {cells.map(({ r, c }) => <rect x={100 + c * 100} y={100 + r * 100} width="100" height="100" />)}
-            <rect x="94" y="94" width="512" height="512" rx="4" />
-            {
-              cells
-                .filter(({ r, c }) => SAFE.has(`${r},${c}`))
-                .map(({ r, c }) => (
-                  <g>
-                    <path d={`M${112 + c * 100} ${112 + r * 100}L${188 + c * 100} ${188 + r * 100}M${188 + c * 100} ${112 + r * 100}L${112 + c * 100} ${188 + r * 100}`} />
-                    {[[0, -36], [36, 0], [0, 36], [-36, 0]].map(([dx, dy]) => (
-                      <circle class="dot" cx={150 + c * 100 + dx} cy={150 + r * 100 + dy} r="3" />
-                    ))}
-                  </g>
-                ))
-            }
-            <g class="kolam" transform="translate(350 350)">
-              {petals.map((a) => <ellipse cx="0" cy="-21" rx="8.5" ry="20" transform={`rotate(${a})`} />)}
-              <circle r="9" />
-              {dots.map((a) => <circle class="dot" cx={Math.cos(a) * 44} cy={Math.sin(a) * 44} r="2.6" />)}
-            </g>
-          </g>
+          <g id="board-chalk" class="chalk" filter="url(#chalk)"><Fragment set:html={chalkBoard(5)} /></g>
           <g id="yards" class="chalk yards" filter="url(#chalk)"></g>
           <g id="entry-guides" class="entry-guides" visibility="hidden"></g>
           <g id="pairs" class="chalk pairmarks" filter="url(#chalk)"></g>
@@ -247,7 +239,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
             <button type="button" id="win-help-toggle" class="win-help-toggle" aria-label="How are win chances estimated?" aria-controls="win-help" aria-expanded="false">?</button>
           </header>
           <div id="win-bar" class="win-bar"></div>
-          <p id="win-help" class="win-help" hidden>Live estimate for the next place still open. Finished players leave the bar, and it updates after each roll and move. The model trained on four-player games where every pawn starts at home; other setups have not been calibrated.</p>
+          <p id="win-help" class="win-help" hidden>Live estimate for the next place still open. Finished players leave the bar, and it updates after each roll and move. The model trained on four-player games where every pawn starts at home; other setups have not been calibrated.<span id="win-help-board" hidden> The 7×7 board borrows the 5×5 model until it has been trained on its own games, so treat its numbers as a rough guide.</span></p>
         </section>
         <button type="button" id="trajectory-open" class="btn trajectory-open" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18M4 15l4.5-5 4 3 7.5-8" /></svg>
@@ -286,7 +278,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   <details>
     <summary>How to play</summary>
     <p>
-      Each player has four pawns waiting beside their edge of the board. Throw the four cowries:
+      Each player has four pawns (six on the 7×7 board) waiting beside their edge of the board. Throw the four cowries:
       the number that land mouth up is your move. All four up is <em>chowka</em> (4), all four down
       is <em>bhara</em> (8). A 4 or 8 earns another throw, and so does every hit. You can take an
       earned throw straight away or move first, whichever you like.
@@ -297,8 +289,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       and play what you have.
     </p>
     <p>
-      Spend each throw on a pawn or pair, in any order. You can start all four pawns on your home
-      square (the crossed square on your edge), or spend a 4 or 8 to enter all four waiting pawns
+      Spend each throw on a pawn or pair, in any order. You can start all your pawns on your home
+      square (the crossed square on your edge), or spend a 4 or 8 to enter all your waiting pawns
       together or one at a time, depending on the setup choice. Once in, a pawn stays in.
       If none of your remaining throws can move a pawn, your moves from that turn are undone.
     </p>
@@ -319,8 +311,15 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       and 4 squares). An opponent's single must land exactly on the committed pair's square
       before moving past it. Your own singles can land there or move past freely, and your pair
       can land on your own singles. Only a pair can hit a pair; a pair landing on lone pawns
-      just shares the square with them. First to bring all four pawns
+      just shares the square with them. First to bring all their pawns
       to the centre wins. In the rare case that nobody can move at all, the game is a draw.
+    </p>
+    <p>
+      The 7×7 board plays the same way with one more ring. After the outer ring, pawns go
+      clockwise round the middle ring, then turn in again and go anticlockwise round the
+      innermost ring before the centre. Pairs form on the first square of the middle ring and
+      may sit anywhere inside the outer ring. The four corners of the middle ring are crossed
+      safe squares too.
     </p>
     <p>
       In games with three or four players, you can offer a short truce against a clear leader.
@@ -335,11 +334,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
 <script>
   import {
-    HOME,
-    LAST_OUTER,
-    PAIR_SQUARE,
     WAITING,
     apply,
+    boardOf,
+    pawnWord,
     canSkip,
     finished,
     frozen,
@@ -352,9 +350,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     shellsFor,
     recordSpend,
     recordThrow,
-    square,
     throwShells,
     type Action,
+    type BoardSize,
     type Move,
     type Turn,
     type Seat,
@@ -365,7 +363,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   import type { AIRequest, AIResponse } from '../../scripts/chowkaBharaAI.worker';
   import { observeAction, predictedAcceptance } from '../../scripts/chowkaBharaOpponent';
   import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
-  import { outlookStrength, winProbabilities } from '../../scripts/chowkaBharaWin';
+  import { outlookStrength, winModelFor, winProbabilities } from '../../scripts/chowkaBharaWin';
+  import { chalkBoard, unitsOf } from '../../scripts/chowkaBharaBoard';
   import { copyTurn, resolveTurn } from '../../scripts/chowkaBharaMatch';
   import { rehearseEndgame } from '../../scripts/chowkaBharaEndgame';
   import { mountTrajectory, type OutlookSample } from '../../scripts/chowkaBharaTrajectory';
@@ -415,7 +414,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   ];
   const SEATS_FOR: Record<number, Seat[]> = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
   const DELAY = { shake: 650, step: 170, think: 650, between: 550, read: 900 };
-  const RECORD_KEY = 'chowka-bhara';
+  // Results on the 7x7 board are kept apart from the classic board's record.
+  const recordKey = () => boardOf(state).size === 5 ? 'chowka-bhara' : 'chowka-bhara-7x7';
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const setupEl = $<HTMLFormElement>('setup');
@@ -510,6 +510,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   let onlineHistorySent = 0;
   let shellsUp = [false, false, false, false];
   const boardEl = document.querySelector<SVGElement>('.board')!;
+  const boardChalkEl = document.getElementById('board-chalk')!;
+  const boardSquareEl = document.querySelector<HTMLElement>('.board-square')!;
+  const floorEl = $('floor');
   const sendOnline = (type: string, data: Record<string, unknown> = {}) =>
     window.parent.postMessage({ source: 'chowka-game', type, ...data }, location.origin);
 
@@ -605,6 +608,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[char]!);
+
+  const chosenBoard = (f: FormData): BoardSize => f.get('board') === '7' ? 7 : 5;
 
   const setupCounts = () => {
     const f = new FormData(setupEl);
@@ -704,50 +709,68 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   const soloHuman = () => humanCount() === 1;
   const isYou = (i: number) => soloHuman() && seated[i].level === null;
 
-  // ---- Board geometry, in 7x7 board units ----
+  // ---- Board geometry, in board units ----
+  // The grid sits inside a one-unit margin for the waiting pawns, so a 5x5
+  // board is 7 units across and a 7x7 board is 9.
 
+  const units = () => unitsOf(boardOf(state).size);
+  const middle = () => units() / 2;
   const centreOf = ([r, c]: readonly [number, number]): [number, number] => [c + 1.5, r + 1.5];
 
   // Rotate a point about the board centre by a seat's quarter turns (anticlockwise on screen).
   const forSeat = (seat: Seat, [x, y]: [number, number]): [number, number] => {
-    let dx = x - 3.5;
-    let dy = y - 3.5;
+    const m = middle();
+    let dx = x - m;
+    let dy = y - m;
     for (let i = 0; i < seat; i++) [dx, dy] = [dy, -dx];
-    return [3.5 + dx, 3.5 + dy];
+    return [m + dx, m + dy];
   };
 
   const viewPoint = ([x, y]: [number, number]): [number, number] => {
     if (!onlineMode || onlineSeat < 0) return [x, y];
-    let dx = x - 3.5;
-    let dy = y - 3.5;
+    const m = middle();
+    let dx = x - m;
+    let dy = y - m;
     const seat = state.players[onlineSeat]?.seat ?? 0;
     for (let i = 0; i < seat; i++) [dx, dy] = [-dy, dx];
-    return [3.5 + dx, 3.5 + dy];
+    return [m + dx, m + dy];
   };
 
-  const yardSpot = (seat: Seat, pawn: number) => forSeat(seat, [2.4 + pawn * 0.73, 6.5]);
+  const YARD_GAP = 0.73;
+  const yardSpot = (seat: Seat, pawn: number) =>
+    forSeat(seat, [middle() + (pawn - (boardOf(state).pawns - 1) / 2) * YARD_GAP, units() - 0.5]);
+
+  // Finished pawns gather in their player's quarter of the centre square,
+  // turned towards their side: 2x2 for four pawns, 3x2 for six.
+  const centreSpot = (seat: Seat, pawn: number): [number, number] => {
+    const across = boardOf(state).pawns > 4 ? 3 : 2;
+    const gap = across === 3 ? 0.15 : 0.24;
+    const col = pawn % across;
+    const row = Math.floor(pawn / across);
+    const m = middle() + 0.25;
+    return forSeat(seat, [m + (col - (across - 1) / 2) * gap, m + (row - 0.5) * 0.24]);
+  };
 
   const CLUSTER: [number, number][][] = [
     [[0, 0]],
     [[-0.17, 0], [0.17, 0]],
     [[-0.17, -0.12], [0.17, -0.12], [0, 0.17]],
     [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]],
+    [[-0.22, -0.17], [0, -0.17], [0.22, -0.17], [-0.11, 0.17], [0.11, 0.17]],
+    [[-0.22, -0.17], [0, -0.17], [0.22, -0.17], [-0.22, 0.17], [0, 0.17], [0.22, 0.17]],
   ];
 
   function layout(s: State): Map<string, [number, number]> {
+    const board = boardOf(s);
     const spots = new Map<string, [number, number]>();
     const bySquare = new Map<string, string[]>();
     s.players.forEach((p, i) =>
       p.pawns.forEach((pos, j) => {
         const key = `${i}-${j}`;
         if (pos === WAITING) spots.set(key, yardSpot(p.seat, j));
-        else if (pos === HOME) {
-          // Each player has a quarter of the centre square, turned towards their side,
-          // with room for all four pawns in a 2x2 block that never overlaps another.
-          const [dx, dy] = [(j % 2 ? 0.12 : -0.12), (j < 2 ? -0.12 : 0.12)];
-          spots.set(key, forSeat(p.seat, [3.75 + dx, 3.75 + dy]));
-        } else {
-          const sq = square(p.seat, pos).join();
+        else if (pos === board.home) spots.set(key, centreSpot(p.seat, j));
+        else {
+          const sq = board.square(p.seat, pos).join();
           if (!bySquare.has(sq)) bySquare.set(sq, []);
           bySquare.get(sq)!.push(key);
         }
@@ -767,9 +790,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         rest.forEach((k, n) => spots.set(k, [x + (n - (rest.length - 1) / 2) * 0.3, y + 0.2]));
         return;
       }
-      const shape = CLUSTER[Math.min(keys.length, 4) - 1];
+      const shape = CLUSTER[Math.min(keys.length, CLUSTER.length) - 1];
       keys.forEach((k, n) => {
-        const [dx, dy] = n < 4 ? shape[n] : [(n - 4) * 0.08, 0];
+        const [dx, dy] = n < shape.length ? shape[n] : [(n - shape.length) * 0.08, 0];
         spots.set(k, [x + dx, y + dy]);
       });
     });
@@ -778,11 +801,27 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   // ---- Rendering ----
 
+  // Redraw the chalk grid when the board size changes.
+  let drawnBoard: BoardSize = 5;
+  function drawBoard() {
+    const { size } = boardOf(state);
+    const extent = unitsOf(size) * 100;
+    boardSquareEl.style.setProperty('--units', String(unitsOf(size)));
+    boardSquareEl.dataset.board = String(size);
+    floorEl.dataset.board = String(size);
+    if (drawnBoard === size) return;
+    drawnBoard = size;
+    boardEl.setAttribute('viewBox', `0 0 ${extent} ${extent}`);
+    boardChalkEl.innerHTML = chalkBoard(size);
+  }
+
   const buildPawns = () => {
+    drawBoard();
+    const board = boardOf(state);
     pawnsEl.innerHTML = '';
     pawnEls.length = 0;
     seated.forEach((p, i) => {
-      pawnEls[i] = [0, 1, 2, 3].map((j) => {
+      pawnEls[i] = Array.from({ length: board.pawns }, (_, j) => {
         const el = document.createElement('button');
         el.type = 'button';
         el.className = 'pawn';
@@ -796,7 +835,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     });
     // Tinted insets leave the chalk cell borders and safe-square crosses legible.
     homeGuidesEl.innerHTML = state.players.map((p, i) => {
-      const [r, c] = square(p.seat, 0);
+      const [r, c] = board.square(p.seat, 0);
       const colour = COLOURS.find((entry) => entry.id === seated[i].colour)!;
       const x = 107 + c * 100;
       const y = 107 + r * 100;
@@ -807,18 +846,20 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     // A chalk outline for each seat's waiting area.
     yardsEl.innerHTML = state.players
       .map((p) => {
-        const [x, y] = forSeat(p.seat, [3.5, 6.5]);
+        const [x, y] = forSeat(p.seat, [middle(), units() - 0.5]);
         const vertical = p.seat % 2 === 1;
-        const w = vertical ? 58 : 330;
-        const h = vertical ? 330 : 58;
+        const long = (board.pawns - 1) * YARD_GAP * 100 + 111;
+        const w = vertical ? 58 : long;
+        const h = vertical ? long : 58;
         return `<rect x="${x * 100 - w / 2}" y="${y * 100 - h / 2}" width="${w}" height="${h}" rx="29" stroke-dasharray="3 9"/>`;
       })
       .join('');
-    // Cross the boundary between the last outer square and the first inner square.
-    // Derive arrows from the routes so they follow the chosen seats and colours.
-    entryGuidesEl.innerHTML = state.players.map((p, i) => {
-      const [ox, oy] = centreOf(square(p.seat, LAST_OUTER)).map((n) => n * 100);
-      const [ix, iy] = centreOf(square(p.seat, PAIR_SQUARE)).map((n) => n * 100);
+    // Cross the boundary where each route turns into the next ring in: once on
+    // a 5x5 board, twice on a 7x7. Derive arrows from the routes so they follow
+    // the chosen seats and colours.
+    entryGuidesEl.innerHTML = state.players.flatMap((p, i) => board.ringStarts.slice(1).map((start) => {
+      const [ox, oy] = centreOf(board.square(p.seat, start - 1)).map((n) => n * 100);
+      const [ix, iy] = centreOf(board.square(p.seat, start)).map((n) => n * 100);
       const dx = (ix - ox) / 100;
       const dy = (iy - oy) / 100;
       const mx = (ox + ix) / 2;
@@ -828,7 +869,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const path = `M${mx - dx * 22} ${my - dy * 22}L${tipX} ${tipY}M${tipX - dx * 9 - dy * 7} ${tipY - dy * 9 + dx * 7}L${tipX} ${tipY}L${tipX - dx * 9 + dy * 7} ${tipY - dy * 9 - dx * 7}`;
       const colour = COLOURS.find((c) => c.id === seated[i].colour)!.arrow;
       return `<g><path class="entry-shadow" d="${path}"/><path d="${path}" stroke="${colour}"/></g>`;
-    }).join('');
+    })).join('');
   };
 
   const movesFor = (player: number, pawn: number, value: number) =>
@@ -840,9 +881,10 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     [x, y] = viewPoint([x, y]);
     const boardWidth = pawnsEl.clientWidth;
     const halfWidth = movePickerEl.offsetWidth / 2 + 8;
-    movePickerEl.style.left = `${Math.max(halfWidth, Math.min(boardWidth - halfWidth, x / 7 * boardWidth))}px`;
-    movePickerEl.style.top = `${y / 7 * 100}%`;
-    movePickerEl.classList.toggle('below', y / 7 * boardWidth < movePickerEl.offsetHeight + 32);
+    const u = units();
+    movePickerEl.style.left = `${Math.max(halfWidth, Math.min(boardWidth - halfWidth, x / u * boardWidth))}px`;
+    movePickerEl.style.top = `${y / u * 100}%`;
+    movePickerEl.classList.toggle('below', y / u * boardWidth < movePickerEl.offsetHeight + 32);
   }
 
   window.addEventListener('resize', () => {
@@ -871,14 +913,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     seated.forEach((p, i) =>
       pawnEls[i].forEach((el, j) => {
         const [x, y] = viewPoint(hopping.get(`${i}-${j}`) ?? spots.get(`${i}-${j}`)!);
-        el.style.left = `${(x / 7) * 100}%`;
-        el.style.top = `${(y / 7) * 100}%`;
+        el.style.left = `${(x / units()) * 100}%`;
+        el.style.top = `${(y / units()) * 100}%`;
         const pos = viewState.players[i].pawns[j];
-        el.classList.toggle('home', pos === HOME);
+        el.classList.toggle('home', pos === boardOf(viewState).home);
         el.classList.toggle('movable', i === current && movable.has(j));
         el.classList.toggle('picked', i === current && selectedPawn === j && human);
         el.disabled = !(i === current && movable.has(j));
-        const where = pos === WAITING ? 'waiting' : pos === HOME ? 'home' : `${pos} steps along`;
+        const where = pos === WAITING ? 'waiting' : pos === boardOf(viewState).home ? 'home' : `${pos} steps along`;
         el.setAttribute('aria-label', `${p.colourName} pawn ${j + 1}, ${where}`);
       }),
     );
@@ -908,7 +950,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       for (const move of options) {
         const pair = move.pawns.length === 2;
         const alternative = options.some((m) => m.value === move.value && m.pawns.length !== move.pawns.length);
-        const detail = move.from === WAITING ? move.pawns.length === 4 ? 'Enter all' : 'Enter pawn'
+        const detail = move.from === WAITING ? move.pawns.length > 1 ? 'Enter all' : 'Enter pawn'
           : pair ? `Pair · ${move.steps} ${move.steps === 1 ? 'square' : 'squares'}`
           : alternative ? `Single · ${move.steps} squares` : '';
         const button = choiceButton(String(move.value), move);
@@ -922,7 +964,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       }
       positionMovePicker(x, y);
       if (hintedMove && options.some((m) => sameMove(m, hintedMove!))) {
-        const [tx, ty] = hintedMove.to === HOME ? [3.5, 3.5] : centreOf(square(state.players[current].seat, hintedMove.to));
+        const board = boardOf(state);
+        const [tx, ty] = centreOf(hintedMove.to === board.home ? board.centre : board.square(state.players[current].seat, hintedMove.to));
         marksEl.innerHTML = `<circle class="target" cx="${tx * 100}" cy="${ty * 100}" r="40"/>`;
       }
     }
@@ -973,6 +1016,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     const winChances = showOutlook ? currentWinChances() : [];
     const winPercents = wholePercentages(winChances);
     winOutlookEl.hidden = !showOutlook;
+    $('win-help-board').hidden = !winModelFor(state).borrowedFrom;
     if (showOutlook) {
       winHeadingEl.textContent = `${target} place outlook`;
       winOutlookEl.setAttribute('aria-label', `Estimated chances of finishing ${target}`);
@@ -1018,7 +1062,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         </li>`;
       })
       .join('');
-    renderRecord(statsEl, RECORD_KEY);
+    renderRecord(statsEl, recordKey());
     onlineSnapshot();
     maybeShowTrajectory();
   }
@@ -1262,7 +1306,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
           'Final places: ' + placings.map((i, n) => `${ordinal(n + 1)} ${seated[i].name}`).join(', ') + '. The rest are stuck for good.';
       } else {
         statusEl.textContent = "Draw: no one can move any more, so the game can't go on.";
-        if (soloHuman() && !rehearsed) recordResult(RECORD_KEY, 'draw');
+        if (soloHuman() && !rehearsed) recordResult(recordKey(), 'draw');
       }
       render();
       return;
@@ -1564,7 +1608,8 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       for (const [n, idx] of steps.entries()) {
         if (id !== gameId) return;
         move.pawns.forEach((p, k) => {
-          const [x, y] = idx === HOME ? [3.5, 3.5] : centreOf(square(seat, idx));
+          const board = boardOf(state);
+          const [x, y] = centreOf(idx === board.home ? board.centre : board.square(seat, idx));
           hopping.set(`${move.player}-${p}`, [x + (move.pawns.length === 2 ? (k ? 0.12 : -0.12) : 0), y]);
         });
         render();
@@ -1584,14 +1629,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       if (outcome === 'betrayal') socialEvents.push(`${who.name} broke the truce by hitting ${seated[victim].name}. ${seated[victim].name} will remember.`);
       if (outcome === 'relay') socialEvents.push(`${seated[victim].name} gave ${who.name} a bonus throw that could reach the leader.`);
     }
-    if (move.from === WAITING) lastEl.textContent = move.pawns.length === 4 ? `${who.name} brought all four pawns in.` : `${who.name} brought a pawn in.`;
+    if (move.from === WAITING) lastEl.textContent = move.pawns.length > 1 ? `${who.name} brought all ${pawnWord(move.pawns.length)} pawns in.` : `${who.name} brought a pawn in.`;
     else if (hits.length) {
       const names = [...new Set(hits.map((h) => seated[h.player].name))].join(' and ');
       const verb = isYou(move.player) ? 'You hit' : `${who.name} hit`;
       lastEl.textContent = `${verb} ${names === 'You' ? 'you' : names}!${firstHit ? ' The inner ring is open.' : ''} Bonus throw.`;
       hits.forEach((h) => pawnEls[h.player][h.pawn].classList.add('knocked'));
       setTimeout(() => document.querySelectorAll('.pawn.knocked').forEach((el) => el.classList.remove('knocked')), 700);
-    } else if (move.to === HOME) lastEl.textContent = `${who.name} reached the centre.`;
+    } else if (move.to === boardOf(state).home) lastEl.textContent = `${who.name} reached the centre.`;
     else lastEl.textContent = `${who.name} moved ${move.steps}${move.pawns.length === 2 ? ' as a pair' : ''}.`;
     recordHistory(lastEl.textContent);
     socialEvents.forEach(announceSocial);
@@ -1614,10 +1659,11 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     if (!watching) {
       phase = 'over';
       const human = who.level === null;
+      const allIn = `All ${pawnWord(boardOf(state).pawns)} pawns are in the centre.`;
       statusEl.textContent = isYou(player)
-        ? 'You win! All four pawns are in the centre.'
-        : `${who.name} wins${human ? '! All four pawns are in the centre.' : '.'}`;
-      if (soloHuman() && !rehearsed) recordResult(RECORD_KEY, human ? 'win' : 'loss');
+        ? `You win! ${allIn}`
+        : `${who.name} wins${human ? `! ${allIn}` : '.'}`;
+      if (soloHuman() && !rehearsed) recordResult(recordKey(), human ? 'win' : 'loss');
       // Play on for the other places if someone is left to watch or play.
       const humansLeft = left.some((i) => seated[i].level === null);
       watchEl.hidden = !(left.length >= 2 && (human || humansLeft));
@@ -1643,7 +1689,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     pendingOffers = [];
     socialNoticeEl.textContent = '';
     gameId++;
-    state = newGame(SEATS_FOR[seated.length], f.get('entry') as EntryMode);
+    state = newGame(SEATS_FOR[seated.length], f.get('entry') as EntryMode, chosenBoard(f));
     positions = [state];
     historyDescriptions = ['Game started.'];
     historyIndex = null;
@@ -1673,7 +1719,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   // before the end, so the race replay can be checked without a full match.
   function jumpToEndgame(place: number): boolean {
     statusEl.textContent = 'Setting up the endgame…';
-    const rehearsal = rehearseEndgame(seated.length, state.entry, place);
+    const rehearsal = rehearseEndgame(seated.length, state.entry, state.size, place);
     if (!rehearsal) {
       statusEl.textContent = 'Could not find that ending; starting from the beginning.';
       return false;
@@ -1696,9 +1742,9 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
         text = step.lost ? `${who} lost the turn with a third 4 or 8.`
           : `${who} threw ${action.value}${action.value === 4 || action.value === 8 ? ' and earned another throw' : ''}.`;
       } else if (action.kind === 'skip') text = `${who} skips the risky throw.`;
-      else if (action.move.from === WAITING) text = `${who} brought ${action.move.pawns.length === 4 ? 'all four pawns' : 'a pawn'} in.`;
+      else if (action.move.from === WAITING) text = `${who} brought ${action.move.pawns.length > 1 ? `all ${pawnWord(action.move.pawns.length)} pawns` : 'a pawn'} in.`;
       else if (step.hits.length) text = `${who} hit ${[...new Set(step.hits.map((h) => name(h.player)))].join(' and ')}! Bonus throw.`;
-      else if (action.move.to === HOME) text = `${who} reached the centre.`;
+      else if (action.move.to === boardOf(state).home) text = `${who} reached the centre.`;
       else text = `${who} moved ${action.move.steps}${action.move.pawns.length === 2 ? ' as a pair' : ''}.`;
       positions.push(step.after);
       historyDescriptions.push(text);
@@ -1726,14 +1772,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     return true;
   }
 
-  function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[]) {
+  function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[], size: BoardSize = 5) {
     if (players.length < 2 || players.length > 4 || players.some((p) => !COLOURS.some((c) => c.id === p.colour))) return;
     onlineOwners = players.map((p) => p.id);
     onlineSeat = onlineOwners.indexOf(onlineSelf);
     if (onlineSeat < 0) return;
     seated = players.map((p) => ({ name: p.name.slice(0, 24), colour: p.colour,
       colourName: COLOURS.find((c) => c.id === p.colour)!.name, level: p.level, style: p.style }));
-    state = newGame(SEATS_FOR[seated.length], 'home');
+    state = newGame(SEATS_FOR[seated.length], 'home', size === 7 ? 7 : 5);
     social = newSocial(seated.length);
     turnStartSocial = structuredClone(social);
     pendingOffers = [];
@@ -1810,7 +1856,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       const proposed = command.move as Move;
       if (proposed.player !== current || ![1, 2, 3, 4, 8].includes(proposed.value)
         || !Array.isArray(proposed.pawns) || proposed.pawns.length < 1 || proposed.pawns.length > 2
-        || !proposed.pawns.every((pawn) => Number.isInteger(pawn) && pawn >= 0 && pawn < 4)
+        || !proposed.pawns.every((pawn) => Number.isInteger(pawn) && pawn >= 0 && pawn < boardOf(state).pawns)
         || !Number.isInteger(proposed.from) || !Number.isInteger(proposed.to)
         || !turn.bank.includes(proposed.value)) return;
       const move = legalMoves(state, current, proposed.value).find((candidate) => sameMove(candidate, proposed));
@@ -1859,16 +1905,21 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
     renderSetupRows();
     // Preview the table with the chosen seats.
     const f = new FormData(setupEl);
+    const size = chosenBoard(f);
+    const all = pawnWord(size - 1);
     $('entry-hint').textContent = f.get('entry') === 'all'
-      ? 'Spend one 4 or 8 to bring all four pawns in.'
+      ? `Spend one 4 or 8 to bring all ${all} pawns in.`
       : f.get('entry') === 'each'
         ? 'Spend a 4 or 8 for each pawn you bring in.'
-        : 'All four pawns begin on your home square.';
+        : `All ${all} pawns begin on your home square.`;
+    $('board-hint').textContent = size === 7
+      ? 'The bigger board: three rings, six pawns, and four more safe squares at the corners of the middle ring.'
+      : 'The classic board: an outer ring and one inner ring round the centre.';
     seated = buildSeated();
     social = newSocial(seated.length);
     pendingOffers = [];
     socialNoticeEl.textContent = '';
-    state = newGame(SEATS_FOR[seated.length], f.get('entry') as EntryMode);
+    state = newGame(SEATS_FOR[seated.length], f.get('entry') as EntryMode, size);
     positions = [state];
     historyDescriptions = ['Game started.'];
     historyIndex = null;
@@ -1887,7 +1938,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       if (j >= 0 && j !== i) humanColours[j] = humanColours[i];
       humanColours[i] = input.value;
       showSetup();
-    } else if (name === 'humans' || name === 'opponents' || name === 'entry') showSetup();
+    } else if (name === 'humans' || name === 'opponents' || name === 'entry' || name === 'board') showSetup();
     else if (name.startsWith('human-name-') && !input.value.trim()) {
       input.value = defaultHumanName(Number(name.slice(11)), setupCounts().humans);
     }
@@ -1938,7 +1989,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
       if (event.data.type === 'init' && !onlineReady && Array.isArray(event.data.players)) {
         onlineHosting = event.data.hosting === true;
         onlineSelf = String(event.data.self);
-        startOnlineGame(event.data.players);
+        startOnlineGame(event.data.players, event.data.board === 7 ? 7 : 5);
       } else if (event.data.type === 'snapshot') applyOnlineSnapshot(event.data.snapshot);
       else if (event.data.type === 'pause') pauseOnline();
       else if (event.data.type === 'resume') resumeOnline();
@@ -2104,6 +2155,25 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   .opponent-rows :global(svg) {
     width: 1.2rem;
     height: 1.2rem;
+  }
+
+  .setup .board-chip {
+    padding-left: 0.45rem;
+  }
+
+  .setup .mini-board :global(svg) {
+    display: block;
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .mini-board :global(.mini-floor) { fill: #a74630; }
+  .mini-board :global(.mini-grid),
+  .mini-board :global(.mini-cross) {
+    fill: none;
+    stroke: #f4eee3;
+    stroke-width: 0.09;
+    stroke-linecap: round;
   }
 
   .opponent-rows {
@@ -2276,8 +2346,14 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   .board-square {
+    --units: 7; /* board units across: the grid plus a one-unit margin each side */
     position: relative;
     aspect-ratio: 1;
+  }
+
+  /* The 7x7 board has more squares, so it gets more room on wide screens. */
+  .floor[data-board='7'] {
+    width: min(100%, 42rem);
   }
 
   .board {
@@ -2341,7 +2417,7 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
 
   .pawns :global(.pawn) {
     position: absolute;
-    width: 6.4%;
+    width: calc(44.8% / var(--units));
     aspect-ratio: 1;
     padding: 0;
     border: 0;
@@ -2367,7 +2443,12 @@ const dots = Array.from({ length: 16 }, (_, i) => (i * Math.PI) / 8);
   }
 
   .pawns :global(.pawn.home) {
-    width: 3.3%;
+    width: calc(23.1% / var(--units));
+  }
+
+  /* Six finished pawns share a quarter of the centre square. */
+  .board-square[data-board='7'] .pawns :global(.pawn.home) {
+    width: calc(15% / var(--units));
   }
 
   .pawns :global(.pawn.movable) {

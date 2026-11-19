@@ -2,13 +2,14 @@ import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
-import { finished, recordThrow } from '../src/scripts/chowkaBhara';
+import { BOARD_SIZES, boardFor, finished, recordThrow, type BoardSize } from '../src/scripts/chowkaBhara';
 import { applyKnownAction, copyTurn, playMatch, possibleActions, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
-import { CHOWKA_MODEL, decisionScore } from '../src/scripts/chowkaBharaModel';
+import { decisionScore } from '../src/scripts/chowkaBharaModel';
 import { chooseAction, type Style } from '../src/scripts/chowkaBharaAI';
 import {
-  CHOWKA_WIN_MODEL,
+  CHOWKA_WIN_MODELS,
   WIN_FEATURE_NAMES,
+  WIN_MODEL_FILES,
   validateWinModel,
   winFeatures,
   type WinModel,
@@ -16,6 +17,7 @@ import {
 
 interface DataJob {
   id: number;
+  size: BoardSize;
   games: number;
   seed: number;
   sampleEvery: number;
@@ -46,13 +48,13 @@ const policy = (style: Style, hard: boolean): MatchPolicy => (context) => {
       for (const [value, count] of THROW_ODDS) {
         const after = copyTurn(context.turn);
         recordThrow(after, value);
-        score += count / 16 * decisionScore(context.state, context.player, after, context.turnStart, CHOWKA_MODEL);
+        score += count / 16 * decisionScore(context.state, context.player, after, context.turnStart);
       }
     } else {
       const after = applyKnownAction(context.state, context.turn, action);
-      score = decisionScore(after.state, context.player, after.turn, context.turnStart, CHOWKA_MODEL)
+      score = decisionScore(after.state, context.player, after.turn, context.turnStart)
         + after.hits.length * (style === 'aggressive' ? 16 : style === 'cautious' ? 2 : 5)
-        + (action.kind === 'move' && action.move.to === 24 && style === 'racer' ? 12 : 0);
+        + (action.kind === 'move' && action.move.to === boardFor(context.state.size).home && style === 'racer' ? 12 : 0);
     }
     if (score > bestScore) { best = action; bestScore = score; }
   }
@@ -75,6 +77,7 @@ function generate(job: DataJob): DataResult {
       policies: orderedStyles.map((style, seat) => policy(style, seat === hardSeat)),
       styles: orderedStyles,
       entry: 'home',
+      size: job.size,
       seed: job.seed + game * 0x9e3779b1,
       observeBehaviour: false,
       onDecision: ({ state, player: current, turn: liveTurn, turnStart }) => {
@@ -131,11 +134,16 @@ if (!isMainThread) {
   const sampleEvery = Math.max(4, numberArg('sample-every', 14));
   const workers = Math.max(1, Math.min(numberArg('workers', Math.min(8, availableParallelism() - 1)), availableParallelism()));
   const featureCount = WIN_FEATURE_NAMES.length;
+  // --board=5 (default) or --board=7 picks the board to sample and the file to replace.
+  const size = numberArg('board', 5) as BoardSize;
+  if (!BOARD_SIZES.includes(size)) throw new Error(`--board must be one of ${BOARD_SIZES.join(', ')}.`);
+  const CHOWKA_WIN_MODEL = CHOWKA_WIN_MODELS[size];
 
   const generateParallel = async (totalGames: number, baseSeed: number): Promise<DataResult[]> => {
     const shards = Math.min(workers, totalGames);
     const jobs = Array.from({ length: shards }, (_, id) => ({
       id,
+      size,
       games: Math.floor(totalGames / shards) + (id < totalGames % shards ? 1 : 0),
       seed: baseSeed + id * 100003,
       sampleEvery,
@@ -158,7 +166,7 @@ if (!isMainThread) {
     return results.sort((a, b) => a.id - b.id);
   };
 
-  console.log(`Generating four-player home-entry positions from ${games} training, ${validationGames} calibration and ${testGames} test games on ${workers} workers.`);
+  console.log(`Generating four-player home-entry ${size}x${size} positions from ${games} training, ${validationGames} calibration and ${testGames} test games on ${workers} workers.`);
   const trainingParts = await generateParallel(games, seed);
   const validationParts = await generateParallel(validationGames, seed ^ 0x5f3759df);
   const testParts = await generateParallel(testGames, seed ^ 0x3c6ef372);
@@ -317,6 +325,7 @@ if (!isMainThread) {
 
   const model: WinModel = {
     version: 3,
+    board: size,
     weights: Array.from(weights),
     temperature,
     trainedGames: games,
@@ -328,7 +337,7 @@ if (!isMainThread) {
     testByPlace,
   };
   if (!validateWinModel(model)) throw new Error('Training produced an invalid win model.');
-  const destination = resolve('src/data/chowka-bhara-win-model.json');
+  const destination = resolve(WIN_MODEL_FILES[size]);
   await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
   console.log(`Saved win model to ${destination}.`);
   console.log(`Validation: log loss ${validationMetrics.logLoss.toFixed(4)} (uniform ${validationMetrics.uniformLogLoss.toFixed(4)}), Brier ${validationMetrics.brier.toFixed(4)}, accuracy ${(validationMetrics.accuracy * 100).toFixed(1)}%, calibration error ${(validationMetrics.calibrationError * 100).toFixed(1)}%.`);

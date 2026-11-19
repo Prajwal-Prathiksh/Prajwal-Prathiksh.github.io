@@ -1,8 +1,10 @@
 type Colour = 'blue' | 'red' | 'yellow' | 'green';
 type Seat = { id: string; name: string; colour: Colour; ready: boolean };
-type Lobby = { type: 'lobby'; seats: Seat[]; bots: number };
+type Board = 5 | 7;
+type Lobby = { type: 'lobby'; seats: Seat[]; bots: number; board?: Board };
 type GamePlayer = { id: string; name: string; colour: Colour; level: 'hard' | null; style: 'balanced' };
-type GameConfig = { players: GamePlayer[] };
+type GameConfig = { players: GamePlayer[]; board: Board };
+const boardOf = (value: unknown): Board => value === 7 ? 7 : 5;
 type Wire = { type: string; id?: string; from?: string; to?: string; role?: string; signal?: RTCSessionDescriptionInit | RTCIceCandidateInit; accept?: boolean };
 
 const colours: Colour[] = ['blue', 'red', 'yellow', 'green'];
@@ -14,6 +16,8 @@ const roomView = $('room');
 const entry = $('entry');
 const linkInput = $<HTMLInputElement>('link');
 const botInput = $<HTMLSelectElement>('bots');
+const boardInput = $<HTMLSelectElement>('board');
+const boardNote = $('board-note');
 const seatsList = $<HTMLOListElement>('seats');
 const requests = $('requests');
 const connections = $<HTMLUListElement>('connections');
@@ -35,7 +39,7 @@ let hosting = false;
 let self = '';
 let socket: WebSocket | null = null;
 let hostId = '';
-let lobby: Lobby = { type: 'lobby', seats: [], bots: 3 };
+let lobby: Lobby = { type: 'lobby', seats: [], bots: 3, board: 5 };
 const peers = new Map<string, { pc: RTCPeerConnection; channel: RTCDataChannel; pending: RTCIceCandidateInit[] }>();
 let gameStarted = false;
 let gameReady = false;
@@ -120,6 +124,9 @@ function render() {
     seatsList.append(li);
   }
   botInput.value = String(lobby.bots);
+  boardInput.value = String(boardOf(lobby.board));
+  boardInput.disabled = !hosting;
+  boardNote.textContent = boardOf(lobby.board) === 7 ? 'Three rings and six pawns each.' : 'The classic board, four pawns each.';
   [...botInput.options].forEach((o) => { o.disabled = Number(o.value) + lobby.seats.length > 4 || Number(o.value) + lobby.seats.length < 2; });
   startButton.hidden = !hosting || gameStarted;
   startButton.disabled = lobby.seats.length + lobby.bots < 2 || lobby.seats.length + lobby.bots > 4 || lobby.seats.some((s) => !s.ready);
@@ -164,15 +171,15 @@ function onData(id: string, raw: string) {
     if (data.type === 'name' && typeof data.name === 'string') { seat.name = data.name.trim().slice(0, 24) || 'Player'; broadcast(); }
     if (data.type === 'colour' && typeof data.colour === 'string') setColour(id, data.colour as Colour);
   } else if (data.type === 'start' && Array.isArray(data.players)) {
-    openGame({ players: data.players as GamePlayer[] });
+    openGame({ players: data.players as GamePlayer[], board: boardOf(data.board) });
   } else if (data.type === 'restart' && Array.isArray(data.players)) {
-    openGame({ players: data.players as GamePlayer[] }, true);
+    openGame({ players: data.players as GamePlayer[], board: boardOf(data.board) }, true);
   } else if (data.type === 'pause' && gameStarted) {
     showOffline(String(data.name ?? 'A player'), false);
   } else if (data.type === 'resume' && gameStarted) {
     clearOffline();
   } else if (data.type === 'players' && gameStarted && Array.isArray(data.players)) {
-    gameConfig = { players: data.players as GamePlayer[] };
+    gameConfig = { players: data.players as GamePlayer[], board: gameConfig?.board ?? 5 };
     frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'players', players: gameConfig.players }, location.origin);
   } else if (data.type === 'snapshot' && gameStarted) {
     if (gameReady) frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'snapshot', snapshot: data.snapshot }, location.origin);
@@ -215,7 +222,7 @@ function createPeer(id: string, initiator: boolean) {
         broadcast();
         if (gameStarted && gameConfig) {
           offline.delete(id);
-          data.send(JSON.stringify({ type: 'start', players: gameConfig.players }));
+          data.send(JSON.stringify({ type: 'start', players: gameConfig.players, board: gameConfig.board }));
           sendCatchup(data);
           if (offline.size) data.send(JSON.stringify({ type: 'pause', name: offlineNames() }));
           else if (!offline.size) resumeMatch();
@@ -311,7 +318,7 @@ function resumeMatch() {
 function replaceMissingWithBots() {
   if (!hosting || !gameConfig || !offline.size) return false;
   const missing = new Set(offline);
-  gameConfig = { players: gameConfig.players.map((player) => missing.has(player.id)
+  gameConfig = { ...gameConfig, players: gameConfig.players.map((player) => missing.has(player.id)
     ? { ...player, id: '', name: `${player.colour[0].toUpperCase()}${player.colour.slice(1)} bot`, level: 'hard' }
     : player) };
   for (const id of missing) {
@@ -333,7 +340,7 @@ $<HTMLButtonElement>('continue-bot').onclick = () => {
 
 $<HTMLButtonElement>('restart-bot').onclick = () => {
   if (!replaceMissingWithBots() || !gameConfig) return;
-  tellGuests({ type: 'restart', players: gameConfig.players });
+  tellGuests({ type: 'restart', players: gameConfig.players, board: gameConfig.board });
   openGame(gameConfig, true);
 };
 
@@ -375,10 +382,10 @@ startButton.onclick = () => {
   const used = new Set(people.map((seat) => seat.colour));
   const bots = colours.filter((colour) => !used.has(colour)).slice(0, lobby.bots)
     .map((colour) => ({ id: '', name: `${colour[0].toUpperCase()}${colour.slice(1)}`, colour, level: 'hard' as const, style: 'balanced' as const }));
-  const config: GameConfig = { players: [...people, ...bots] };
+  const config: GameConfig = { players: [...people, ...bots], board: boardOf(lobby.board) };
   if (config.players.length < 2 || config.players.length > 4) return;
   send({ type: 'lock' });
-  for (const { channel } of peers.values()) if (channel.readyState === 'open') channel.send(JSON.stringify({ type: 'start', players: config.players }));
+  for (const { channel } of peers.values()) if (channel.readyState === 'open') channel.send(JSON.stringify({ type: 'start', players: config.players, board: config.board }));
   openGame(config);
 };
 
@@ -386,7 +393,7 @@ window.addEventListener('message', (event) => {
   if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.source !== 'chowka-game') return;
   if (event.data.type === 'ready' && gameStarted && gameConfig) {
     gameReady = true;
-    frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'init', hosting, self, players: gameConfig.players }, location.origin);
+    frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'init', hosting, self, players: gameConfig.players, board: gameConfig.board }, location.origin);
     for (const snapshot of pendingSnapshots.splice(0))
       frame.contentWindow?.postMessage({ source: 'chowka-online', type: 'snapshot', snapshot }, location.origin);
   } else if (event.data.type === 'snapshot' && hosting && gameStarted) {
@@ -534,6 +541,7 @@ $<HTMLButtonElement>('copy').onclick = async () => {
   $<HTMLButtonElement>('copy').textContent = 'Copied';
 };
 botInput.onchange = () => { if (hosting) { lobby.bots = Number(botInput.value); broadcast(); } };
+boardInput.onchange = () => { if (hosting) { lobby.board = boardOf(Number(boardInput.value)); broadcast(); } };
 nameInput.onchange = () => {
   if (hosting) { const seat = lobby.seats.find((s) => s.id === self); if (seat) { seat.name = cleanName(); broadcast(); } }
   else if (peers.get(hostId)?.channel.readyState === 'open') peers.get(hostId)!.channel.send(JSON.stringify({ type: 'name', name: cleanName() }));

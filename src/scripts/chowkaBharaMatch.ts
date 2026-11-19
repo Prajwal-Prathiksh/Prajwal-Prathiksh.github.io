@@ -14,6 +14,7 @@ import {
   stranded,
   turnOver,
   type Action,
+  type BoardSize,
   type EntryMode,
   type Hit,
   type Seat,
@@ -116,6 +117,7 @@ export interface MatchOptions {
   styles?: string[];
   seats?: Seat[];
   entry?: EntryMode;
+  size?: BoardSize;
   seed?: number;
   maxTurns?: number;
   onTurn?: (state: State, player: number, social: SocialState) => void;
@@ -132,7 +134,7 @@ export function playMatch(options: MatchOptions): MatchResult {
   if (players < 2 || players > 4) throw new Error('A match needs two to four policies.');
   const styles = options.styles ?? Array(players).fill('balanced');
   const random = seededRandom(options.seed ?? 1);
-  let state = newGame(options.seats ?? defaultSeats[players], options.entry ?? 'home');
+  let state = newGame(options.seats ?? defaultSeats[players], options.entry ?? 'home', options.size ?? 5);
   const social = newSocial(players);
   const places: number[] = [];
   let current = 0;

@@ -22,7 +22,9 @@ import Base from '../../../layouts/Base.astro';
       <h2>Seats</h2>
       <ol id="seats" class="seats"></ol>
       <label id="bot-control" class="field">Computer players <select id="bots"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select></label>
-      <p id="guest-note" class="muted note" hidden>The host chooses the computer seats.</p>
+      <label class="field">Board <select id="board"><option value="5">5×5 · four pawns each</option><option value="7">7×7 · six pawns each</option></select></label>
+      <p id="board-note" class="muted note">The classic board, four pawns each.</p>
+      <p id="guest-note" class="muted note" hidden>The host chooses the board and the computer seats.</p>
       <button class="btn primary" id="start-game" type="button" hidden>Start game</button>
       <h2>Connections</h2>
       <div id="requests"></div>

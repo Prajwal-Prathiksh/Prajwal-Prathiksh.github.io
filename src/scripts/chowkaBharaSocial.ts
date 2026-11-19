@@ -1,4 +1,4 @@
-import { HOME, LAST_OUTER, WAITING, apply, finished, legalMoves, type State } from './chowkaBhara';
+import { WAITING, apply, boardOf, classicSteps, finished, legalMoves, type State } from './chowkaBhara';
 
 export interface Pact {
   a: number;
@@ -46,15 +46,19 @@ export const pactFor = (social: SocialState, player: number) =>
 export const allyOf = (pact: Pact, player: number) => pact.a === player ? pact.b : pact.a;
 
 // Count pawns home and near the centre, but discount progress at the outer gate
-// until that player has earned access to the inner ring with a hit.
+// until that player has earned access to the inner ring with a hit. Scores
+// use the 5x5 scale on every board, so truce thresholds mean the same thing.
 export function threat(s: State, player: number): number {
+  const b = boardOf(s);
   const p = s.players[player];
+  const share = 4 / b.pawns;
   let score = p.hasHit ? 5 : 0;
   for (const pos of p.pawns) {
-    if (pos === HOME) score += 28;
+    const steps = classicSteps(b, pos);
+    if (pos === b.home) score += 28 * share;
     else if (pos === WAITING) score += 0;
-    else if (pos > LAST_OUTER) score += 10 + (pos - LAST_OUTER) * 2.2;
-    else score += (p.hasHit ? 0.45 : 0.25) * pos;
+    else if (pos > b.lastOuter) score += (10 + (steps - 15) * 2.2) * share;
+    else score += (p.hasHit ? 0.45 : 0.25) * steps * share;
   }
   return score;
 }

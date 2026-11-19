@@ -1,20 +1,17 @@
 // Frozen tournament reference from commit a71e7b8. Keep this implementation
 // unchanged so reported results remain comparable to the original Hard AI.
+// Only the board geometry is now read from the state, which leaves its 5x5
+// play exactly as it was.
 import {
-  HOME,
-  LAST_OUTER,
-  PAIR_SQUARE,
   WAITING,
   apply,
+  boardOf,
   canSkip,
   finished,
   isPotentialPair,
-  isSafe,
-  keyOf,
   legalMoves,
   recordSpend,
   recordThrow,
-  square,
   stranded,
   type Action,
   type Hit,
@@ -40,6 +37,7 @@ const boardKey = (s: State) => s.players.map((p) => `${p.pawns.join(',')}/${p.pa
 const copyTurn = (t: Turn): Turn => ({ bank: [...t.bank], owed: t.owed, streak: t.streak, run: [...t.run] });
 
 function playerScore(s: State, player: number, style: Style): number {
+  const { home: HOME, lastOuter: LAST_OUTER, pairSquare: PAIR_SQUARE, isSafe, square, key: keyOf } = boardOf(s);
   const p = s.players[player];
   const w = WEIGHTS[style];
   let score = p.hasHit ? w.hit : 0;
@@ -49,7 +47,7 @@ function playerScore(s: State, player: number, style: Style): number {
     if (pos === HOME) { score += HOME * w.progress + w.centre; return; }
     score += pos * w.progress;
     if (isSafe(square(p.seat, pos))) score += w.safe;
-    if (pos >= 13 && pos <= LAST_OUTER && !p.hasHit) gateCount++;
+    if (pos >= LAST_OUTER - 2 && pos <= LAST_OUTER && !p.hasHit) gateCount++;
     if (pos > LAST_OUTER) {
       const left = HOME - pos;
       if ([1, 2, 3, 4, 8].includes(left)) score += 6;
@@ -164,6 +162,7 @@ function actionReason(s: State, action: Action, social: SocialState, nextPlayer:
   if (action.kind === 'throw') return 'Throw now to see another option before spending a held value.';
   if (action.kind === 'skip') return 'Skip the risky throw and use the values already held.';
   const m = action.move;
+  const { home: HOME, isSafe, square } = boardOf(s);
   const { state: after, hits } = apply(s, m);
   const pact = pactFor(social, m.player);
   if (pact && hits.some((h) => h.player === allyOf(pact, m.player))) {

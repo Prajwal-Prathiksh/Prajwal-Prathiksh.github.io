@@ -399,11 +399,13 @@ const COLOURS = [
     historyLabels: string[];
   }
 
+  // `rangoli` is the powder colour for the home-square borders and ring-entry
+  // guides. Red sits close to the red-oxide floor, so its dots get a cream ring.
   const COLOURS = [
-    { id: 'blue', name: 'Blue', chalk: '#b4d5ff', arrow: '#3f9dff' },
-    { id: 'red', name: 'Red', chalk: '#ffb098', arrow: '#ff6759' },
-    { id: 'yellow', name: 'Yellow', chalk: '#fff3a5', arrow: '#ffd638' },
-    { id: 'green', name: 'Green', chalk: '#c4f3b3', arrow: '#43e384' },
+    { id: 'blue', name: 'Blue', chalk: '#b4d5ff', arrow: '#3f9dff', rangoli: '#2f7dff', ring: '' },
+    { id: 'red', name: 'Red', chalk: '#ffb098', arrow: '#ff6759', rangoli: '#ff2a3d', ring: '#ffe9d4' },
+    { id: 'yellow', name: 'Yellow', chalk: '#fff3a5', arrow: '#ffd638', rangoli: '#ffc400', ring: '' },
+    { id: 'green', name: 'Green', chalk: '#c4f3b3', arrow: '#43e384', rangoli: '#1fbf4f', ring: '' },
   ];
   const STYLES: { id: Style; name: string }[] = [
     { id: 'balanced', name: 'Balanced' },
@@ -834,14 +836,24 @@ const COLOURS = [
       });
     });
     // Tinted insets leave the chalk cell borders and safe-square crosses legible.
+    // Each home square gets a rangoli border: a ring of powder dots with a
+    // four-petal flower in each corner, in the player's colour.
     homeGuidesEl.innerHTML = state.players.map((p, i) => {
       const [r, c] = board.square(p.seat, 0);
       const colour = COLOURS.find((entry) => entry.id === seated[i].colour)!;
-      const x = 107 + c * 100;
-      const y = 107 + r * 100;
-      return `<g><rect class="home-fill" x="${x}" y="${y}" width="86" height="86" rx="12" fill="${colour.arrow}"/>`
-        + `<rect class="home-shadow" x="${x}" y="${y}" width="86" height="86" rx="12"/>`
-        + `<rect class="home-outline" x="${x}" y="${y}" width="86" height="86" rx="12" stroke="${colour.arrow}"/></g>`;
+      const x = 100 + c * 100;
+      const y = 100 + r * 100;
+      const spots: [number, number][] = [];
+      for (let k = 0; k <= 8; k++) {
+        const t = 12 + k * 9.5;
+        spots.push([t, 12], [t, 88], [12, t], [88, t]);
+      }
+      const corners = [[12, 12], [88, 12], [12, 88], [88, 88]];
+      const dots = (radius: number) => spots.map(([dx, dy]) => `<circle cx="${x + dx}" cy="${y + dy}" r="${radius}"/>`).join('');
+      const petals = (grow: number) => corners.map(([dx, dy]) => [45, 135].map((turn) =>
+        `<ellipse cx="${x + dx}" cy="${y + dy}" rx="${3.4 + grow}" ry="${8.5 + grow}" transform="rotate(${turn} ${x + dx} ${y + dy})"/>`).join('')).join('');
+      const ring = colour.ring ? `<g fill="${colour.ring}">${dots(4.9)}${petals(1.3)}</g>` : '';
+      return `<g class="rangoli" filter="url(#chalk)">${ring}<g fill="${colour.rangoli}">${dots(3.6)}${petals(0)}</g></g>`;
     }).join('');
     // A chalk outline for each seat's waiting area.
     yardsEl.innerHTML = state.players
@@ -860,15 +872,37 @@ const COLOURS = [
     entryGuidesEl.innerHTML = state.players.flatMap((p, i) => board.ringStarts.slice(1).map((start) => {
       const [ox, oy] = centreOf(board.square(p.seat, start - 1)).map((n) => n * 100);
       const [ix, iy] = centreOf(board.square(p.seat, start)).map((n) => n * 100);
+      const [nx, ny] = centreOf(board.square(p.seat, start + 1)).map((n) => n * 100);
       const dx = (ix - ox) / 100;
       const dy = (iy - oy) / 100;
-      const mx = (ox + ix) / 2;
-      const my = (oy + iy) / 2;
-      const tipX = mx + dx * 22;
-      const tipY = my + dy * 22;
-      const path = `M${mx - dx * 22} ${my - dy * 22}L${tipX} ${tipY}M${tipX - dx * 9 - dy * 7} ${tipY - dy * 9 + dx * 7}L${tipX} ${tipY}L${tipX - dx * 9 + dy * 7} ${tipY - dy * 9 - dx * 7}`;
-      const colour = COLOURS.find((c) => c.id === seated[i].colour)!.arrow;
-      return `<g><path class="entry-shadow" d="${path}"/><path d="${path}" stroke="${colour}"/></g>`;
+      // Which way the pawn turns once it is inside the new ring.
+      const tx = (nx - ix) / 100;
+      const ty = (ny - iy) / 100;
+      const head = (x: number, y: number, ux: number, uy: number, size = 1) =>
+        `M${x - (ux * 9 + uy * 7) * size} ${y - (uy * 9 - ux * 7) * size}L${x} ${y}L${x - (ux * 9 - uy * 7) * size} ${y - (uy * 9 + ux * 7) * size}`;
+      let path: string;
+      let kind = '';
+      if (tx === dx && ty === dy) {
+        // The route carries straight on (the 5x5 board): one short arrow across the boundary.
+        const mx = (ox + ix) / 2;
+        const my = (oy + iy) / 2;
+        path = `M${mx - dx * 22} ${my - dy * 22}L${mx + dx * 22} ${my + dy * 22}${head(mx + dx * 22, my + dy * 22, dx, dy)}`;
+      } else {
+        // A small kinked arrow tucked into the corner where the route turns:
+        // it crosses the ring boundary beside the grid line on the side the
+        // pawn turns towards, then bends over that line into the next square.
+        // That leaves the middle of each square clear for pawns.
+        const bx = (ox + ix) / 2 + tx * 36;
+        const by = (oy + iy) / 2 + ty * 36;
+        const corner = [bx + dx * 22, by + dy * 22];
+        const tip = [corner[0] + tx * 32, corner[1] + ty * 32];
+        path = `M${bx - dx * 22} ${by - dy * 22}L${corner[0]} ${corner[1]}L${tip[0]} ${tip[1]}${head(tip[0], tip[1], tx, ty, 0.7)}`;
+        kind = ' kink';
+      }
+      // Drawn as a dotted powder line, like the rangoli borders on the home squares.
+      const shade = COLOURS.find((c) => c.id === seated[i].colour)!;
+      const ring = shade.ring ? `<path class="ring" d="${path}" stroke="${shade.ring}"/>` : '';
+      return `<g class="entry${kind}" filter="url(#chalk)">${ring}<path d="${path}" stroke="${shade.rangoli}"/></g>`;
     })).join('');
   };
 
@@ -2282,31 +2316,20 @@ const COLOURS = [
   }
 
   .entry-guides { pointer-events: none; }
+  /* Ring-entry guides: dotted rangoli powder in each player's colour. */
   .entry-guides :global(path) {
     fill: none;
-    stroke-width: 5.5;
+    stroke-width: 6.5;
     stroke-linecap: round;
     stroke-linejoin: round;
+    stroke-dasharray: 0.1 9;
   }
-  .entry-guides :global(path.entry-shadow) {
-    stroke: #432118;
-    stroke-width: 10;
-    opacity: 0.95;
+
+  .entry-guides :global(path.ring) {
+    stroke-width: 9;
   }
 
   .home-guides { pointer-events: none; }
-  .home-guides :global(.home-fill) { opacity: 0.22; }
-  .home-guides :global(.home-shadow) {
-    fill: none;
-    stroke: #432118;
-    stroke-width: 8;
-    opacity: 0.75;
-  }
-  .home-guides :global(.home-outline) {
-    fill: none;
-    stroke-width: 4;
-    opacity: 0.9;
-  }
 
   select {
     font: inherit;

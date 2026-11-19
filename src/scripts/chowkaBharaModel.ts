@@ -3,13 +3,14 @@ import {
   apply,
   boardOf,
   isPaired,
+  isBonus,
   isPotentialPair,
   legalMoves,
+  throwOdds,
   type BoardSize,
   type State,
   type Turn,
 } from './chowkaBhara';
-import { THROW_ODDS } from './chowkaBharaMatch';
 import trainedModel5 from '../data/chowka-bhara-model.json';
 import trainedModel7 from '../data/chowka-bhara-model-7x7.json';
 
@@ -18,11 +19,14 @@ export const BOARD_FEATURE_NAMES = [
   'potential-pairs', 'committed-pairs', 'finish-chance', 'mobility',
   'capture-chance', 'exposure',
 ] as const;
+// Held throws are counted in five slots (see Board.throwSlot): low, middle and
+// high plain throws, then chowka and bhara. On a 5x5 board these are 1, 2, 3,
+// 4 and 8.
 export const TURN_FEATURE_NAMES = [
-  'held-1', 'held-2', 'held-3', 'held-4', 'held-8', 'bank-size',
-  'bank-variety', 'owed-throws', 'bonus-streak', 'usable-held',
-  'capturing-held', 'finishing-held', 'bonus-held', 'skip-available',
-  'bust-risk', 'turn-gain', 'followup-capture',
+  'held-low', 'held-mid', 'held-high', 'held-chowka', 'held-bhara', 'bank-size',
+  'bank-variety', 'owed-throws', 'usable-held',
+  'capturing-held', 'finishing-held', 'bonus-held',
+  'turn-gain', 'followup-capture',
 ] as const;
 export const FEATURE_NAMES = [...BOARD_FEATURE_NAMES, ...TURN_FEATURE_NAMES] as const;
 
@@ -53,7 +57,8 @@ export const MODEL_FILES: Record<BoardSize, string> = {
 };
 export const modelFor = (state: State): EvaluationModel => CHOWKA_MODELS[boardOf(state).size];
 
-const chanceOf = (value: number) => (THROW_ODDS.find(([throwValue]) => throwValue === value)?.[1] ?? 0) / 16;
+const chanceOf = (state: State, value: number) =>
+  throwOdds(boardOf(state)).find(([throwValue]) => throwValue === value)?.[1] ?? 0;
 const featureCache = new WeakMap<State, Map<number, number[]>>();
 const tacticalCache = new WeakMap<State, { capture: number[]; exposure: number[] }>();
 
@@ -63,13 +68,13 @@ function tacticalFeatures(state: State) {
   const capture = Array(state.players.length).fill(0);
   const chanceByAttacker = Array.from({ length: state.players.length }, () => Array(state.players.length).fill(0));
   for (let actor = 0; actor < state.players.length; actor++) {
-    for (const [value, count] of THROW_ODDS) {
+    for (const [value, chance] of throwOdds(boardOf(state))) {
       const victims = new Set<number>();
       for (const move of legalMoves(state, actor, value)) {
         apply(state, move).hits.forEach((hit) => victims.add(hit.player));
       }
-      if (victims.size) capture[actor] += count / 16;
-      victims.forEach((victim) => { chanceByAttacker[actor][victim] += count / 16; });
+      if (victims.size) capture[actor] += chance;
+      victims.forEach((victim) => { chanceByAttacker[actor][victim] += chance; });
     }
   }
   const exposure = state.players.map((_, victim) =>
@@ -103,13 +108,13 @@ export function playerFeatures(state: State, player: number): number[] {
     if (isPaired(state, player, pawn) && p.partner[pawn] > pawn) committedPairs++;
     const left = b.home - pos;
     const needed = isPaired(state, player, pawn) ? left * 2 : left;
-    finishChance += chanceOf(needed);
+    finishChance += chanceOf(state, needed);
   });
 
   let mobility = 0;
-  for (const [value, count] of THROW_ODDS) {
+  for (const [value, chance] of throwOdds(b)) {
     const moves = legalMoves(state, player, value);
-    mobility += count / 16 * Math.min(1, moves.length / b.pawns);
+    mobility += chance * Math.min(1, moves.length / b.pawns);
   }
   const tactical = tacticalFeatures(state);
   const n = b.pawns;
@@ -153,8 +158,9 @@ export function modelScore(state: State, player: number, model: EvaluationModel 
 }
 
 export function turnFeatures(state: State, player: number, turn: Turn, turnStart: State): number[] {
-  const values = [1, 2, 3, 4, 8];
-  const counts = values.map((value) => turn.bank.filter((held) => held === value).length / 4);
+  const board = boardOf(state);
+  const counts = [0, 0, 0, 0, 0];
+  for (const held of turn.bank) counts[board.throwSlot(held)] += 1 / 4;
   const unique = new Set(turn.bank);
   let usable = 0;
   let capturing = 0;
@@ -171,15 +177,12 @@ export function turnFeatures(state: State, player: number, turn: Turn, turnStart
   return [
     ...counts,
     bankSize,
-    unique.size / 5,
+    unique.size / board.throws.length,
     Math.min(1, turn.owed / 3),
-    turn.streak / 2,
     usable / Math.max(1, turn.bank.length),
     capturing / Math.max(1, turn.bank.length),
     finishing / Math.max(1, turn.bank.length),
-    turn.bank.filter((value) => value === 4 || value === 8).length / Math.max(1, turn.bank.length),
-    turn.owed > 0 && turn.streak >= 2 ? 1 : 0,
-    turn.owed > 0 && turn.streak >= 2 ? 0.125 * (1 + bankSize) : 0,
+    turn.bank.filter((value) => isBonus(board, value)).length / Math.max(1, turn.bank.length),
     gain,
     turn.owed > 0 ? playerFeatures(state, player)[10] : 0,
   ];

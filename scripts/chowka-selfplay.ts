@@ -4,7 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
 import { chooseAction } from '../src/scripts/chowkaBharaAI';
 import { chooseOriginalHardAction } from '../src/scripts/chowkaBharaOriginalAI';
-import { applyKnownAction, copyTurn, playMatch, possibleActions, resolveTurn, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
+import { applyKnownAction, copyTurn, playMatch, possibleActions, resolveTurn, seededRandom, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
 import {
   CHOWKA_MODELS,
   FEATURE_NAMES,
@@ -17,7 +17,7 @@ import {
   type EvaluationModel,
 } from '../src/scripts/chowkaBharaModel';
 import type { Action, BoardSize, EntryMode, State, Turn } from '../src/scripts/chowkaBhara';
-import { BOARD_SIZES, boardFor, legalMoves, newGame, newTurn, recordThrow } from '../src/scripts/chowkaBhara';
+import { BOARD_SIZES, boardFor, boardOf, legalMoves, newGame, newTurn, recordThrow, throwOdds } from '../src/scripts/chowkaBhara';
 import { observeAction } from '../src/scripts/chowkaBharaOpponent';
 import { newSocial, styleBelief } from '../src/scripts/chowkaBharaSocial';
 import { WIN_FEATURE_NAMES, winFeatures, winProbabilities } from '../src/scripts/chowkaBharaWin';
@@ -74,12 +74,9 @@ const originalHardPolicy: MatchPolicy = (context) =>
 const positionalPolicy = (model: EvaluationModel): MatchPolicy => (context) => {
   const actions = possibleActions(context.state, context.player, context.turn);
   const moves = actions.filter((action): action is Extract<Action, { kind: 'move' }> => action.kind === 'move');
-  if (!moves.length) return actions.find((action) => action.kind === 'skip')
-    ?? actions.find((action) => action.kind === 'throw') ?? null;
-  // Build a modest bank before committing it, while avoiding the third risky
-  // bonus throw. The position model chooses the actual move.
-  if (context.turn.owed > 0 && context.turn.streak < 2 && context.turn.bank.length < 2) return { kind: 'throw' };
-  if (context.turn.streak >= 2 && context.turn.owed > 0) return actions.find((action) => action.kind === 'skip') ?? moves[0];
+  if (!moves.length) return actions.find((action) => action.kind === 'throw') ?? null;
+  // Build a modest bank before committing it. The position model chooses the actual move.
+  if (context.turn.owed > 0 && context.turn.bank.length < 2) return { kind: 'throw' };
   let best = moves[0];
   let bestScore = -Infinity;
   for (const action of moves) {
@@ -98,10 +95,10 @@ const selfPlayPolicy = (model: EvaluationModel): MatchPolicy => (context) => {
     let score = -Infinity;
     if (action.kind === 'throw') {
       score = 0;
-      for (const [value, count] of THROW_ODDS) {
+      for (const [value, chance] of throwOdds(boardOf(context.state))) {
         const after = copyTurn(context.turn);
-        recordThrow(after, value);
-        score += count / 16 * decisionScore(context.state, context.player, after, context.turnStart, model);
+        recordThrow(boardOf(context.state), after, value);
+        score += chance * decisionScore(context.state, context.player, after, context.turnStart, model);
       }
     } else {
       const after = applyKnownAction(context.state, context.turn, action);
@@ -212,12 +209,10 @@ if (!isMainThread) {
         if (path.length !== n * n || new Set(path.map(board.key)).size !== n * n) {
           throw new Error(`${n}x${n} path for seat ${seat} does not visit every square once.`);
         }
-        // Every step is to a neighbouring square; only the last step into the centre may be diagonal.
+        // Every step is to a neighbouring square (a diagonal step enters the 7x7 middle ring).
         path.slice(1).forEach(([r, c], i) => {
           const [pr, pc] = path[i];
-          const far = Math.max(Math.abs(r - pr), Math.abs(c - pc));
-          const straight = Math.abs(r - pr) + Math.abs(c - pc) === 1;
-          if (!(straight || (i + 1 === board.home && far === 1))) throw new Error(`${n}x${n} path jumps at step ${i + 1}.`);
+          if (Math.max(Math.abs(r - pr), Math.abs(c - pc)) !== 1) throw new Error(`${n}x${n} path jumps at step ${i + 1}.`);
         });
       }
       if (board.pawns !== n - 1 || board.home !== n * n - 1 || board.lastOuter !== 4 * (n - 1) - 1
@@ -229,6 +224,28 @@ if (!isMainThread) {
       if (legalMoves(gate, 0, 2).some((move) => move.to > board.lastOuter)) throw new Error(`${n}x${n} inner ring opened before a hit.`);
       gate.players[0].hasHit = true;
       if (!legalMoves(gate, 0, 2).some((move) => move.to === board.pairSquare)) throw new Error(`${n}x${n} inner ring stayed shut after a hit.`);
+    }
+    // 7x7: diagonal entry onto the middle ring's crossed corner, both inner rings
+    // clockwise, and a straight last step into the centre.
+    const big = boardFor(7).path(0);
+    const expect7 = [[6, 2], [5, 1], [4, 1], [5, 2], [4, 2], [3, 2], [4, 3], [3, 3]];
+    const got7 = [big[23], big[24], big[25], big[39], big[40], big[41], big[47], big[48]];
+    if (JSON.stringify(got7) !== JSON.stringify(expect7)) throw new Error(`7x7 route changed: ${JSON.stringify(got7)}.`);
+    if (!boardFor(7).isSafe(big[24])) throw new Error('The 7x7 middle-ring entry should be a crossed square.');
+    // Throws: four cowries on 5x5, six on 7x7, and the odds add up.
+    for (const [n, values] of [[5, [1, 2, 3, 4, 8]], [7, [1, 2, 3, 4, 5, 6, 12]]] as const) {
+      const board = boardFor(n);
+      const odds = throwOdds(board);
+      if (JSON.stringify(odds.map(([v]) => v)) !== JSON.stringify(values)
+        || Math.abs(odds.reduce((sum, [, p]) => sum + p, 0) - 1) > 1e-12) throw new Error(`${n}x${n} throws are wrong.`);
+      const entry = newGame([0, 2], 'each', n);
+      if (legalMoves(entry, 0, board.cowries).length === 0 || legalMoves(entry, 0, 3).length !== 0) {
+        throw new Error(`${n}x${n} pawns should enter only on chowka or bhara.`);
+      }
+      // Three bonus throws in a row are all kept: the old bust rule is gone.
+      const streak = newTurn();
+      for (const bonus of [board.bonus[0], board.bonus[1], board.bonus[0]]) recordThrow(board, streak, bonus);
+      if (streak.bank.length !== 3 || streak.owed !== 1) throw new Error(`${n}x${n} three bonus throws should all be kept.`);
     }
     for (const n of BOARD_SIZES.filter((board) => board !== 5)) {
       const trial7 = { id: 0, model: CHOWKA_MODELS[n], opponent: CHOWKA_MODELS[n], games: 2, players: 2, entry: 'home' as const, size: n, seed, budget: 0 };
@@ -265,7 +282,7 @@ if (!isMainThread) {
         { seat: 2, pawns: [10, 24, 24, 24], partner: [-1, -1, -1, -1], hasHit: true },
       ],
     };
-    const tacticalTurn: Turn = { bank: [4, 2], owed: 0, streak: 0, run: [] };
+    const tacticalTurn: Turn = { bank: [4, 2], owed: 0 };
     const tacticalChoice = chooseAction(
       tacticalState, 0, tacticalTurn, 'hard', 'balanced', tacticalState, 1, newSocial(2), { nodeBudget: 24 },
     ).action;
@@ -287,9 +304,9 @@ if (!isMainThread) {
         { seat: 3, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
       ],
     };
-    const beforeRoll: Turn = { bank: [], owed: 1, streak: 0, run: [] };
+    const beforeRoll: Turn = { bank: [], owed: 1 };
     const afterEight = copyTurn(beforeRoll);
-    recordThrow(afterEight, 8);
+    recordThrow(boardFor(5), afterEight, 8);
     const beforeChances = winProbabilities(outlookState, 0, beforeRoll, outlookState);
     const afterChances = winProbabilities(outlookState, 0, afterEight, outlookState);
     if (Math.abs(afterChances.reduce((sum, chance) => sum + chance, 0) - 1) > 1e-9) {
@@ -325,7 +342,7 @@ if (!isMainThread) {
         { seat: 3, pawns: [0, 0, 0, 0], partner: [-1, -1, -1, -1], hasHit: false },
       ],
     };
-    const heldTwo: Turn = { bank: [2], owed: 0, streak: 0, run: [] };
+    const heldTwo: Turn = { bank: [2], owed: 0 };
     const impact = WIN_FEATURE_NAMES.indexOf('held-hit-impact');
     const victim = winFeatures(exposedState, 1, 0, heldTwo, exposedState)[impact];
     const bystander = winFeatures(exposedState, 2, 0, heldTwo, exposedState)[impact];
@@ -341,7 +358,7 @@ if (!isMainThread) {
     turnStart.players[0].pawns[0] = 14;
     const advanced = newGame([0, 2], 'each');
     advanced.players[0].pawns[0] = 15;
-    const blocked: Turn = { bank: [1], owed: 0, streak: 0, run: [] };
+    const blocked: Turn = { bank: [1], owed: 0 };
     const resolution = resolveTurn(advanced, 0, blocked, turnStart);
     if (!resolution.over || !resolution.rolledBack || resolution.state !== turnStart) {
       throw new Error('An unusable final roll did not undo the whole turn.');

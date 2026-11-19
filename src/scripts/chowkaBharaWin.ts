@@ -1,8 +1,8 @@
 import trainedModel5 from '../data/chowka-bhara-win-model.json';
 import trainedModel7 from '../data/chowka-bhara-win-model-7x7.json';
-import { apply, boardOf, finished, legalMoves, recordSpend, type BoardSize, type State, type Turn } from './chowkaBhara';
+import { apply, boardOf, finished, legalMoves, recordSpend, throwOdds, type BoardSize, type State, type Turn } from './chowkaBhara';
 import { FEATURE_NAMES, decisionScore, relativeFeatures, turnFeatures } from './chowkaBharaModel';
-import { resolveTurn, THROW_ODDS } from './chowkaBharaMatch';
+import { copyTurn, resolveTurn } from './chowkaBharaMatch';
 
 export const WIN_FEATURE_NAMES = [
   ...FEATURE_NAMES, 'best-option', 'to-move', 'held-hit-impact', 'next-roll-hit-impact',
@@ -42,7 +42,7 @@ function bestOption(state: State, player: number, turn: Turn, turnStart: State):
   for (const value of new Set(turn.bank)) {
     for (const move of legalMoves(state, player, value)) {
       const result = apply(state, move);
-      const after: Turn = { bank: [...turn.bank], owed: turn.owed, streak: turn.streak, run: [...turn.run] };
+      const after = copyTurn(turn);
       recordSpend(after, value, result.hits.length > 0);
       best = Math.max(best, decisionScore(result.state, player, after, turnStart));
     }
@@ -96,8 +96,8 @@ export function winFeatures(
     : Array(FEATURE_NAMES.length - board.length + 1).fill(0);
   const heldImpact = hitImpact(state, player, current, turn.bank);
   const nextRollImpact = turn.owed > 0
-    ? THROW_ODDS.reduce((sum, [value, count]) =>
-      sum + count / 16 * hitImpact(state, player, current, [value]), 0)
+    ? throwOdds(boardOf(state)).reduce((sum, [value, chance]) =>
+      sum + chance * hitImpact(state, player, current, [value]), 0)
     : 0;
   return [...board, ...liveTurn, player === current ? 1 : 0, heldImpact, nextRollImpact];
 }

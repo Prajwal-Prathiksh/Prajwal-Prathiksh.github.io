@@ -87,8 +87,8 @@ const COLOURS = [
         <legend>Entering the board</legend>
         <div class="chips">
           <label class="chip"><input type="radio" name="entry" value="home" checked />Start on home squares</label>
-          <label class="chip"><input type="radio" name="entry" value="all" />Enter all with one 4 or 8</label>
-          <label class="chip"><input type="radio" name="entry" value="each" />Enter each with a 4 or 8</label>
+          <label class="chip"><input type="radio" name="entry" value="all" />Enter all with one <span class="bonus-pair">4 or 8</span></label>
+          <label class="chip"><input type="radio" name="entry" value="each" />Enter each with a <span class="bonus-pair">4 or 8</span></label>
         </div>
         <p id="entry-hint" class="hint muted">All four pawns begin on your home square.</p>
       </fieldset>
@@ -194,15 +194,15 @@ const COLOURS = [
           </div>
           <div id="shells" class="shells" aria-hidden="true">
             {[0, 1, 2, 3].map(() => <svg class="cowrie" viewBox="0 0 24 32"><use href="#cowrie-back" /></svg>)}
+            <!-- The script redraws the shells for the chosen board: four on 5x5, six on 7x7. -->
           </div>
           <p id="thrown" class="thrown" aria-live="polite"></p>
           <div class="throw-actions">
             <button type="button" class="btn primary" id="throw" hidden>Throw cowries</button>
-            <button type="button" class="btn skip" id="skip" hidden>Skip throw</button>
             <button type="button" class="btn skip" id="watch" hidden>Watch the rest</button>
             <div id="pick" class="pick" hidden>
               <span>or choose:</span>
-              {[1, 2, 3, 4, 8].map((v) => <button type="button" class="value" data-throw={v}>{v}</button>)}
+              <span id="pick-values">{[1, 2, 3, 4, 8].map((v) => <button type="button" class="value" data-throw={v}>{v}</button>)}</span>
             </div>
             <div id="bank" class="bank"></div>
           </div>
@@ -278,19 +278,14 @@ const COLOURS = [
   <details>
     <summary>How to play</summary>
     <p>
-      Each player has four pawns (six on the 7×7 board) waiting beside their edge of the board. Throw the four cowries:
+      Each player has four pawns waiting beside their edge of the board. Throw the four cowries:
       the number that land mouth up is your move. All four up is <em>chowka</em> (4), all four down
       is <em>bhara</em> (8). A 4 or 8 earns another throw, and so does every hit. You can take an
       earned throw straight away or move first, whichever you like.
     </p>
     <p>
-      Careful with 4s and 8s: holding three from a row loses everything left in your turn. Spending
-      one lowers the count, and a 1, 2 or 3 resets it. With two held, you can skip the next throw
-      and play what you have.
-    </p>
-    <p>
       Spend each throw on a pawn or pair, in any order. You can start all your pawns on your home
-      square (the crossed square on your edge), or spend a 4 or 8 to enter all your waiting pawns
+      square (the crossed square on your edge), or spend a chowka or bhara to enter all your waiting pawns
       together or one at a time, depending on the setup choice. Once in, a pawn stays in.
       If none of your remaining throws can move a pawn, your moves from that turn are undone.
     </p>
@@ -315,11 +310,13 @@ const COLOURS = [
       to the centre wins. In the rare case that nobody can move at all, the game is a draw.
     </p>
     <p>
-      The 7×7 board plays the same way with one more ring. After the outer ring, pawns go
-      clockwise round the middle ring, then turn in again and go anticlockwise round the
-      innermost ring before the centre. Pairs form on the first square of the middle ring and
-      may sit anywhere inside the outer ring. The four corners of the middle ring are crossed
-      safe squares too.
+      The 7×7 board plays the same way with six pawns, six cowries and one more ring. A throw is
+      the number of cowries mouth up, 1 to 5; all six up is chowka (6) and all six down is bhara
+      (12), and those two earn another throw and bring pawns in. After the outer ring, a pawn steps
+      diagonally onto the crossed corner of the middle ring, goes clockwise round it, then steps
+      straight in and goes clockwise round the innermost ring to the centre. Pairs form on that
+      first middle-ring square and may sit anywhere inside the outer ring. The four corners of the
+      middle ring are crossed safe squares too.
     </p>
     <p>
       In games with three or four players, you can offer a short truce against a clear leader.
@@ -336,9 +333,9 @@ const COLOURS = [
   import {
     WAITING,
     apply,
+    boardFor,
     boardOf,
     pawnWord,
-    canSkip,
     finished,
     frozen,
     isPaired,
@@ -351,6 +348,7 @@ const COLOURS = [
     recordSpend,
     recordThrow,
     throwShells,
+    throwValues,
     type Action,
     type BoardSize,
     type Move,
@@ -429,7 +427,6 @@ const COLOURS = [
   const shellsEl = $('shells');
   const thrownEl = $('thrown');
   const throwEl = $<HTMLButtonElement>('throw');
-  const skipEl = $<HTMLButtonElement>('skip');
   const watchEl = $<HTMLButtonElement>('watch');
   const pickEl = $('pick');
   // Testing aid: with ?debug in the address, setup offers choosing your own throws.
@@ -811,6 +808,27 @@ const COLOURS = [
     boardSquareEl.style.setProperty('--units', String(unitsOf(size)));
     boardSquareEl.dataset.board = String(size);
     floorEl.dataset.board = String(size);
+    // One cowrie per pawn, and the testing picker offers this board's throws.
+    const board = boardOf(state);
+    // Clone the server-rendered shell and button so they keep the page's scoped styles.
+    if (shellsEl.children.length !== board.cowries) {
+      const shell = shellsEl.firstElementChild!;
+      shellsEl.replaceChildren(...Array.from({ length: board.cowries }, () => {
+        const copy = shell.cloneNode(true) as SVGElement;
+        copy.classList.remove('tumble', 'landed');
+        copy.querySelector('use')!.setAttribute('href', '#cowrie-back');
+        return copy;
+      }));
+      shellsUp = Array(board.cowries).fill(false);
+      const picks = $('pick-values');
+      const button = picks.firstElementChild!;
+      picks.replaceChildren(...throwValues(board).map((v) => {
+        const copy = button.cloneNode(true) as HTMLButtonElement;
+        copy.dataset.throw = String(v);
+        copy.textContent = String(v);
+        return copy;
+      }));
+    }
     if (drawnBoard === size) return;
     drawnBoard = size;
     boardEl.setAttribute('viewBox', `0 0 ${extent} ${extent}`);
@@ -882,7 +900,18 @@ const COLOURS = [
         `M${x - (ux * 9 + uy * 7) * size} ${y - (uy * 9 - ux * 7) * size}L${x} ${y}L${x - (ux * 9 - uy * 7) * size} ${y - (uy * 9 + ux * 7) * size}`;
       let path: string;
       let kind = '';
-      if (tx === dx && ty === dy) {
+      if (dx !== 0 && dy !== 0) {
+        // A diagonal step onto the 7x7 middle ring's crossed corner: cross the
+        // shared corner point, then bend the way the ring runs.
+        const ux = dx / Math.SQRT2;
+        const uy = dy / Math.SQRT2;
+        const px = (ox + ix) / 2;
+        const py = (oy + iy) / 2;
+        const corner = [px + ux * 20, py + uy * 20];
+        const tip = [corner[0] + tx * 28, corner[1] + ty * 28];
+        path = `M${px - ux * 26} ${py - uy * 26}L${corner[0]} ${corner[1]}L${tip[0]} ${tip[1]}${head(tip[0], tip[1], tx, ty, 0.7)}`;
+        kind = ' kink';
+      } else if (tx === dx && ty === dy) {
         // The route carries straight on (the 5x5 board): one short arrow across the boundary.
         const mx = (ox + ix) / 2;
         const my = (oy + iy) / 2;
@@ -1012,7 +1041,6 @@ const COLOURS = [
       : turn.bank.length || turn.owed > 1
         ? `Throw again${turn.owed > 1 ? ` (${turn.owed})` : ''}`
         : 'Throw cowries';
-    skipEl.hidden = !(human && canSkip(turn));
     pickEl.hidden = !((human && turn.owed > 0 && pickThrows) || picking);
     const bank = turn.bank;
     bankEl.innerHTML = '';
@@ -1137,7 +1165,7 @@ const COLOURS = [
   }
 
   function currentWinChances(): number[] {
-    const turnKey = `${turn.bank.join(',')}|${turn.owed}|${turn.streak}|${turn.run.join(',')}`;
+    const turnKey = `${turn.bank.join(',')}|${turn.owed}`;
     const placingsKey = placings.join(',');
     if (outlookCache?.state === state && outlookCache.current === current
       && outlookCache.turn === turnKey && outlookCache.placings === placingsKey) return outlookCache.chances;
@@ -1276,20 +1304,17 @@ const COLOURS = [
     shellsUp = [...up];
   }
 
-  const bonusName = (v: number) => (v === 4 ? 'Chowka (4)' : 'Bhara (8)');
-  // e.g. "Bhara (8) on top of 8 and 4: three in a row."
-  const lostMessage = (v: number, run: number[]) =>
-    `${bonusName(v)} on top of ${run.join(' and ')}: three in a row.`;
+  // Chowka is every cowrie mouth up, bhara every one mouth down.
+  const bonusWord = (v: number) => v === boardOf(state).bonus[0] ? 'Chowka' : 'Bhara';
 
   const describe = (v: number) =>
-    v === 4 ? 'Chowka! 4, throw again.' : v === 8 ? 'Bhara! 8, throw again.' : `Threw ${v}.`;
+    boardOf(state).bonus.includes(v) ? `${bonusWord(v)}! ${v}, throw again.` : `Threw ${v}.`;
 
   // ---- Turn flow ----
   //
-  // A turn is a series of actions: throw (while throws are owed), skip a risky
-  // throw, or move. See Turn in chowkaBhara.ts for the counting.
+  // A turn is a series of actions: throw (while throws are owed) or move.
+  // See Turn in chowkaBhara.ts for the counting.
 
-  const risky = () => canSkip(turn);
   const nextRival = (player: number, placed = placings) => {
     let rival = (player + 1) % seated.length;
     while (placed.includes(rival) && rival !== player) rival = (rival + 1) % seated.length;
@@ -1398,9 +1423,7 @@ const COLOURS = [
           : soloHuman()
             ? 'Your turn. Throw the cowries.'
             : 'Throw the cowries.'
-        : risky()
-          ? 'Two 4/8s held: a third would lose the turn. Spend one, throw, or skip.'
-          : turn.owed > 0
+        : turn.owed > 0
             ? 'Move a pawn, or throw again first.'
             : 'Tap a pawn to move.';
       statusEl.textContent = soloHuman() || prompt.startsWith('Your') ? prompt : `${me.name} (${me.colourName}): ${prompt}`;
@@ -1439,27 +1462,15 @@ const COLOURS = [
     hintTextEl.textContent = '';
     hintedMove = null;
     if (action.kind === 'throw') {
-      const t = action.value ? { up: shellsFor(action.value), value: action.value } : throwShells();
+      const board = boardOf(state);
+      const t = action.value ? { up: shellsFor(board, action.value), value: action.value } : throwShells(board);
       render();
       await throwAnimation(t.up);
       if (id !== gameId) return;
-      const run = [...turn.run];
-      const r = recordThrow(turn, t.value);
-      thrownEl.textContent = r === 'lost' ? lostMessage(t.value, run) : describe(t.value);
-      if (r === 'lost') {
-        const who = seated[current].name;
-        lastEl.textContent = `${who === 'You' ? 'You' : who} lost the turn: ${lostMessage(t.value, run)}`;
-        recordHistory(lastEl.textContent);
-        render();
-        await wait(DELAY.read);
-      } else {
-        recordHistory(`${seated[current].name} threw ${t.value}${t.value === 4 || t.value === 8 ? ' and earned another throw' : ''}.`);
-        render();
-      }
-    } else if (action.kind === 'skip') {
-      turn.owed--;
-      thrownEl.textContent = `${seated[current].name === 'You' ? 'You skip' : `${seated[current].name} skips`} the risky throw.`;
-      recordHistory(thrownEl.textContent);
+      const bonus = recordThrow(board, turn, t.value) === 'bonus';
+      thrownEl.textContent = describe(t.value);
+      recordHistory(`${seated[current].name} threw ${t.value}${bonus ? ' and earned another throw' : ''}.`);
+      render();
     } else {
       await performMove(action.move);
     }
@@ -1499,15 +1510,11 @@ const COLOURS = [
   throwEl.addEventListener('click', () => {
     if ((phase === 'act' && historyIndex === null && turn.owed > 0) || phase === 'pick') humanAction({ kind: 'throw' });
   });
-  pickEl.querySelectorAll<HTMLButtonElement>('[data-throw]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const value = Number(b.dataset.throw);
-      if ((phase === 'act' && historyIndex === null && turn.owed > 0 && pickThrows) || phase === 'pick') humanAction({ kind: 'throw', value });
-    }),
-  );
-
-  skipEl.addEventListener('click', () => {
-    if (phase === 'act' && historyIndex === null && canSkip(turn)) humanAction({ kind: 'skip' });
+  pickEl.addEventListener('click', (event) => {
+    const b = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-throw]');
+    if (!b) return;
+    const value = Number(b.dataset.throw);
+    if ((phase === 'act' && historyIndex === null && turn.owed > 0 && pickThrows) || phase === 'pick') humanAction({ kind: 'throw', value });
   });
 
   historyBackEl.addEventListener('click', () => {
@@ -1773,9 +1780,8 @@ const COLOURS = [
       const { action } = step;
       let text = '';
       if (action.kind === 'throw') {
-        text = step.lost ? `${who} lost the turn with a third 4 or 8.`
-          : `${who} threw ${action.value}${action.value === 4 || action.value === 8 ? ' and earned another throw' : ''}.`;
-      } else if (action.kind === 'skip') text = `${who} skips the risky throw.`;
+        text = `${who} threw ${action.value}${boardOf(step.state).bonus.includes(action.value!) ? ' and earned another throw' : ''}.`;
+      }
       else if (action.move.from === WAITING) text = `${who} brought ${action.move.pawns.length > 1 ? `all ${pawnWord(action.move.pawns.length)} pawns` : 'a pawn'} in.`;
       else if (step.hits.length) text = `${who} hit ${[...new Set(step.hits.map((h) => name(h.player)))].join(' and ')}! Bonus throw.`;
       else if (action.move.to === boardOf(state).home) text = `${who} reached the centre.`;
@@ -1885,10 +1891,9 @@ const COLOURS = [
     if (!onlineHosting || !onlineReady || onlineEnded || onlinePaused || phase !== 'act' || seated[current].level !== null
       || onlineOwners[current] !== from || !command || typeof command !== 'object') return;
     if (command.type === 'throw' && turn.owed > 0) { act({ kind: 'throw' }); return; }
-    if (command.type === 'skip' && canSkip(turn)) { act({ kind: 'skip' }); return; }
     if (command.type === 'move' && command.move && typeof command.move === 'object') {
       const proposed = command.move as Move;
-      if (proposed.player !== current || ![1, 2, 3, 4, 8].includes(proposed.value)
+      if (proposed.player !== current || !throwValues(boardOf(state)).includes(proposed.value)
         || !Array.isArray(proposed.pawns) || proposed.pawns.length < 1 || proposed.pawns.length > 2
         || !proposed.pawns.every((pawn) => Number.isInteger(pawn) && pawn >= 0 && pawn < boardOf(state).pawns)
         || !Number.isInteger(proposed.from) || !Number.isInteger(proposed.to)
@@ -1941,14 +1946,17 @@ const COLOURS = [
     const f = new FormData(setupEl);
     const size = chosenBoard(f);
     const all = pawnWord(size - 1);
+    const [chowka, bhara] = boardFor(size).bonus;
+    const bonusPair = `${chowka} or ${bhara}`;
+    setupEl.querySelectorAll('.bonus-pair').forEach((el) => { el.textContent = bonusPair; });
     $('entry-hint').textContent = f.get('entry') === 'all'
-      ? `Spend one 4 or 8 to bring all ${all} pawns in.`
+      ? `Spend one ${bonusPair} to bring all ${all} pawns in.`
       : f.get('entry') === 'each'
-        ? 'Spend a 4 or 8 for each pawn you bring in.'
+        ? `Spend a ${bonusPair} for each pawn you bring in.`
         : `All ${all} pawns begin on your home square.`;
     $('board-hint').textContent = size === 7
-      ? 'The bigger board: three rings, six pawns, and four more safe squares at the corners of the middle ring.'
-      : 'The classic board: an outer ring and one inner ring round the centre.';
+      ? 'The bigger board: three rings, six pawns, six cowries (throws 1 to 5, chowka 6, bhara 12), and four more safe squares at the corners of the middle ring.'
+      : 'The classic board: four cowries (throws 1 to 3, chowka 4, bhara 8), an outer ring and one inner ring round the centre.';
     seated = buildSeated();
     social = newSocial(seated.length);
     pendingOffers = [];

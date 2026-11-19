@@ -1,4 +1,4 @@
-import { WAITING, apply, boardOf, classicSteps, finished, legalMoves, type State } from './chowkaBhara';
+import { WAITING, apply, boardOf, classicSteps, finished, legalMoves, throwOdds, type State } from './chowkaBhara';
 
 export interface Pact {
   a: number;
@@ -22,7 +22,6 @@ export const BEHAVIOUR_STYLES = ['balanced', 'aggressive', 'cautious', 'builder'
 export type BehaviourStyle = typeof BEHAVIOUR_STYLES[number];
 const STYLE_PRIOR = [0.4, 0.15, 0.15, 0.15, 0.15];
 
-const ODDS: [number, number][] = [[1, 4 / 16], [2, 6 / 16], [3, 4 / 16], [4, 1 / 16], [8, 1 / 16]];
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
 export function newSocial(players: number): SocialState {
@@ -142,7 +141,7 @@ export function relayValue(s: State, actor: number, target: number): number {
   if (finished(s, target)) return 0;
   const before = threat(s, target);
   let expected = 0;
-  for (const [value, chance] of ODDS) {
+  for (const [value, chance] of throwOdds(boardOf(s))) {
     let best = 0;
     for (const move of legalMoves(s, actor, value)) {
       const result = apply(s, move);

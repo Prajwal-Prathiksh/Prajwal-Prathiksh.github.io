@@ -3,6 +3,7 @@ import {
   boardOf,
   isPotentialPair,
   legalMoves,
+  throwValues,
   type Action,
   type Move,
   type State,
@@ -31,7 +32,7 @@ function exposed(state: State, player: number): number {
   let count = 0;
   for (let opponent = 0; opponent < state.players.length; opponent++) {
     if (opponent === player) continue;
-    for (const value of [1, 2, 3, 4, 8]) {
+    for (const value of throwValues(boardOf(state))) {
       if (legalMoves(state, opponent, value).some((move) =>
         apply(state, move).hits.some((hit) => hit.player === player))) count++;
     }

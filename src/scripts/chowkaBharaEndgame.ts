@@ -3,7 +3,7 @@
 // that point are real, so the end-of-game chart can be checked without
 // playing a full match by hand.
 
-import { finished, recordThrow, type Action, type BoardSize, type EntryMode, type Hit, type State, type Turn } from './chowkaBhara';
+import { boardOf, finished, recordThrow, type Action, type BoardSize, type EntryMode, type Hit, type State, type Turn } from './chowkaBhara';
 import { chooseAction } from './chowkaBharaAI';
 import { applyKnownAction, copyTurn, playMatch, randomThrow, seededRandom } from './chowkaBharaMatch';
 import type { SocialState } from './chowkaBharaSocial';
@@ -19,7 +19,6 @@ export interface EndgameStep {
   after: State;
   afterTurn: Turn;
   hits: Hit[];
-  lost: boolean; // a third 4 or 8 voided the turn
 }
 
 export interface Endgame {
@@ -39,12 +38,11 @@ function playOnce(players: number, entry: EntryMode, size: BoardSize, seed: numb
     const choice = chooseAction(context.state, context.player, context.turn, 'easy', 'balanced',
       context.turnStart, context.nextPlayer, context.social).action;
     if (!choice) return null;
-    const action: Action = choice.kind === 'throw' ? { kind: 'throw', value: randomThrow(random) } : choice;
+    const action: Action = choice.kind === 'throw' ? { kind: 'throw', value: randomThrow(boardOf(context.state), random) } : choice;
     let after = context.state;
     let afterTurn = copyTurn(context.turn);
     let hits: Hit[] = [];
-    let lost = false;
-    if (action.kind === 'throw') lost = recordThrow(afterTurn, action.value!) === 'lost';
+    if (action.kind === 'throw') recordThrow(boardOf(context.state), afterTurn, action.value!);
     else {
       const result = applyKnownAction(context.state, context.turn, action);
       after = result.state;
@@ -53,7 +51,7 @@ function playOnce(players: number, entry: EntryMode, size: BoardSize, seed: numb
     }
     steps.push({
       state: context.state, player: context.player, turn: copyTurn(context.turn), turnStart: context.turnStart,
-      social: structuredClone(context.social), placings: [...placed], action, after, afterTurn, hits, lost,
+      social: structuredClone(context.social), placings: [...placed], action, after, afterTurn, hits,
     });
     return action;
   };

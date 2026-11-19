@@ -2,11 +2,12 @@
 //
 // Seats: 0 bottom, 1 right, 2 top, 3 left. Each pawn follows its own path
 // from the centre of its edge, ring by ring towards the centre: anticlockwise
-// round the outer ring, then clockwise round the next ring in, alternating
-// ring by ring, and finally into the centre. A 5x5 board has two rings (16
-// and 8 squares) and four pawns each; a 7x7 board has three (24, 16 and 8)
-// and six pawns each. Each step into a new ring is straight in from the
-// square just before the home square's column. Until its player has hit an
+// round the outer ring, then clockwise round each ring inside it, and finally
+// into the centre. A 5x5 board has two rings (16 and 8 squares) and four
+// pawns each; a 7x7 board has three (24, 16 and 8) and six pawns each. A
+// pawn enters each ring at its nearest corner: on a 7x7 board it steps
+// diagonally from the outer ring onto the middle ring's crossed corner;
+// otherwise it steps straight in. Until its player has hit an
 // opponent, a pawn can go no further than the last outer square. A pawn's
 // position is its index along that path: -1 means waiting off the board (only
 // before a pawn is first brought in), 0 is the home square, where a hit pawn
@@ -70,6 +71,10 @@ export interface Board {
   pairSquare: number; // first square past the outer ring, the only place pairs form
   ringStarts: number[]; // path index where each ring begins, outermost first
   centre: Square;
+  cowries: number; // shells thrown: four on 5x5, six on 7x7
+  throws: readonly { value: number; ways: number }[]; // ways out of 2 ** cowries
+  bonus: readonly number[]; // chowka and bhara, which earn another throw
+  throwSlot(value: number): number; // 0-2 for plain throws, low to high; 3 chowka; 4 bhara
   safe: Square[];
   path(seat: Seat): readonly Square[];
   square(seat: Seat, index: number): Square;
@@ -96,16 +101,21 @@ function makeBoard(size: BoardSize): Board {
   // Bottom seat's path; the other seats are the same path turned.
   const base: Square[] = [];
   const ringStarts: number[] = [];
+  const isCorner = (ring: number, [r, c]: Square) =>
+    (r === ring || r === size - 1 - ring) && (c === ring || c === size - 1 - ring);
   let start: Square = [size - 1, mid];
   for (let ring = 0; ring < rings; ring++) {
-    const anticlockwise = ring % 2 === 0;
+    // The outer ring runs anticlockwise; every ring inside it runs clockwise.
     const loop = ringSquares(size, ring);
-    const ordered = anticlockwise ? loop : [loop[0], ...loop.slice(1).reverse()];
+    const ordered = ring === 0 ? loop : [loop[0], ...loop.slice(1).reverse()];
     const from = ordered.findIndex(([r, c]) => r === start[0] && c === start[1]);
     ringStarts.push(base.length);
     base.push(...ordered.slice(from), ...ordered.slice(0, from));
+    // A pawn enters the next ring at its nearest corner: diagonally in when
+    // that corner is up and back (the 7x7 outer ring), otherwise straight in.
     const [r, c] = base[base.length - 1];
-    start = [r - 1, c]; // straight in from the ring's last square
+    const diagonal: Square = [r - 1, c - 1];
+    start = isCorner(ring + 1, diagonal) ? diagonal : [r - 1, c];
   }
   const centre: Square = [mid, mid];
   base.push(centre);
@@ -122,8 +132,22 @@ function makeBoard(size: BoardSize): Board {
   if (size >= 7) safe.push([1, 1], [1, size - 2], [size - 2, 1], [size - 2, size - 2]);
   const safeKeys = new Set(safe.map(key));
   const home = base.length - 1;
+  // One shell per pawn: k mouths up throws k (ways: n choose k), none up throws 2n.
+  const cowries = size - 1;
+  const choose = (n: number, k: number): number => (k === 0 ? 1 : (choose(n, k - 1) * (n - k + 1)) / k);
+  const throws = [
+    ...Array.from({ length: cowries }, (_, i) => ({ value: i + 1, ways: choose(cowries, i + 1) })),
+    { value: 2 * cowries, ways: 1 },
+  ];
   return {
     size,
+    cowries,
+    throws,
+    bonus: [cowries, 2 * cowries],
+    // Plain throws spread over three slots, low to high, so model features
+    // mean the same on both boards.
+    throwSlot: (value) => value === 2 * cowries ? 4 : value === cowries ? 3
+      : Math.min(2, Math.floor(((value - 1) * 3) / (cowries - 1))),
     pawns: size - 1,
     home,
     lastOuter: ringStarts[1] - 1,
@@ -153,7 +177,7 @@ export function classicSteps(board: Board, pos: number): number {
   return 15 + (pos - board.lastOuter) * 9 / (board.home - board.lastOuter);
 }
 
-// A 4 or 8 is spent to enter either one pawn or all of them, depending on setup.
+// A chowka or bhara is spent to enter either one pawn or all of them, depending on setup.
 export function newGame(seats: Seat[], entry: EntryMode = 'each', size: BoardSize = 5): State {
   const start = entry === 'home' ? 0 : WAITING;
   const { pawns } = boardFor(size);
@@ -211,7 +235,7 @@ function tryMove(s: State, occ: Map<number, Occupant[]>, player: number, pawns: 
   const from = p.pawns[pawns[0]];
   if (from === b.home) return null;
   if (from === WAITING) {
-    return pawns.length === 1 && (value === 4 || value === 8)
+    return pawns.length === 1 && isBonus(b, value)
       ? { player, pawns: s.entry === 'all' ? p.pawns.map((_, i) => i) : pawns, value, steps: 0, from, to: 0 }
       : null;
   }
@@ -321,21 +345,28 @@ export const finished = (s: State, player: number) => s.players[player].pawns.ev
 // the inner-ring gate with no hit yet, out of everyone's reach). No throw can
 // change that, so the game ends as a draw.
 export const frozen = (s: State) =>
-  s.players.every((_, i) => finished(s, i) || [1, 2, 3, 4, 8].every((v) => legalMoves(s, i, v).length === 0));
+  s.players.every((_, i) => finished(s, i) || throwValues(boardOf(s)).every((v) => legalMoves(s, i, v).length === 0));
 
-// Four cowries: the count landing mouth-up is the throw, and none up counts as 8.
-export function throwShells(): { up: boolean[]; value: number } {
-  const up = Array.from({ length: 4 }, () => Math.random() < 0.5);
+// Cowries: the count landing mouth-up is the throw. All up is chowka, worth
+// the number of shells; none up is bhara, worth twice that. Both earn another
+// throw. A 5x5 board uses four cowries (1, 2, 3, 4 and 8), a 7x7 board six
+// (1 to 5, 6 and 12).
+export const isBonus = (board: Board, value: number) => board.bonus.includes(value);
+export const throwValues = (board: Board) => board.throws.map((t) => t.value);
+// Each throw with its probability.
+export const throwOdds = (board: Board): [number, number][] =>
+  board.throws.map((t) => [t.value, t.ways / 2 ** board.cowries]);
+
+export function throwShells(board: Board): { up: boolean[]; value: number } {
+  const up = Array.from({ length: board.cowries }, () => Math.random() < 0.5);
   const n = up.filter(Boolean).length;
-  return { up, value: n === 0 ? 8 : n };
+  return { up, value: n === 0 ? 2 * board.cowries : n };
 }
-export const isBonus = (value: number) => value === 4 || value === 8;
-export const THROW_VALUES = [1, 2, 3, 4, 8];
 
 // Shells that show a given throw, for when the value is chosen rather than thrown.
-export function shellsFor(value: number): boolean[] {
-  const ups = value === 8 ? 0 : value;
-  const up = [0, 1, 2, 3].map((i) => i < ups);
+export function shellsFor(board: Board, value: number): boolean[] {
+  const ups = value === 2 * board.cowries ? 0 : value;
+  const up = Array.from({ length: board.cowries }, (_, i) => i < ups);
   for (let i = up.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [up[i], up[j]] = [up[j], up[i]];
@@ -345,51 +376,28 @@ export function shellsFor(value: number): boolean[] {
 
 // ---- Throws within a turn ----
 //
-// A turn starts owing one throw. Every 4 or 8 and every hit owes another, and
-// the player takes owed throws whenever they like, before or after moving.
-// The risk count is how many 4s and 8s from the current run are still held:
-// it rises with each 4 or 8 thrown, falls when one is spent, and resets on a
-// 1, 2 or 3. Reaching three loses everything left in the turn, so at two the
-// player may skip a throw instead.
+// A turn starts owing one throw. Every chowka or bhara and every hit owes
+// another, and the player takes owed throws whenever they like, before or
+// after moving.
 
 export interface Turn {
   bank: number[];
   owed: number;
-  streak: number;
-  run: number[]; // the 4s and 8s behind the risk count, for messages
 }
 
-export const RISKY = 2;
-export const newTurn = (): Turn => ({ bank: [], owed: 1, streak: 0, run: [] });
-export const endedTurn = (): Turn => ({ bank: [], owed: 0, streak: 0, run: [] });
-export const canSkip = (t: Turn) => t.owed > 0 && t.streak >= RISKY;
+export const newTurn = (): Turn => ({ bank: [], owed: 1 });
+export const endedTurn = (): Turn => ({ bank: [], owed: 0 });
 
-export function recordThrow(t: Turn, value: number): 'bonus' | 'plain' | 'lost' {
+export function recordThrow(board: Board, t: Turn, value: number): 'bonus' | 'plain' {
   t.owed--;
-  if (!isBonus(value)) {
-    t.streak = 0;
-    t.run = [];
-    t.bank.push(value);
-    return 'plain';
-  }
-  if (++t.streak > RISKY) {
-    t.bank = [];
-    t.owed = 0;
-    t.streak = 0;
-    return 'lost';
-  }
-  t.run.push(value);
   t.bank.push(value);
+  if (!isBonus(board, value)) return 'plain';
   t.owed++;
   return 'bonus';
 }
 
 export function recordSpend(t: Turn, value: number, hit: boolean): void {
   t.bank.splice(t.bank.indexOf(value), 1);
-  if (isBonus(value) && t.streak > 0) {
-    t.streak--;
-    t.run.splice(t.run.indexOf(value) >= 0 ? t.run.indexOf(value) : 0, 1);
-  }
   if (hit) t.owed++;
 }
 
@@ -398,4 +406,4 @@ export const stranded = (s: State, player: number, t: Turn) => t.bank.length > 0
 export const turnOver = (s: State, player: number, t: Turn) => t.owed === 0 && usable(s, player, t).length === 0;
 
 // A throw may carry a chosen value (for testing); otherwise the shells decide.
-export type Action = { kind: 'throw'; value?: number } | { kind: 'skip' } | { kind: 'move'; move: Move };
+export type Action = { kind: 'throw'; value?: number } | { kind: 'move'; move: Move };

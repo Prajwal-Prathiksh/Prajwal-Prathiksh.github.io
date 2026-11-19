@@ -2,8 +2,8 @@ import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
-import { BOARD_SIZES, boardFor, finished, recordThrow, type BoardSize } from '../src/scripts/chowkaBhara';
-import { applyKnownAction, copyTurn, playMatch, possibleActions, seededRandom, THROW_ODDS, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
+import { BOARD_SIZES, boardFor, boardOf, finished, recordThrow, throwOdds, type BoardSize } from '../src/scripts/chowkaBhara';
+import { applyKnownAction, copyTurn, playMatch, possibleActions, seededRandom, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
 import { decisionScore } from '../src/scripts/chowkaBharaModel';
 import { chooseAction, type Style } from '../src/scripts/chowkaBharaAI';
 import {
@@ -45,10 +45,10 @@ const policy = (style: Style, hard: boolean): MatchPolicy => (context) => {
     let score = -Infinity;
     if (action.kind === 'throw') {
       score = 0;
-      for (const [value, count] of THROW_ODDS) {
+      for (const [value, chance] of throwOdds(boardOf(context.state))) {
         const after = copyTurn(context.turn);
-        recordThrow(after, value);
-        score += count / 16 * decisionScore(context.state, context.player, after, context.turnStart);
+        recordThrow(boardOf(context.state), after, value);
+        score += chance * decisionScore(context.state, context.player, after, context.turnStart);
       }
     } else {
       const after = applyKnownAction(context.state, context.turn, action);

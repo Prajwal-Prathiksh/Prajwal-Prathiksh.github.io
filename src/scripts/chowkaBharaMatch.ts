@@ -3,7 +3,7 @@
 
 import {
   apply,
-  canSkip,
+  boardOf,
   finished,
   frozen,
   legalMoves,
@@ -14,6 +14,7 @@ import {
   stranded,
   turnOver,
   type Action,
+  type Board,
   type BoardSize,
   type EntryMode,
   type Hit,
@@ -35,11 +36,7 @@ import {
 } from './chowkaBharaSocial';
 import { observeAction, predictedAcceptance } from './chowkaBharaOpponent';
 
-export const THROW_ODDS = [[1, 4], [2, 6], [3, 4], [4, 1], [8, 1]] as const;
-
-export const copyTurn = (turn: Turn): Turn => ({
-  bank: [...turn.bank], owed: turn.owed, streak: turn.streak, run: [...turn.run],
-});
+export const copyTurn = (turn: Turn): Turn => ({ bank: [...turn.bank], owed: turn.owed });
 
 // A stranded bank voids the entire turn, including moves already made. Resolve
 // this before checking whether the player has finished or the turn is over.
@@ -54,7 +51,6 @@ export function possibleActions(state: State, player: number, turn: Turn): Actio
     legalMoves(state, player, value).map((move) => ({ kind: 'move' as const, move })),
   );
   if (turn.owed > 0) moves.push({ kind: 'throw' });
-  if (canSkip(turn)) moves.push({ kind: 'skip' });
   return moves;
 }
 
@@ -64,10 +60,6 @@ export function applyKnownAction(
   action: Exclude<Action, { kind: 'throw' }>,
 ): { state: State; turn: Turn; hits: Hit[] } {
   const nextTurn = copyTurn(turn);
-  if (action.kind === 'skip') {
-    nextTurn.owed--;
-    return { state, turn: nextTurn, hits: [] };
-  }
   const result = apply(state, action.move);
   recordSpend(nextTurn, action.move.value, result.hits.length > 0);
   return { state: result.state, turn: nextTurn, hits: result.hits };
@@ -84,12 +76,15 @@ export function seededRandom(seed: number): () => number {
   };
 }
 
-export function randomThrow(random: () => number): number {
-  const roll = Math.floor(random() * 16);
-  if (roll < 4) return 1;
-  if (roll < 10) return 2;
-  if (roll < 14) return 3;
-  return roll === 14 ? 4 : 8;
+// Walks the board's throws in order, so a given random number always gives
+// the same throw.
+export function randomThrow(board: Board, random: () => number): number {
+  let roll = Math.floor(random() * 2 ** board.cowries);
+  for (const { value, ways } of board.throws) {
+    if (roll < ways) return value;
+    roll -= ways;
+  }
+  return board.throws[board.throws.length - 1].value;
 }
 
 export interface MatchContext {
@@ -179,7 +174,7 @@ export function playMatch(options: MatchOptions): MatchResult {
       if (options.observeBehaviour !== false) observeAction(social, state, current, turn, action);
       actions++;
       if (action.kind === 'throw') {
-        recordThrow(turn, action.value ?? randomThrow(random));
+        recordThrow(boardOf(state), turn, action.value ?? randomThrow(boardOf(state), random));
       } else {
         const result = applyKnownAction(state, turn, action);
         state = result.state;

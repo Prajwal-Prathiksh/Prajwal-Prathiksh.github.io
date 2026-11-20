@@ -293,6 +293,22 @@ export function legalMoves(s: State, player: number, value: number): Move[] {
   return moves;
 }
 
+// legalMoves lists every pawn so you can tap any of them. For search, pawns
+// stacked on one square are interchangeable: moving pawn 1 or pawn 4 from the
+// home square leaves the same board. On the "home" start a 7x7 player has six
+// pawns on one square, so keeping one of each shrinks the AI's tree sixfold
+// per ply.
+export function distinctMoves(s: State, player: number, value: number): Move[] {
+  const p = s.players[player];
+  const seen = new Set<string>();
+  return legalMoves(s, player, value).filter((m) => {
+    const key = `${m.pawns.length}:${m.from}:${m.pawns.length === 1 && p.partner[m.pawns[0]] !== SOLO ? 'split' : ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function apply(start: State, move: Move): { state: State; hits: Hit[] } {
   const b = boardOf(start);
   const s = clone(start);

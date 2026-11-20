@@ -3,6 +3,7 @@ import {
   apply,
   boardOf,
   classicSteps,
+  distinctMoves,
   finished,
   isPotentialPair,
   legalMoves,
@@ -132,7 +133,7 @@ function replyScore(s: State, player: number, style: Style, nextPlayer: number, 
   for (const [value, chance] of throwOdds(boardOf(s))) {
     let bestForOpponent = -Infinity;
     let ourReply = base;
-    for (const move of legalMoves(s, nextPlayer, value)) {
+    for (const move of distinctMoves(s, nextPlayer, value)) {
       const result = apply(s, move);
       const after = result.state;
       let theirs = inferredOpponentScore(after, player, nextPlayer, social, broken, model);

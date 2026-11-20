@@ -1,6 +1,6 @@
 import trainedModel5 from '../data/chowka-bhara-win-model.json';
 import trainedModel7 from '../data/chowka-bhara-win-model-7x7.json';
-import { apply, boardOf, finished, legalMoves, recordSpend, throwOdds, type BoardSize, type State, type Turn } from './chowkaBhara';
+import { apply, boardOf, distinctMoves, finished, recordSpend, throwOdds, type BoardSize, type State, type Turn } from './chowkaBhara';
 import { FEATURE_NAMES, decisionScore, relativeFeatures, turnFeatures } from './chowkaBharaModel';
 import { copyTurn, resolveTurn } from './chowkaBharaMatch';
 
@@ -40,7 +40,7 @@ function bestOption(state: State, player: number, turn: Turn, turnStart: State):
   const base = decisionScore(state, player, turn, turnStart);
   let best = base;
   for (const value of new Set(turn.bank)) {
-    for (const move of legalMoves(state, player, value)) {
+    for (const move of distinctMoves(state, player, value)) {
       const result = apply(state, move);
       const after = copyTurn(turn);
       recordSpend(after, value, result.hits.length > 0);
@@ -62,7 +62,7 @@ function captureImpacts(state: State, current: number, value: number): number[] 
   const cached = byValue.get(value);
   if (cached) return cached;
   const impact = state.players.map(() => 0);
-  for (const move of legalMoves(state, current, value)) {
+  for (const move of distinctMoves(state, current, value)) {
     const { state: after, hits } = apply(state, move);
     if (!hits.length) continue;
     impact[current] = 1;

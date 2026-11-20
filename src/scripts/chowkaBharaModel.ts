@@ -5,6 +5,7 @@ import {
   isPaired,
   isBonus,
   isPotentialPair,
+  distinctMoves,
   legalMoves,
   throwOdds,
   type BoardSize,
@@ -70,7 +71,7 @@ function tacticalFeatures(state: State) {
   for (let actor = 0; actor < state.players.length; actor++) {
     for (const [value, chance] of throwOdds(boardOf(state))) {
       const victims = new Set<number>();
-      for (const move of legalMoves(state, actor, value)) {
+      for (const move of distinctMoves(state, actor, value)) {
         apply(state, move).hits.forEach((hit) => victims.add(hit.player));
       }
       if (victims.size) capture[actor] += chance;

@@ -4,9 +4,9 @@
 import {
   apply,
   boardOf,
+  distinctMoves,
   finished,
   frozen,
-  legalMoves,
   newGame,
   newTurn,
   recordSpend,
@@ -48,7 +48,7 @@ export function resolveTurn(state: State, player: number, turn: Turn, turnStart:
 
 export function possibleActions(state: State, player: number, turn: Turn): Action[] {
   const moves: Action[] = [...new Set(turn.bank)].flatMap((value) =>
-    legalMoves(state, player, value).map((move) => ({ kind: 'move' as const, move })),
+    distinctMoves(state, player, value).map((move) => ({ kind: 'move' as const, move })),
   );
   if (turn.owed > 0) moves.push({ kind: 'throw' });
   return moves;

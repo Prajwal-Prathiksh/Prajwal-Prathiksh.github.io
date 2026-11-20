@@ -19,7 +19,7 @@
 // move off together as a pair; until then they are still vulnerable singles and
 // may split. Once they leave together they stay a pair for good. Two meeting on
 // any other inner square just sit together, and
-// an opponent landing there knocks out only one of them. A pair moves half the
+// an opponent's single landing there sends every one of them home. A pair moves half the
 // throw (so 2, 4 and 8 move it 1, 2 and 4), can only hit another pair (it
 // shares a square with lone pawns), and can't be jumped. An opponent's single
 // may land exactly on the pair's square (hitting nothing). A friendly single
@@ -127,9 +127,16 @@ function makeBoard(size: BoardSize): Board {
     return s;
   }));
   const key = ([r, c]: Square) => r * size + c;
-  // Home squares and the centre, plus the corners of the second ring on a 7x7 board.
+  // Home squares and the centre. A 7x7 board also shelters the corners of its
+  // outer and middle rings, where a pawn turns and a chase behind it closes
+  // up, but not the innermost ring: there is nowhere to sit out the last lap.
   const safe: Square[] = [...paths.map((p) => p[0]), centre];
-  if (size >= 7) safe.push([1, 1], [1, size - 2], [size - 2, 1], [size - 2, size - 2]);
+  if (size >= 7) {
+    for (const ring of [0, 1]) {
+      const far = size - 1 - ring;
+      safe.push([ring, ring], [ring, far], [far, ring], [far, far]);
+    }
+  }
   const safeKeys = new Set(safe.map(key));
   const home = base.length - 1;
   // One shell per pawn: k mouths up throws k (ways: n choose k), none up throws 2n.
@@ -336,11 +343,12 @@ export function apply(start: State, move: Move): { state: State; hits: Hit[] } {
     const sq = b.square(p.seat, move.to);
     if (!b.isSafe(sq)) {
       const there = opponents(b, occupancy(start), sq, move.player);
-      // A pair takes out a pair. A single takes out one lone pawn, never a pair.
+      // A pair takes out a pair. A single takes out every lone pawn on the
+      // square, never a pair.
       hits =
         move.pawns.length === 2
           ? there.filter((o) => o.paired)
-          : there.filter((o) => !o.paired).slice(0, 1);
+          : there.filter((o) => !o.paired);
       hits = hits.map(({ player, pawn }) => ({ player, pawn }));
       hits.forEach((h) => {
         const q = s.players[h.player];

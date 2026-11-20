@@ -17,7 +17,7 @@ import {
   type EvaluationModel,
 } from '../src/scripts/chowkaBharaModel';
 import type { Action, BoardSize, EntryMode, State, Turn } from '../src/scripts/chowkaBhara';
-import { BOARD_SIZES, boardFor, boardOf, legalMoves, newGame, newTurn, recordThrow, throwOdds } from '../src/scripts/chowkaBhara';
+import { BOARD_SIZES, apply, boardFor, boardOf, legalMoves, newGame, newTurn, recordThrow, throwOdds } from '../src/scripts/chowkaBhara';
 import { observeAction } from '../src/scripts/chowkaBharaOpponent';
 import { newSocial, styleBelief } from '../src/scripts/chowkaBharaSocial';
 import { WIN_FEATURE_NAMES, winFeatures, winProbabilities } from '../src/scripts/chowkaBharaWin';
@@ -216,7 +216,7 @@ if (!isMainThread) {
         });
       }
       if (board.pawns !== n - 1 || board.home !== n * n - 1 || board.lastOuter !== 4 * (n - 1) - 1
-        || board.pairSquare !== board.lastOuter + 1 || board.safe.length !== (n === 5 ? 5 : 9)) {
+        || board.pairSquare !== board.lastOuter + 1 || board.safe.length !== (n === 5 ? 5 : 13)) {
         throw new Error(`${n}x${n} board constants are wrong.`);
       }
       const gate = newGame([0, 2], 'home', n);
@@ -224,6 +224,24 @@ if (!isMainThread) {
       if (legalMoves(gate, 0, 2).some((move) => move.to > board.lastOuter)) throw new Error(`${n}x${n} inner ring opened before a hit.`);
       gate.players[0].hasHit = true;
       if (!legalMoves(gate, 0, 2).some((move) => move.to === board.pairSquare)) throw new Error(`${n}x${n} inner ring stayed shut after a hit.`);
+
+      // A single landing on two lone opposing pawns sends both home, but it
+      // never hits a committed pair.
+      const target = [...Array(board.home).keys()].find((i) => i > board.pairSquare + 1
+        && !board.isSafe(board.square(0, i)))!;
+      const theirs = board.path(2).findIndex(([r, c]) => r === board.square(0, target)[0] && c === board.square(0, target)[1]);
+      const crowd = newGame([0, 2], 'home', n);
+      crowd.players[0].hasHit = true;
+      crowd.players[0].pawns[0] = target - 1;
+      crowd.players[1].pawns[0] = crowd.players[1].pawns[1] = theirs;
+      const single = legalMoves(crowd, 0, 1).find((move) => move.to === target);
+      if (!single || apply(crowd, single).hits.length !== 2) throw new Error(`${n}x${n} a single did not hit every lone pawn on the square.`);
+      if (theirs > board.pairSquare) {
+        crowd.players[1].partner[0] = 1;
+        crowd.players[1].partner[1] = 0;
+        const blocked = legalMoves(crowd, 0, 1).find((move) => move.to === target);
+        if (blocked && apply(crowd, blocked).hits.length) throw new Error(`${n}x${n} a single hit a committed pair.`);
+      }
     }
     // 7x7: diagonal entry onto the middle ring's crossed corner, both inner rings
     // clockwise, and a straight last step into the centre.

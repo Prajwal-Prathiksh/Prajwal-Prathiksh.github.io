@@ -39,6 +39,15 @@ let hosting = false;
 let self = '';
 let socket: WebSocket | null = null;
 let hostId = '';
+// Two or four players in all, never three: three would seat players on three
+// sides, giving one of them a free side.
+const evenTable = (players: number) => players === 2 || players === 4;
+// The allowed bot count nearest the one asked for, the larger on a tie.
+const fitBots = (people: number, wanted: number) => {
+  const allowed = [3, 2, 1, 0].filter((n) => evenTable(people + n));
+  return allowed.length ? allowed.reduce((best, n) => Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best) : 0;
+};
+
 let lobby: Lobby = { type: 'lobby', seats: [], bots: 3, board: 5 };
 const peers = new Map<string, { pc: RTCPeerConnection; channel: RTCDataChannel; pending: RTCIceCandidateInit[] }>();
 let gameStarted = false;
@@ -127,9 +136,9 @@ function render() {
   boardInput.value = String(boardOf(lobby.board));
   boardInput.disabled = !hosting;
   boardNote.textContent = boardOf(lobby.board) === 7 ? 'Three rings and six pawns each.' : 'The classic board, four pawns each.';
-  [...botInput.options].forEach((o) => { o.disabled = Number(o.value) + lobby.seats.length > 4 || Number(o.value) + lobby.seats.length < 2; });
+  [...botInput.options].forEach((o) => { o.disabled = o.hidden = !evenTable(Number(o.value) + lobby.seats.length); });
   startButton.hidden = !hosting || gameStarted;
-  startButton.disabled = lobby.seats.length + lobby.bots < 2 || lobby.seats.length + lobby.bots > 4 || lobby.seats.some((s) => !s.ready);
+  startButton.disabled = !evenTable(lobby.seats.length + lobby.bots) || lobby.seats.some((s) => !s.ready);
 }
 
 function broadcast() {
@@ -383,7 +392,7 @@ startButton.onclick = () => {
   const bots = colours.filter((colour) => !used.has(colour)).slice(0, lobby.bots)
     .map((colour) => ({ id: '', name: `${colour[0].toUpperCase()}${colour.slice(1)}`, colour, level: 'hard' as const, style: 'balanced' as const }));
   const config: GameConfig = { players: [...people, ...bots], board: boardOf(lobby.board) };
-  if (config.players.length < 2 || config.players.length > 4) return;
+  if (!evenTable(config.players.length)) return;
   send({ type: 'lock' });
   for (const { channel } of peers.values()) if (channel.readyState === 'open') channel.send(JSON.stringify({ type: 'start', players: config.players, board: config.board }));
   openGame(config);
@@ -473,7 +482,7 @@ function connect(role: 'host' | 'guest') {
       } else if (message.type === 'join-request' && hosting && message.id) requestJoin(message.id);
       else if (message.type === 'approved' && message.id && hosting) {
         const colour = colours.find((c) => !lobby.seats.some((s) => s.colour === c));
-        if (colour) { lobby.seats.push({ id: message.id, name: 'Joining player', colour, ready: false }); lobby.bots = Math.min(lobby.bots, 4 - lobby.seats.length); broadcast(); }
+        if (colour) { lobby.seats.push({ id: message.id, name: 'Joining player', colour, ready: false }); lobby.bots = fitBots(lobby.seats.length, lobby.bots); broadcast(); }
       } else if (message.type === 'approved' && !hosting) {
         say('Joining the host directly…');
         // The relay identifies the host when the guest first joins the room.
@@ -489,13 +498,13 @@ function connect(role: 'host' | 'guest') {
         send({ type: 'remove-guest', to: message.id });
         peers.get(message.id)?.pc.close(); peers.delete(message.id);
         lobby.seats = lobby.seats.filter((s) => s.id !== message.id);
-        lobby.bots = Math.min(3, Math.max(lobby.bots, 2 - lobby.seats.length));
+        lobby.bots = fitBots(lobby.seats.length, lobby.bots);
         broadcast();
       } else if (message.type === 'guest-return' && hosting && message.id) {
         // The relay kept this person's seat and verified their private room key.
         if (!gameStarted && !lobby.seats.some((seat) => seat.id === message.id)) {
           const colour = colours.find((c) => !lobby.seats.some((seat) => seat.colour === c));
-          if (colour) { lobby.seats.push({ id: message.id, name: 'Returning player', colour, ready: false }); broadcast(); }
+          if (colour) { lobby.seats.push({ id: message.id, name: 'Returning player', colour, ready: false }); lobby.bots = fitBots(lobby.seats.length, lobby.bots); broadcast(); }
         }
         say(`${lobby.seats.find((seat) => seat.id === message.id)?.name ?? 'A player'} is reconnecting…`);
       } else if (message.type === 'host-left') {

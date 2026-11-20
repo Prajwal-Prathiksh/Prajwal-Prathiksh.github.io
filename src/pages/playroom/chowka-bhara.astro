@@ -69,7 +69,7 @@ const COLOURS = [
             <label class="chip"><input type="radio" name="opponents" value={n} checked={n === 3} />{n}</label>
           ))}
         </div>
-        <p class="hint muted">Two to four players in all. Humans take turns on this device.</p>
+        <p class="hint muted">Two or four players in all. Humans take turns on this device.</p>
       </fieldset>
       <fieldset>
         <legend id="colour-legend">Your colour</legend>
@@ -298,7 +298,7 @@ const COLOURS = [
     </p>
     <p>
       On the outer ring your own pawns can share only the safe squares. In the inner ring, two of
-      your pawns may sit together on a square, and an opponent landing there knocks out just one.
+      your pawns may sit together on a square, and an opponent landing there sends both home.
       Two pawns meeting on your first inner square, the one just inside your last outer square,
       can become a pair. Their dotted chalk circle means they are still vulnerable singles.
       Move one alone to split them, or move them together to commit the pair and make the circle
@@ -316,7 +316,7 @@ const COLOURS = [
       diagonally onto the crossed corner of the middle ring, goes clockwise round it, then steps
       straight in and goes clockwise round the innermost ring to the centre. Pairs form on that
       first middle-ring square and may sit anywhere inside the outer ring. The four corners of the
-      middle ring are crossed safe squares too.
+      outer ring and of the middle ring are crossed safe squares too.
     </p>
     <p>
       In games with three or four players, you can offer a short truce against a clear leader.
@@ -413,7 +413,7 @@ const COLOURS = [
     { id: 'builder', name: 'Builder' },
     { id: 'racer', name: 'Racer' },
   ];
-  const SEATS_FOR: Record<number, Seat[]> = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
+  const SEATS_FOR: Record<number, Seat[]> = { 2: [0, 2], 4: [0, 1, 2, 3] };
   const DELAY = { shake: 650, step: 170, think: 650, between: 550, read: 900 };
   // Bigger boards throw bigger numbers, so their pawns hop more squares a
   // move. Hops are shortened to match, so an average move takes as long on
@@ -617,6 +617,12 @@ const COLOURS = [
 
   const chosenBoard = (f: FormData): BoardSize => f.get('board') === '7' ? 7 : 5;
 
+  const evenTable = (players: number) => players === 2 || players === 4;
+  // The allowed computer count nearest the one asked for, the larger on a tie.
+  const fitComputers = (humans: number, wanted: number) => [3, 2, 1, 0]
+    .filter((n) => evenTable(humans + n))
+    .reduce((best, n) => Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best);
+
   const setupCounts = () => {
     const f = new FormData(setupEl);
     return { humans: Number(f.get('humans')), computers: Number(f.get('opponents')) };
@@ -637,14 +643,15 @@ const COLOURS = [
     const previousStyles = readStyles();
     let { humans, computers } = setupCounts();
 
-    // Keep the total between two and four players.
-    const lo = Math.max(0, 2 - humans);
-    const hi = 4 - humans;
+    // Two or four players in all. Three would seat players on three sides of
+    // the board, so one of them would have a free side and the others not.
     setupEl.querySelectorAll<HTMLInputElement>('input[name=opponents]').forEach((input) => {
-      input.disabled = Number(input.value) < lo || Number(input.value) > hi;
+      // Hide counts that would make three players rather than offer them greyed out.
+      input.disabled = !evenTable(humans + Number(input.value));
+      input.closest('label')!.hidden = input.disabled;
     });
-    if (computers < lo || computers > hi) {
-      computers = Math.min(hi, Math.max(lo, computers));
+    if (!evenTable(humans + computers)) {
+      computers = fitComputers(humans, computers);
       setupEl.querySelector<HTMLInputElement>(`input[name=opponents][value="${computers}"]`)!.checked = true;
     }
 
@@ -1829,7 +1836,7 @@ const COLOURS = [
   }
 
   function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[], size: BoardSize = 5) {
-    if (players.length < 2 || players.length > 4 || players.some((p) => !COLOURS.some((c) => c.id === p.colour))) return;
+    if ((players.length !== 2 && players.length !== 4) || players.some((p) => !COLOURS.some((c) => c.id === p.colour))) return;
     onlineOwners = players.map((p) => p.id);
     onlineSeat = onlineOwners.indexOf(onlineSelf);
     if (onlineSeat < 0) return;
@@ -1971,7 +1978,7 @@ const COLOURS = [
         ? `Spend a ${bonusPair} for each pawn you bring in.`
         : `All ${all} pawns begin on your home square.`;
     $('board-hint').textContent = size === 7
-      ? 'The bigger board: three rings, six pawns, six cowries (throws 1 to 5, chowka 6, bhara 12), and four more safe squares at the corners of the middle ring.'
+      ? 'The bigger board: three rings, six pawns, six cowries (throws 1 to 5, chowka 6, bhara 12), and eight more safe squares at the corners of the outer and middle rings.'
       : 'The classic board: four cowries (throws 1 to 3, chowka 4, bhara 8), an outer ring and one inner ring round the centre.';
     seated = buildSeated();
     social = newSocial(seated.length);
@@ -2172,6 +2179,10 @@ const COLOURS = [
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  .setup :global(.chip[hidden]) {
+    display: none;
   }
 
   .setup :global(.chip) {

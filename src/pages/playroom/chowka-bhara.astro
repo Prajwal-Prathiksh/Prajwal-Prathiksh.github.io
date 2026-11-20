@@ -347,6 +347,7 @@ const COLOURS = [
     shellsFor,
     recordSpend,
     recordThrow,
+    throwOdds,
     throwShells,
     throwValues,
     type Action,
@@ -414,6 +415,12 @@ const COLOURS = [
   ];
   const SEATS_FOR: Record<number, Seat[]> = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
   const DELAY = { shake: 650, step: 170, think: 650, between: 550, read: 900 };
+  // Bigger boards throw bigger numbers, so their pawns hop more squares a
+  // move. Hops are shortened to match, so an average move takes as long on
+  // every board as on the classic one.
+  const meanThrow = (size: BoardSize) =>
+    throwOdds(boardFor(size)).reduce((sum, [value, odds]) => sum + value * odds, 0);
+  const hopDelay = () => DELAY.step * meanThrow(5) / meanThrow(boardOf(state).size);
   // Results on the 7x7 board are kept apart from the classic board's record.
   const recordKey = () => boardOf(state).size === 5 ? 'chowka-bhara' : 'chowka-bhara-7x7';
 
@@ -755,8 +762,8 @@ const COLOURS = [
     [[-0.17, 0], [0.17, 0]],
     [[-0.17, -0.12], [0.17, -0.12], [0, 0.17]],
     [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]],
-    [[-0.22, -0.17], [0, -0.17], [0.22, -0.17], [-0.11, 0.17], [0.11, 0.17]],
-    [[-0.22, -0.17], [0, -0.17], [0.22, -0.17], [-0.22, 0.17], [0, 0.17], [0.22, 0.17]],
+    [[-0.26, -0.19], [0, -0.19], [0.26, -0.19], [-0.13, 0.19], [0.13, 0.19]],
+    [[-0.26, -0.19], [0, -0.19], [0.26, -0.19], [-0.26, 0.19], [0, 0.19], [0.26, 0.19]],
   ];
 
   function layout(s: State): Map<string, [number, number]> {
@@ -896,9 +903,12 @@ const COLOURS = [
       // Which way the pawn turns once it is inside the new ring.
       const tx = (nx - ix) / 100;
       const ty = (ny - iy) / 100;
-      const head = (x: number, y: number, ux: number, uy: number, size = 1) =>
-        `M${x - (ux * 9 + uy * 7) * size} ${y - (uy * 9 - ux * 7) * size}L${x} ${y}L${x - (ux * 9 - uy * 7) * size} ${y - (uy * 9 + ux * 7) * size}`;
+      // The head is a solid chevron drawn apart from the dotted shaft: dots
+      // packed into a short head clump into a blob.
+      const head = (x: number, y: number, ux: number, uy: number) =>
+        `M${x - ux * 13 + uy * 10} ${y - uy * 13 - ux * 10}L${x} ${y}L${x - ux * 13 - uy * 10} ${y - uy * 13 + ux * 10}`;
       let path: string;
+      let tipHead: string;
       let kind = '';
       if (dx !== 0 && dy !== 0) {
         // A diagonal step onto the 7x7 middle ring's crossed corner: cross the
@@ -909,13 +919,15 @@ const COLOURS = [
         const py = (oy + iy) / 2;
         const corner = [px + ux * 20, py + uy * 20];
         const tip = [corner[0] + tx * 28, corner[1] + ty * 28];
-        path = `M${px - ux * 26} ${py - uy * 26}L${corner[0]} ${corner[1]}L${tip[0]} ${tip[1]}${head(tip[0], tip[1], tx, ty, 0.7)}`;
+        path = `M${px - ux * 26} ${py - uy * 26}L${corner[0]} ${corner[1]}L${tip[0] - tx * 8} ${tip[1] - ty * 8}`;
+        tipHead = head(tip[0], tip[1], tx, ty);
         kind = ' kink';
       } else if (tx === dx && ty === dy) {
         // The route carries straight on (the 5x5 board): one short arrow across the boundary.
         const mx = (ox + ix) / 2;
         const my = (oy + iy) / 2;
-        path = `M${mx - dx * 22} ${my - dy * 22}L${mx + dx * 22} ${my + dy * 22}${head(mx + dx * 22, my + dy * 22, dx, dy)}`;
+        path = `M${mx - dx * 22} ${my - dy * 22}L${mx + dx * 14} ${my + dy * 14}`;
+        tipHead = head(mx + dx * 22, my + dy * 22, dx, dy);
       } else {
         // A small kinked arrow tucked into the corner where the route turns:
         // it crosses the ring boundary beside the grid line on the side the
@@ -925,13 +937,17 @@ const COLOURS = [
         const by = (oy + iy) / 2 + ty * 36;
         const corner = [bx + dx * 22, by + dy * 22];
         const tip = [corner[0] + tx * 32, corner[1] + ty * 32];
-        path = `M${bx - dx * 22} ${by - dy * 22}L${corner[0]} ${corner[1]}L${tip[0]} ${tip[1]}${head(tip[0], tip[1], tx, ty, 0.7)}`;
+        path = `M${bx - dx * 22} ${by - dy * 22}L${corner[0]} ${corner[1]}L${tip[0] - tx * 8} ${tip[1] - ty * 8}`;
+        tipHead = head(tip[0], tip[1], tx, ty);
         kind = ' kink';
       }
       // Drawn as a dotted powder line, like the rangoli borders on the home squares.
       const shade = COLOURS.find((c) => c.id === seated[i].colour)!;
+      // The cream ring lifts Red's dots off the floor; on the solid head it
+      // would read as a second chevron, so the head goes without.
       const ring = shade.ring ? `<path class="ring" d="${path}" stroke="${shade.ring}"/>` : '';
-      return `<g class="entry${kind}" filter="url(#chalk)">${ring}<path d="${path}" stroke="${shade.rangoli}"/></g>`;
+      return `<g class="entry${kind}" filter="url(#chalk)">${ring}<path d="${path}" stroke="${shade.rangoli}"/>`
+        + `<path class="head" d="${tipHead}" stroke="${shade.rangoli}"/></g>`;
     })).join('');
   };
 
@@ -1654,7 +1670,7 @@ const COLOURS = [
           hopping.set(`${move.player}-${p}`, [x + (move.pawns.length === 2 ? (k ? 0.12 : -0.12) : 0), y]);
         });
         render();
-        await wait(n === steps.length - 1 ? DELAY.step * 1.4 : DELAY.step);
+        await wait(n === steps.length - 1 ? hopDelay() * 1.4 : hopDelay());
       }
     }
     hopping.clear();
@@ -2337,6 +2353,12 @@ const COLOURS = [
     stroke-width: 9;
   }
 
+  /* A solid chalk chevron reads as an arrowhead; dots there blur into a blob. */
+  .entry-guides :global(path.head) {
+    stroke-width: 4.5;
+    stroke-dasharray: none;
+  }
+
   .home-guides { pointer-events: none; }
 
   select {
@@ -2473,6 +2495,12 @@ const COLOURS = [
     cursor: default;
   }
 
+  /* A 7x7 square is 7/9 the width of a 5x5 one, so its pawns take more of
+     their square to look about as big as the classic board's. */
+  .board-square[data-board='7'] .pawns :global(.pawn) {
+    width: calc(54% / var(--units));
+  }
+
   .pawns :global(.pawn.home) {
     width: calc(23.1% / var(--units));
   }
@@ -2552,13 +2580,41 @@ const COLOURS = [
     text-shadow: 0 1px 2px rgb(40 8 0 / 0.5);
   }
 
+  /* Six cowries on 7x7 must fit the narrow tray beside the board, so the
+     gap and the shells shrink together rather than spill past the edge. */
   .shells {
     display: flex;
     justify-content: center;
-    gap: 0.9rem;
+    gap: clamp(0.3rem, 4%, 0.9rem);
+    min-width: 0;
     height: 3.4rem;
     align-items: center;
   }
+
+  /* Six cowries sit in two offset rows of three, like a handful dropped on
+     the floor, so they keep the classic board's size in a narrow tray. */
+  .floor[data-board='7'] .shells {
+    display: grid;
+    grid-template-columns: repeat(7, 1.45rem);
+    justify-content: center;
+    row-gap: 0.2rem;
+    column-gap: 0;
+    height: auto;
+    min-height: 3.4rem;
+  }
+
+  .floor[data-board='7'] .cowrie {
+    width: 1.9rem;
+    justify-self: center;
+    grid-row: 1;
+  }
+
+  .floor[data-board='7'] .cowrie:nth-child(1) { grid-column: 1 / 3; }
+  .floor[data-board='7'] .cowrie:nth-child(2) { grid-column: 3 / 5; }
+  .floor[data-board='7'] .cowrie:nth-child(3) { grid-column: 5 / 7; }
+  .floor[data-board='7'] .cowrie:nth-child(4) { grid-area: 2 / 2 / 3 / 4; }
+  .floor[data-board='7'] .cowrie:nth-child(5) { grid-area: 2 / 4 / 3 / 6; }
+  .floor[data-board='7'] .cowrie:nth-child(6) { grid-area: 2 / 6 / 3 / 8; }
 
   .throw-player {
     display: inline-flex;
@@ -2581,6 +2637,8 @@ const COLOURS = [
   }
 
   .cowrie {
+    flex: 0 1 1.9rem;
+    min-width: 0;
     width: 1.9rem;
     aspect-ratio: 24 / 32;
     rotate: var(--r, 0deg);
@@ -3075,8 +3133,33 @@ const COLOURS = [
     margin-block: 0;
   }
 
+  /* Narrow full screen stacks the tray under the board. The floor keeps a
+     usable minimum so a short screen scrolls rather than squeezing it. */
   .game-area:global(.zen-on) .floor {
-    width: min(100%, calc(100dvh - 22rem));
+    width: min(100%, max(18rem, calc(100dvh - 22rem)));
+  }
+
+  /* A phone or small tablet held sideways: there is no height to stack in,
+     so the tray sits beside the board, as on a wide screen. */
+  @media (orientation: landscape) and (max-width: 55.99rem) {
+    .game-area:global(.zen-on) .floor {
+      --square: max(14rem, min(calc(100vw - 16rem), calc(100dvh - 8.5rem)));
+      grid-template-columns: var(--square) 13rem;
+      width: auto;
+      max-width: 100%;
+    }
+
+    .game-area:global(.zen-on) .thrower {
+      margin: 0.6rem 0.6rem 0.6rem 0;
+      padding: 0.5rem;
+      gap: 0.3rem;
+    }
+
+    .game-area:global(.zen-on) .bank :global(.value) {
+      min-width: 1.9rem;
+      height: 1.9rem;
+      font-size: 0.9rem;
+    }
   }
 
   /* Wide full screen: the throwing circle moves to the board's right, on the same floor. */

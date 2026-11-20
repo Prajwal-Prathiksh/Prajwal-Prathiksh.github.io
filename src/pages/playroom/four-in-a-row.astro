@@ -1,0 +1,1078 @@
+---
+import Base from '../../layouts/Base.astro';
+import ZenToggle from '../../components/ZenToggle.astro';
+
+const COLS = 7;
+const ROWS = 6;
+// Front plate geometry, in a 700 x 600 viewBox: one 100-unit cell per slot.
+const holes = Array.from({ length: COLS * ROWS }, (_, i) => ({ x: 50 + (i % COLS) * 100, y: 50 + Math.floor(i / COLS) * 100 }));
+// Wood grain: long faint strokes, the same on every build.
+let seed = 11;
+const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const grain = Array.from({ length: 46 }, () => {
+  const x = rand() * 700;
+  const sway = (rand() - 0.5) * 18;
+  return { d: `M${x.toFixed(1)} -5C${(x + sway).toFixed(1)} 180 ${(x - sway).toFixed(1)} 420 ${(x + sway * 0.6).toFixed(1)} 605`, w: (0.6 + rand() * 2.2).toFixed(2), o: (0.05 + rand() * 0.1).toFixed(3), light: rand() < 0.35 };
+});
+---
+
+<Base title="Four in a Row" description="Four in a Row: drop brass and silver coins into a wooden rack and line up four. Play a friend or a computer that plays perfectly on Hard.">
+  <p class="back"><a href="/playroom/">← Playroom</a></p>
+  <h1>Four in a Row</h1>
+  <p class="muted intro">Drop your coins into the rack and line up four.</p>
+
+  <svg class="sprite" aria-hidden="true">
+    <defs>
+      <symbol id="mark-sun" viewBox="-20 -20 40 40">
+        <circle r="6.2" fill="none" stroke="currentColor" stroke-width="2.4" />
+        <g stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          {Array.from({ length: 8 }, (_, i) => (
+            <line x1="0" y1="-10" x2="0" y2="-14.5" transform={`rotate(${i * 45})`} />
+          ))}
+        </g>
+      </symbol>
+      <symbol id="mark-moon" viewBox="-20 -20 40 40">
+        <path d="M5.5 -11.5a12 12 0 1 0 6 16.5a9.5 9.5 0 1 1 -6 -16.5z" fill="currentColor" />
+        <circle cx="8.5" cy="-6" r="1.6" fill="currentColor" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="game-area" data-zen>
+    <form id="setup" class="setup">
+      <fieldset>
+        <legend>Opponent</legend>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="opponent" value="computer" checked />Computer</label>
+          <label class="chip"><input type="radio" name="opponent" value="friend" />A friend, on this device</label>
+        </div>
+      </fieldset>
+      <fieldset id="level-set">
+        <legend>Computer</legend>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="level" value="easy" />Easy</label>
+          <label class="chip"><input type="radio" name="level" value="medium" checked />Medium</label>
+          <label class="chip"><input type="radio" name="level" value="hard" />Hard</label>
+        </div>
+        <p id="level-hint" class="hint muted"></p>
+      </fieldset>
+      <fieldset>
+        <legend id="coin-legend">Your coins</legend>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="coin" value="brass" checked /><span class="chip-coin brass" aria-hidden="true"><svg><use href="#mark-sun" /></svg></span>Brass</label>
+          <label class="chip"><input type="radio" name="coin" value="silver" /><span class="chip-coin silver" aria-hidden="true"><svg><use href="#mark-moon" /></svg></span>Silver</label>
+        </div>
+      </fieldset>
+      <fieldset id="first-set">
+        <legend>First move</legend>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="first" value="you" checked />You</label>
+          <label class="chip"><input type="radio" name="first" value="computer" />Computer</label>
+          <label class="chip"><input type="radio" name="first" value="alternate" />Take turns</label>
+        </div>
+      </fieldset>
+      <div class="setup-actions">
+        <button type="submit" class="btn primary">Start game</button>
+        <ZenToggle />
+      </div>
+    </form>
+
+    <div id="matchbar" class="matchbar" hidden>
+      <span id="summary" class="muted"></span>
+      <button type="button" class="btn" id="hint">Hint</button>
+      <button type="button" class="btn" id="undo">Undo</button>
+      <button type="button" class="btn" id="newgame">New game</button>
+      <ZenToggle />
+    </div>
+
+    <div class="play">
+      <p class="status" aria-live="polite">
+        <span id="status-coin" class="status-coin" aria-hidden="true"><svg><use href="#mark-sun" /></svg></span>
+        <span id="status"></span>
+      </p>
+
+      <div class="board" id="board">
+        <div class="lane" aria-hidden="true">
+          <div id="ghost" class="coin ghost" hidden><span class="face"><svg><use href="#mark-sun" /></svg></span></div>
+        </div>
+        <div class="rack">
+          <div class="well" id="well">
+            <div class="hollow"></div>
+            <div id="coins" class="coins"></div>
+            <svg class="plate" viewBox="0 0 700 600" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="plate-wood" x1="0" y1="0" x2="1" y2="0.15">
+                  <stop offset="0" stop-color="#7a421f" />
+                  <stop offset="0.35" stop-color="#94532b" />
+                  <stop offset="0.6" stop-color="#7c4521" />
+                  <stop offset="0.85" stop-color="#98582e" />
+                  <stop offset="1" stop-color="#74401d" />
+                </linearGradient>
+                <linearGradient id="plate-rim" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#1e0a02" stop-opacity="0.8" />
+                  <stop offset="1" stop-color="#ffd9a0" stop-opacity="0.35" />
+                </linearGradient>
+                <mask id="plate-holes" maskUnits="userSpaceOnUse" x="0" y="0" width="700" height="600">
+                  <rect width="700" height="600" fill="#fff" />
+                  {holes.map((h) => <circle cx={h.x} cy={h.y} r="39" fill="#000" />)}
+                </mask>
+              </defs>
+              <g mask="url(#plate-holes)">
+                <rect width="700" height="600" fill="url(#plate-wood)" />
+                {grain.map((g) => <path d={g.d} fill="none" stroke={g.light ? '#ffe2b8' : '#2a1005'} stroke-width={g.w} opacity={g.o} />)}
+                {holes.map((h) => <circle cx={h.x} cy={h.y} r="41.5" fill="none" stroke="url(#plate-rim)" stroke-width="5" />)}
+              </g>
+            </svg>
+            <svg id="win-line" class="win-line" viewBox="0 0 700 600" aria-hidden="true"></svg>
+          </div>
+          <span class="foot left" aria-hidden="true"></span>
+          <span class="foot right" aria-hidden="true"></span>
+        </div>
+        <div class="cols" id="cols" role="group" aria-label="Columns">
+          {Array.from({ length: COLS }, (_, c) => (
+            <button type="button" class="col" data-col={c} aria-label={`Drop a coin in column ${c + 1}`} />
+          ))}
+        </div>
+      </div>
+      <p id="insight" class="insight muted"></p>
+    </div>
+  </div>
+
+  <dl id="stats" class="stats"></dl>
+  <p class="muted note">Results against the computer are saved on this device only.</p>
+
+  <section class="rules">
+    <h2>How to play</h2>
+    <p>
+      Take turns dropping a coin into one of the seven columns. It falls to the lowest empty
+      slot. The first to line up four of their own coins in a row, across, up and down or on a
+      slant, wins. If the rack fills with no line of four, the game is a draw.
+    </p>
+    <p>
+      Brass coins carry a sun and silver coins a moon, so the two are easy to tell apart. On a
+      keyboard, use the arrow keys to pick a column and Enter to drop. Stuck? <em>Hint</em> asks the
+      Hard computer for your best column and tells you whether it wins by force, holds a draw,
+      or just looks strongest.
+    </p>
+    <p>
+      Hard never misses. The game is solved: whoever moves first can always win by starting in the
+      middle column. When Hard goes first it plays a proven winning move every turn, from a small
+      book of solved openings and then from its own search. When you go first, a perfect game
+      beats it, but one slip is usually enough for it to take over.
+    </p>
+  </section>
+</Base>
+
+<script>
+  import { recordResult, renderRecord } from '../../scripts/scores';
+  import { chooseMove, type Choice, type Level } from '../../scripts/fourInARowAI';
+  import { Solver } from '../../scripts/fourInARow';
+  import type { MoveRequest, MoveResponse } from '../../scripts/fourInARow.worker';
+
+  const W = 7;
+  const H = 6;
+  type Coin = 'brass' | 'silver';
+  type Who = { coin: Coin; computer: boolean; name: string };
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const setupEl = $<HTMLFormElement>('setup');
+  const matchbarEl = $('matchbar');
+  const summaryEl = $('summary');
+  const statusEl = $('status');
+  const statusCoinEl = $('status-coin');
+  const insightEl = $('insight');
+  const coinsEl = $('coins');
+  const ghostEl = $('ghost');
+  const laneEl = document.querySelector<HTMLElement>('.lane')!;
+  const lineEl = $('win-line');
+  const boardEl = $('board');
+  const undoEl = $<HTMLButtonElement>('undo');
+  const hintEl = $<HTMLButtonElement>('hint');
+  const statsEl = $('stats');
+  const colEls = [...document.querySelectorAll<HTMLButtonElement>('.col')];
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  const LEVEL_HINTS: Record<Level, string> = {
+    easy: 'Looks a move or two ahead and sometimes misses things.',
+    medium: 'Looks several moves ahead. A fair fight.',
+    hard: 'Plays perfectly. If it moves first, it cannot be beaten.',
+  };
+
+  // ---- Game state ----
+  let seq: number[] = [];
+  let players: [Who, Who] = [
+    { coin: 'brass', computer: false, name: 'You' },
+    { coin: 'silver', computer: true, name: 'Computer' },
+  ];
+  let level: Level = 'medium';
+  let vsComputer = true;
+  let over = false;
+  let thinking = false;
+  let started = false;
+  let gameId = 0;
+  let alternateNext: 'you' | 'computer' = 'you';
+  let hover: number | null = null;
+  let lastProof: number | null = null;
+  let hintCol: number | null = null;
+  let hintsUsed = 0;
+  let hinting = false;
+
+  const toMove = () => players[seq.length % 2];
+  const heights = () => {
+    const h = Array(W).fill(0);
+    seq.forEach((c) => h[c]++);
+    return h;
+  };
+  // owner[c][r]: 0 or 1 for the player who placed it, -1 empty.
+  const owners = () => {
+    const grid = Array.from({ length: W }, () => Array(H).fill(-1));
+    const h = Array(W).fill(0);
+    seq.forEach((c, i) => { grid[c][h[c]++] = i % 2; });
+    return grid;
+  };
+
+  function fourAt(grid: number[][], c: number, r: number): [number, number][] | null {
+    const who = grid[c][r];
+    for (const [dc, dr] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+      const cells: [number, number][] = [[c, r]];
+      for (const sign of [1, -1]) {
+        let x = c + dc * sign;
+        let y = r + dr * sign;
+        while (x >= 0 && x < W && y >= 0 && y < H && grid[x][y] === who) {
+          cells.push([x, y]);
+          x += dc * sign;
+          y += dr * sign;
+        }
+      }
+      if (cells.length >= 4) {
+        cells.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        // Keep the four (or more) in line order for drawing.
+        return dc === 0 ? cells.sort((a, b) => a[1] - b[1]) : cells;
+      }
+    }
+    return null;
+  }
+
+  // ---- Drawing ----
+  const markFor = (coin: Coin) => (coin === 'brass' ? '#mark-sun' : '#mark-moon');
+  const coinHtml = (coin: Coin) => `<span class="face"><svg><use href="${markFor(coin)}"/></svg></span>`;
+
+  function placeCoin(c: number, r: number, coin: Coin): HTMLElement {
+    const el = document.createElement('div');
+    el.className = `coin ${coin}`;
+    el.style.setProperty('--c', String(c));
+    el.style.setProperty('--r', String(r));
+    el.dataset.cell = `${c}-${r}`;
+    el.innerHTML = coinHtml(coin);
+    coinsEl.append(el);
+    return el;
+  }
+
+  function redrawCoins() {
+    coinsEl.innerHTML = '';
+    const grid = owners();
+    grid.forEach((col, c) => col.forEach((who, r) => { if (who >= 0) placeCoin(c, r, players[who].coin); }));
+  }
+
+  function setCoinIcon(el: HTMLElement, coin: Coin) {
+    el.className = el.className.replace(/\b(brass|silver)\b/g, '').trim() + ` ${coin}`;
+    el.querySelector('use')!.setAttribute('href', markFor(coin));
+  }
+
+  async function dropAnimation(el: HTMLElement, r: number) {
+    if (reducedMotion.matches) return;
+    const cell = el.getBoundingClientRect().height;
+    // From the waiting spot in the lane down to its slot.
+    const fall = el.getBoundingClientRect().top - laneEl.getBoundingClientRect().top;
+    const ms = 170 + Math.sqrt(H - r) * 120;
+    const bounce = Math.min(cell * 0.18, 10);
+    await el.animate(
+      [
+        { transform: `translateY(${-fall}px)`, easing: 'cubic-bezier(0.55, 0, 1, 0.45)' },
+        { transform: 'translateY(0)', offset: 0.7, easing: 'cubic-bezier(0, 0.55, 0.45, 1)' },
+        { transform: `translateY(${-bounce}px)`, offset: 0.85, easing: 'cubic-bezier(0.55, 0, 1, 0.45)' },
+        { transform: 'translateY(0)' },
+      ],
+      { duration: ms },
+    ).finished;
+  }
+
+  function drawWin(cells: [number, number][]) {
+    const set = new Set(cells.map(([c, r]) => `${c}-${r}`));
+    coinsEl.querySelectorAll<HTMLElement>('.coin').forEach((el) => {
+      el.classList.toggle('win', set.has(el.dataset.cell!));
+      el.classList.toggle('dim', !set.has(el.dataset.cell!));
+    });
+    const [a, b] = [cells[0], cells[cells.length - 1]];
+    const x = (c: number) => 50 + c * 100;
+    const y = (r: number) => 550 - r * 100;
+    lineEl.innerHTML = `<line x1="${x(a[0])}" y1="${y(a[1])}" x2="${x(b[0])}" y2="${y(b[1])}" pathLength="1"/>`;
+  }
+
+  function clearWin() {
+    lineEl.innerHTML = '';
+  }
+
+  function renderGhost() {
+    const who = toMove();
+    const at = hover ?? hintCol;
+    const show = started && !over && !thinking && at !== null && !who.computer && heights()[at] < H;
+    ghostEl.hidden = !show;
+    if (show) {
+      ghostEl.style.setProperty('--c', String(at));
+      setCoinIcon(ghostEl, who.coin);
+    }
+  }
+
+  function render() {
+    const h = heights();
+    const who = toMove();
+    const humanTurn = started && !over && !thinking && !who.computer;
+    colEls.forEach((el, c) => {
+      el.disabled = !humanTurn || h[c] >= H;
+      el.classList.toggle('hinted', humanTurn && c === hintCol);
+    });
+    hintEl.disabled = !humanTurn || hinting;
+    boardEl.classList.toggle('live', humanTurn);
+    renderGhost();
+    if (!over) setCoinIcon(statusCoinEl, who.coin);
+    const humanMoves = seq.filter((_, i) => !players[i % 2].computer).length;
+    undoEl.disabled = thinking || seq.length === 0 || (vsComputer && humanMoves === 0);
+    renderRecord(statsEl, vsComputer ? `four-in-a-row-${level}` : null);
+  }
+
+  function setStatus(text: string, coin?: Coin) {
+    statusEl.textContent = text;
+    if (coin) setCoinIcon(statusCoinEl, coin);
+  }
+
+  function turnStatus() {
+    const who = toMove();
+    if (vsComputer) {
+      setStatus(who.computer ? 'Computer is thinking…' : seq.length < 2 ? 'Your move. Tap a column.' : 'Your move.', who.coin);
+    } else {
+      setStatus(`${who.name}'s move.`, who.coin);
+    }
+    statusEl.parentElement!.classList.toggle('thinking', who.computer);
+    insightEl.textContent = level === 'hard' && vsComputer && lastProof === 1 && !over
+      ? 'Hard has found a forced win.'
+      : '';
+  }
+
+  // ---- The computer, in a worker so the page never stalls ----
+  let worker: Worker | null = null;
+  let requestId = 0;
+  const pending = new Map<number, (choice: Choice) => void>();
+  let fallbackSolver: Solver | null = null;
+
+  function askComputer(as: Level = level): Promise<Choice> {
+    const request: MoveRequest = { id: ++requestId, seq: [...seq], level: as };
+    try {
+      if (!worker) {
+        worker = new Worker(new URL('../../scripts/fourInARow.worker.ts', import.meta.url), { type: 'module' });
+        worker.onmessage = (event: MessageEvent<MoveResponse>) => {
+          pending.get(event.data.id)?.(event.data);
+          pending.delete(event.data.id);
+        };
+        worker.onerror = () => {
+          worker?.terminate();
+          worker = null;
+          pending.forEach((resolve) => resolve(onPage(as)));
+          pending.clear();
+        };
+      }
+      worker.postMessage(request);
+      return new Promise((resolve) => pending.set(request.id, resolve));
+    } catch {
+      return Promise.resolve(onPage(as));
+    }
+  }
+
+  // Without workers the page thinks for itself, more briefly.
+  function onPage(as: Level): Choice {
+    fallbackSolver ??= new Solver();
+    return chooseMove(seq, as, fallbackSolver, { thinkMs: 1200 });
+  }
+
+  // ---- Hints: the Hard computer's choice for whoever is to move ----
+  const HINT_NOTES: Record<string, (col: number) => string> = {
+    win: (c) => `Column ${c} wins by force from here.`,
+    draw: (c) => `Column ${c} holds the draw. Nothing here wins by force.`,
+    lose: (c) => `Every move loses against perfect play. Column ${c} holds out longest.`,
+    search: (c) => `Column ${c} looks strongest.`,
+  };
+
+  function clearHint() {
+    hintCol = null;
+    if (!over) insightEl.textContent = '';
+  }
+
+  async function askHint() {
+    if (hinting || over || thinking || toMove().computer) return;
+    const id = gameId;
+    const asked = seq.length;
+    hinting = true;
+    hintEl.textContent = 'Thinking…';
+    render();
+    const choice = await askComputer('hard');
+    hinting = false;
+    hintEl.textContent = 'Hint';
+    if (id !== gameId || seq.length !== asked) return render();
+    hintCol = choice.col;
+    hover = null; // the waiting coin moves to the hinted column
+    hintsUsed++;
+    const kind = choice.proof === 1 ? 'win' : choice.proof === 0 ? 'draw' : choice.proof === -1 ? 'lose' : 'search';
+    insightEl.textContent = HINT_NOTES[kind](choice.col + 1);
+    updateSummary();
+    render();
+    if (document.activeElement === hintEl) colEls[choice.col].focus({ preventScroll: true });
+  }
+
+  function updateSummary() {
+    const hints = hintsUsed ? ` · ${hintsUsed} ${hintsUsed === 1 ? 'hint' : 'hints'}` : '';
+    summaryEl.textContent = (vsComputer
+      ? `${level[0].toUpperCase()}${level.slice(1)} computer · ${players[0].computer ? 'computer starts' : 'you start'}`
+      : 'Two players') + hints;
+  }
+
+  async function computerTurn() {
+    const id = gameId;
+    thinking = true;
+    render();
+    turnStatus();
+    const startedAt = performance.now();
+    const choice = await askComputer();
+    // A short pause so an instant reply still reads as a move.
+    const wait = 450 - (performance.now() - startedAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    if (id !== gameId) return;
+    thinking = false;
+    lastProof = choice.proof;
+    await drop(choice.col);
+  }
+
+  // ---- Moves ----
+  async function drop(c: number) {
+    const h = heights();
+    if (over || h[c] >= H) return;
+    const id = gameId;
+    const who = toMove();
+    clearHint();
+    seq.push(c);
+    const r = h[c];
+    const el = placeCoin(c, r, who.coin);
+    thinking = true; // no input while the coin falls
+    render();
+    await dropAnimation(el, r);
+    if (id !== gameId) return;
+    thinking = false;
+    const four = fourAt(owners(), c, r);
+    if (four) return finish(seq.length % 2 === 1 ? 0 : 1, four);
+    if (seq.length === W * H) return finish(null, null);
+    turnStatus();
+    render();
+    if (toMove().computer) computerTurn();
+  }
+
+  function finish(winner: 0 | 1 | null, four: [number, number][] | null) {
+    over = true;
+    if (four) drawWin(four);
+    const who = winner === null ? null : players[winner];
+    if (vsComputer) {
+      setStatus(!who ? 'Draw. The rack is full.' : who.computer ? 'Computer wins.' : 'You win!', who?.coin ?? toMove().coin);
+      recordResult(`four-in-a-row-${level}`, !who ? 'draw' : who.computer ? 'loss' : 'win');
+    } else {
+      setStatus(!who ? 'Draw. The rack is full.' : `${who.name} wins!`, who?.coin ?? toMove().coin);
+    }
+    statusEl.parentElement!.classList.remove('thinking');
+    insightEl.textContent = '';
+    boardEl.classList.toggle('won', Boolean(four));
+    render();
+  }
+
+  function undo() {
+    if (thinking || !seq.length) return;
+    gameId++;
+    hinting = false;
+    hintEl.textContent = 'Hint';
+    clearHint();
+    over = false;
+    boardEl.classList.remove('won');
+    clearWin();
+    // Against the computer, step back to your previous turn.
+    do seq.pop();
+    while (vsComputer && seq.length && toMove().computer);
+    if (vsComputer && toMove().computer) {
+      redrawCoins();
+      computerTurn();
+      return;
+    }
+    lastProof = null;
+    redrawCoins();
+    turnStatus();
+    render();
+  }
+
+  // ---- Setup ----
+  function readSetup() {
+    const f = new FormData(setupEl);
+    vsComputer = f.get('opponent') === 'computer';
+    level = f.get('level') as Level;
+    const coin = f.get('coin') as Coin;
+    const other: Coin = coin === 'brass' ? 'silver' : 'brass';
+    $('level-set').hidden = !vsComputer;
+    $('first-set').hidden = !vsComputer;
+    $('coin-legend').textContent = vsComputer ? 'Your coins' : 'First player';
+    $('level-hint').textContent = LEVEL_HINTS[level];
+    if (!vsComputer) {
+      players = [
+        { coin, computer: false, name: coin === 'brass' ? 'Brass' : 'Silver' },
+        { coin: other, computer: false, name: other === 'brass' ? 'Brass' : 'Silver' },
+      ];
+      return;
+    }
+    const first = f.get('first') as 'you' | 'computer' | 'alternate';
+    const computerFirst = first === 'computer' || (first === 'alternate' && alternateNext === 'computer');
+    const you: Who = { coin, computer: false, name: 'You' };
+    const cpu: Who = { coin: other, computer: true, name: 'Computer' };
+    players = computerFirst ? [cpu, you] : [you, cpu];
+  }
+
+  function newGame() {
+    gameId++;
+    readSetup();
+    seq = [];
+    over = false;
+    thinking = false;
+    lastProof = null;
+    hintCol = null;
+    hintsUsed = 0;
+    hinting = false;
+    hintEl.textContent = 'Hint';
+    boardEl.classList.remove('won');
+    clearWin();
+    redrawCoins();
+    updateSummary();
+    if (vsComputer && new FormData(setupEl).get('first') === 'alternate') {
+      alternateNext = players[0].computer ? 'you' : 'computer';
+    }
+    turnStatus();
+    render();
+    if (toMove().computer) computerTurn();
+  }
+
+  setupEl.addEventListener('change', () => { if (!started) { readSetup(); render(); } });
+  setupEl.addEventListener('submit', (event) => {
+    event.preventDefault();
+    started = true;
+    setupEl.hidden = true;
+    matchbarEl.hidden = false;
+    newGame();
+  });
+  $('newgame').addEventListener('click', () => {
+    started = false;
+    gameId++;
+    thinking = false;
+    setupEl.hidden = false;
+    matchbarEl.hidden = true;
+    setupEl.querySelector<HTMLButtonElement>('button[type=submit]')!.focus();
+    seq = [];
+    over = false;
+    boardEl.classList.remove('won');
+    clearWin();
+    redrawCoins();
+    readSetup();
+    setStatus('Choose your game and press Start.');
+    statusEl.parentElement!.classList.remove('thinking');
+    insightEl.textContent = '';
+    render();
+  });
+  undoEl.addEventListener('click', undo);
+  hintEl.addEventListener('click', askHint);
+
+  colEls.forEach((el, c) => {
+    el.addEventListener('pointerenter', () => { hover = c; renderGhost(); });
+    el.addEventListener('focus', () => { hover = c; renderGhost(); });
+    el.addEventListener('click', () => { hover = c; drop(c); });
+    el.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+      if (!step) return;
+      event.preventDefault();
+      for (let next = c + step; next >= 0 && next < W; next += step) {
+        if (!colEls[next].disabled) { colEls[next].focus(); break; }
+      }
+    });
+  });
+  $('cols').addEventListener('pointerleave', () => { hover = null; renderGhost(); });
+
+  readSetup();
+  setStatus('Choose your game and press Start.', players[0].coin);
+  render();
+</script>
+
+<style>
+  .back {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  h1 {
+    margin-bottom: 0.25rem;
+  }
+
+  .intro {
+    margin-top: 0;
+  }
+
+  .sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+  }
+
+  /* ---- Setup, in the playroom's chip style ---- */
+  .setup {
+    display: grid;
+    gap: 0.9rem;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .setup[hidden],
+  .matchbar[hidden],
+  fieldset[hidden] {
+    display: none;
+  }
+
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  legend {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chip:has(input:checked) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    font-weight: 600;
+  }
+
+  .chip:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.85rem;
+  }
+
+  .setup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .matchbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    margin: 1.25rem 0 0;
+    font-size: 0.9rem;
+  }
+
+  /* ---- Coins ---- */
+  .chip-coin,
+  .status-coin,
+  .board :global(.face) {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: rgb(92 58 6 / 0.62);
+    background:
+      radial-gradient(circle at 34% 28%, rgb(255 251 214 / 0.95), rgb(255 238 160 / 0) 32%),
+      radial-gradient(circle at 50% 50%, #f3cd5a 0 52%, #d9a531 58%, #b47f1d 66%, #f0c75a 74%, #a26f14 86%, #6f4908);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 240 190 / 0.45),
+      inset 0 -0.12em 0.25em rgb(80 45 0 / 0.45),
+      0 0.12em 0.2em rgb(0 0 0 / 0.35);
+  }
+
+  .silver.chip-coin,
+  .silver.status-coin,
+  .board :global(.silver .face) {
+    color: rgb(60 68 80 / 0.55);
+    background:
+      radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0) 34%),
+      radial-gradient(circle at 50% 50%, #e9edf2 0 52%, #c4cbd4 58%, #96a0ad 66%, #dde3ea 74%, #8d96a3 86%, #59616d);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.5),
+      inset 0 -0.12em 0.25em rgb(30 36 48 / 0.4),
+      0 0.12em 0.2em rgb(0 0 0 / 0.35);
+  }
+
+  .chip-coin,
+  .status-coin {
+    width: 1.35em;
+    height: 1.35em;
+    flex: none;
+  }
+
+  .chip-coin svg,
+  .status-coin svg,
+  .board :global(.face svg) {
+    width: 62%;
+    height: 62%;
+  }
+
+  .board :global(.face svg) {
+    filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.35));
+  }
+
+  /* ---- Status ---- */
+  .play {
+    display: grid;
+    justify-items: center;
+    margin-top: 1rem;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 2rem;
+    margin: 0 0 0.6rem;
+    font-weight: 600;
+    font-size: 1.05rem;
+  }
+
+  .status.thinking .status-coin {
+    animation: think 1s ease-in-out infinite;
+  }
+
+  @keyframes think {
+    50% {
+      translate: 0 -0.2em;
+      rotate: 18deg;
+    }
+  }
+
+  .insight {
+    min-height: 1.4em;
+    margin: 0.6rem 0 0;
+    font-size: 0.88rem;
+  }
+
+  /* ---- The rack ----
+     The board is a lane for the waiting coin, then a carved wooden rack: a
+     dark hollow behind, the coins, and a front plate with round holes cut by a
+     repeating mask. Coins sit between the hollow and the plate, so a falling
+     coin passes behind the wood. */
+  .board {
+    --pad: 4.2%;
+    position: relative;
+    width: min(100%, 34rem);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  .lane {
+    position: relative;
+    aspect-ratio: 7 / 1;
+    margin-inline: var(--pad);
+  }
+
+  .rack {
+    position: relative;
+    padding: var(--pad);
+    padding-bottom: calc(var(--pad) * 1.15);
+    border-radius: 18px 18px 12px 12px;
+    background:
+      linear-gradient(180deg, rgb(255 220 170 / 0.18), transparent 3%, transparent 96%, rgb(0 0 0 / 0.25)),
+      repeating-linear-gradient(91deg, rgb(255 255 255 / 0.035) 0 2px, transparent 2px 11px),
+      repeating-linear-gradient(88deg, rgb(0 0 0 / 0.07) 0 1px, transparent 1px 23px),
+      linear-gradient(100deg, #6e3a1b, #8b4c25 30%, #74401f 55%, #8f522a 80%, #6a3719);
+    box-shadow:
+      inset 0 2px 0 rgb(255 214 160 / 0.25),
+      inset 0 -3px 0 rgb(40 14 2 / 0.5),
+      0 18px 30px -12px rgb(0 0 0 / 0.55);
+  }
+
+  .well {
+    position: relative;
+    aspect-ratio: 7 / 6;
+    border-radius: 6px;
+  }
+
+  .hollow,
+  .plate,
+  .coins,
+  .win-line {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Tucked inside the plate's edge so no seam shows past the wood. */
+  .hollow {
+    inset: 2px;
+  }
+
+  .hollow {
+    border-radius: 6px;
+    background: linear-gradient(180deg, #2c1407, #1a0b04 60%, #120702);
+    box-shadow: inset 0 3px 8px rgb(0 0 0 / 0.45);
+  }
+
+  .plate {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 0 rgb(255 214 160 / 0.12));
+  }
+
+  .foot {
+    position: absolute;
+    bottom: -10px;
+    width: 16%;
+    height: 14px;
+    border-radius: 0 0 8px 8px;
+    background: linear-gradient(180deg, #5b2e14, #3d1d0b);
+    box-shadow: 0 6px 10px -4px rgb(0 0 0 / 0.5);
+  }
+
+  .foot.left {
+    left: 6%;
+  }
+
+  .foot.right {
+    right: 6%;
+  }
+
+  .board :global(.coin) {
+    position: absolute;
+    left: calc(var(--c) * 100% / 7);
+    top: calc((5 - var(--r)) * 100% / 6);
+    width: calc(100% / 7);
+    height: calc(100% / 6);
+    display: grid;
+    place-items: center;
+    will-change: transform;
+  }
+
+  .board :global(.face) {
+    width: 88%;
+    aspect-ratio: 1;
+    font-size: clamp(10px, 2.6vw, 16px);
+  }
+
+  .board .ghost {
+    top: 0;
+    height: 100%;
+    width: calc(100% / 7);
+    opacity: 0.9;
+    filter: drop-shadow(0 6px 6px rgb(0 0 0 / 0.35));
+    transition: left 0.12s ease;
+    animation: hover-bob 1.6s ease-in-out infinite;
+  }
+
+  .board .ghost[hidden] {
+    display: none;
+  }
+
+  @keyframes hover-bob {
+    50% {
+      translate: 0 -8%;
+    }
+  }
+
+  .board :global(.coin.win .face) {
+    animation: shine 1.2s ease-in-out infinite;
+  }
+
+  @keyframes shine {
+    50% {
+      filter: brightness(1.25) drop-shadow(0 0 0.5em rgb(255 236 170 / 0.9));
+    }
+  }
+
+  .board :global(.coin.dim .face) {
+    filter: saturate(0.75) brightness(0.78);
+    transition: filter 0.4s ease;
+  }
+
+  .win-line {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .win-line :global(line) {
+    stroke: rgb(255 244 214 / 0.92);
+    stroke-width: 14;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    filter: drop-shadow(0 0 6px rgb(255 214 120 / 0.8));
+    animation: draw-line 0.5s 0.15s ease-out forwards;
+  }
+
+  @keyframes draw-line {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Column targets cover the lane and the rack. */
+  .cols {
+    position: absolute;
+    inset: 0 var(--pad);
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .col {
+    border: 0;
+    padding: 0;
+    background: none;
+    border-radius: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .col:disabled {
+    cursor: default;
+  }
+
+  .board.live .col:not(:disabled):hover,
+  .board.live .col:focus-visible {
+    background: linear-gradient(180deg, rgb(255 236 190 / 0.06), rgb(255 236 190 / 0.12));
+  }
+
+  .col:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .board.live .col.hinted {
+    background: linear-gradient(180deg, rgb(255 226 150 / 0.22), transparent 16%);
+    box-shadow: inset 0 0 0 2px rgb(255 226 150 / 0.75);
+    animation: hint-glow 1.4s ease-in-out infinite;
+  }
+
+  @keyframes hint-glow {
+    50% {
+      box-shadow: inset 0 0 0 2px rgb(255 226 150 / 0.35);
+    }
+  }
+
+  /* ---- Full screen: the rack fills the height ----
+     The board is about as tall as it is wide, so its width is the screen
+     height less the buttons, status line and padding. */
+  .game-area:global(.zen-on) .play {
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .game-area:global(.zen-on) .board {
+    width: min(100%, calc(100dvh - 14.5rem));
+  }
+
+  .game-area:global(.zen-on) .insight {
+    margin-top: 0.3rem;
+    text-align: center;
+  }
+
+  /* A phone on its side: buttons beside the rack rather than above it. */
+  @media (orientation: landscape) and (max-height: 34rem) {
+    .game-area:global(.zen-on) {
+      flex-direction: row;
+      gap: 1.5rem;
+      padding-top: max(0.75rem, env(safe-area-inset-top));
+    }
+
+    .game-area:global(.zen-on) .matchbar {
+      order: 2;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .game-area:global(.zen-on) .play {
+      width: auto;
+    }
+
+    .game-area:global(.zen-on) .board {
+      width: calc(100dvh - 7.5rem);
+    }
+  }
+
+  .game-area:global(.zen-on) .setup,
+  .game-area:global(.zen-on) .matchbar {
+    margin: 0;
+  }
+
+  .game-area:global(.zen-on) #summary {
+    display: none;
+  }
+
+  .note {
+    font-size: 0.85rem;
+  }
+
+  .rules {
+    max-width: var(--measure);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .board .ghost,
+    .board :global(.coin.win .face),
+    .status.thinking .status-coin {
+      animation: none;
+    }
+  }
+</style>

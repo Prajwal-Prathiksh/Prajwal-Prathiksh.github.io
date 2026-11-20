@@ -21,6 +21,7 @@
     "selfplay:tournament": "node scripts/run-chowka-tool.mjs tournament",
     "selfplay:baseline": "node scripts/run-chowka-tool.mjs baseline",
     "winmodel:train": "node scripts/run-chowka-tool.mjs win-train",
+    "fourinarow:book": "node scripts/run-ts-tool.mjs scripts/four-in-a-row-book.ts",
     "astro": "astro"
   },
   "allowScripts": {

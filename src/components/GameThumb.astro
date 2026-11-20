@@ -203,6 +203,57 @@ const chowkaBoards = ([[5, 28, 46, 21.6], [7, 166, 35, 18.6]] as const).map(([si
     )
   }
   {
+    slug === 'four-in-a-row' && (
+      <g>
+        <defs>
+          <linearGradient id={id('teak')} x1="0" y1="0" x2="1" y2="0.2">
+            <stop offset="0" stop-color="#6e3a1b" />
+            <stop offset="0.35" stop-color="#94532b" />
+            <stop offset="0.65" stop-color="#7a421f" />
+            <stop offset="1" stop-color="#98582e" />
+          </linearGradient>
+          <radialGradient id={id('brass')} cx="38%" cy="32%" r="70%">
+            <stop offset="0" stop-color="#fff6c4" />
+            <stop offset="0.35" stop-color="#f0c650" />
+            <stop offset="0.8" stop-color="#b07a18" />
+            <stop offset="1" stop-color="#6f4908" />
+          </radialGradient>
+          <radialGradient id={id('silver')} cx="38%" cy="32%" r="70%">
+            <stop offset="0" stop-color="#ffffff" />
+            <stop offset="0.35" stop-color="#dfe4ea" />
+            <stop offset="0.8" stop-color="#8d96a3" />
+            <stop offset="1" stop-color="#59616d" />
+          </radialGradient>
+        </defs>
+        <rect width="320" height="200" fill="#1c0e06" />
+        <rect x="71" y="40" width="178" height="150" rx="9" fill={`url(#${id('teak')})`} />
+        <rect x="88" y="186" width="30" height="8" rx="3" fill="#3d1d0b" />
+        <rect x="202" y="186" width="30" height="8" rx="3" fill="#3d1d0b" />
+        {(() => {
+          // Bottom row first: 1 brass, 2 silver, 0 empty.
+          const rows = [
+            [0, 1, 2, 1, 2, 0, 0],
+            [0, 2, 1, 2, 1, 0, 0],
+            [0, 0, 2, 1, 2, 0, 0],
+            [0, 0, 1, 2, 1, 0, 0],
+            [0, 0, 0, 1, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+          ];
+          return rows.flatMap((row, r) => row.map((v, c) => {
+            const x = 85 + c * 25;
+            const y = 172 - r * 23;
+            return v === 0
+              ? <circle cx={x} cy={y} r="9" fill="#1a0b04" stroke="#4a240f" stroke-width="1.5" />
+              : <circle cx={x} cy={y} r="9.5" fill={`url(#${id(v === 1 ? 'brass' : 'silver')})`} stroke="#3a1a08" stroke-width="1" />;
+          }));
+        })()}
+        <path d="M110 172L185 103" stroke="#fff4d6" stroke-width="4" stroke-linecap="round" opacity="0.85" />
+        <circle cx="210" cy="20" r="9.5" fill={`url(#${id('brass')})`} />
+        <path d="M210 33v4M206 35l4 4 4-4" stroke="#e8c463" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8" />
+      </g>
+    )
+  }
+  {
     slug === 'peg-solitaire' && (
       <g>
         <defs>

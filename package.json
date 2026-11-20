@@ -29,15 +29,20 @@
     "sharp": true
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.7.4",
-    "astro": "^7.3.5"
+    "@astrojs/sitemap": "^3.7.6",
+    "astro": "^7.4.13"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
-    "@cloudflare/workers-types": "^5.20261002.1",
+    "@astrojs/check": "^0.9.12",
+    "@cloudflare/workers-types": "^5.20261120.1",
     "esbuild": "^0.28.2",
     "typescript": "^6.0.3",
     "workbox-build": "^7.4.1",
-    "wrangler": "^4.147.0"
+    "wrangler": "^4.165.0"
+  },
+  "overrides": {
+    "workbox-build": {
+      "glob": "^14.0.6"
+    }
   }
 }

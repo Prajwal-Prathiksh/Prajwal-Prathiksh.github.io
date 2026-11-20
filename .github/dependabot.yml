@@ -1,20 +1,23 @@
 version: 2
 updates:
+  # Version updates arrive as one grouped pull request a week. Security
+  # updates (enabled in the repository settings) open as soon as an
+  # advisory is published, outside this schedule.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     groups:
       npm:
         patterns: ['*']
     ignore:
-      # @astrojs/check does not support TypeScript 7 yet.
+      # @astrojs/check supports TypeScript 5 and 6 only (its peer range).
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     groups:
       actions:
         patterns: ['*']

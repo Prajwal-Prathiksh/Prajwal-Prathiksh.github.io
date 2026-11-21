@@ -80,6 +80,7 @@ const grain = Array.from({ length: 46 }, () => {
     <div id="matchbar" class="matchbar" hidden>
       <span id="summary" class="muted"></span>
       <button type="button" class="btn" id="hint">Hint</button>
+      <button type="button" class="btn" id="coach" aria-pressed="false" title="Show threats, odd and even rows, and how each column turns out">Coach</button>
       <button type="button" class="btn" id="undo">Undo</button>
       <button type="button" class="btn" id="newgame">New game</button>
       <ZenToggle />
@@ -124,6 +125,7 @@ const grain = Array.from({ length: 46 }, () => {
               </g>
             </svg>
             <svg id="win-line" class="win-line" viewBox="0 0 700 600" aria-hidden="true"></svg>
+            <svg id="coach-marks" class="coach-marks" viewBox="0 0 700 600" aria-hidden="true"></svg>
           </div>
           <span class="foot left" aria-hidden="true"></span>
           <span class="foot right" aria-hidden="true"></span>
@@ -134,7 +136,53 @@ const grain = Array.from({ length: 46 }, () => {
           ))}
         </div>
       </div>
+      <div id="verdicts" class="verdicts" role="group" aria-label="How each column turns out" hidden>
+        {Array.from({ length: COLS }, (_, c) => (
+          <button type="button" class="verdict" data-col={c}><span class="v-col">{'abcdefg'[c]}</span><span class="v-text"></span></button>
+        ))}
+      </div>
       <p id="insight" class="insight muted"></p>
+
+      <section id="coach-panel" class="coach-panel" hidden aria-label="Coach">
+        <div class="thumb-row">
+          <p id="thumb" class="thumb"></p>
+          <label class="switch"><input type="checkbox" id="show-counts" checked /><span></span>Line counts</label>
+        </div>
+        <div id="coach-notes" class="coach-notes" aria-live="polite"></div>
+
+        <div id="line-box" class="line-box" hidden>
+          <div class="line-head">
+            <strong id="line-title"></strong>
+            <div class="line-controls">
+              <button type="button" class="btn small" id="line-prev" aria-label="One move back">◀</button>
+              <span id="line-step" class="muted"></span>
+              <button type="button" class="btn small" id="line-next" aria-label="One move forward">▶</button>
+              <button type="button" class="btn small" id="line-close">Close</button>
+            </div>
+          </div>
+          <p id="line-sub" class="muted line-sub"></p>
+          <ol id="line-steps" class="line-steps"></ol>
+          <div id="branch" class="branch" hidden>
+            <p id="branch-title" class="muted"></p>
+            <div id="branch-chips" class="verdicts inline"></div>
+          </div>
+        </div>
+
+        <details class="coach-legend">
+          <summary>How to read the coach</summary>
+          <ul>
+            <li><b>Rows 1–6</b> are numbered from the bottom. Odd rows suit whoever went first, even rows whoever went second: as the rack fills up, that is how the squares fall.</li>
+            <li><span class="key ring good"></span> A solid ring is a <b>threat on a good row</b> for its owner: a square that completes four and that its owner will usually get to fill.</li>
+            <li><span class="key ring"></span> A dashed ring is a threat on the owner's bad row. Useful for forcing moves, rarely a winner on its own.</li>
+            <li><span class="key cross"></span> Don't play here: it fills the square right under the other side's threat, so they win on top.</li>
+            <li><span class="key cross waste"></span> Playing here lets the other side block one of your own threats.</li>
+            <li><b>The glowing numbers</b> count the lines of four still open through each hole: lines that don't already hold coins of both sides. The brighter the glow, the more lines. The holes your next coin can reach are shown large.</li>
+            <li><span class="key star">★</span> <b>Rule of thumb:</b> win if you can, block if you must, never fill the hole under a threat, then take the hole with the most open lines, with a bonus for making a trapdoor on your own floor. It's what a strong human does without calculating. The coach then tells you whether perfect play agrees.</li>
+            <li>Under the rack, every column shows how the game ends if the player to move goes there and both sides then play perfectly: <b>Win in 3</b> means three more of your coins, whatever they do. Tap one to watch that game play out, then tap any step to try a different move there.</li>
+            <li>In the first few moves the browser can't prove every result yet, so some columns show <b>?</b> and early steps of a line are marked as estimates.</li>
+          </ul>
+        </details>
+      </section>
     </div>
   </div>
 
@@ -168,6 +216,8 @@ const grain = Array.from({ length: 46 }, () => {
   import { chooseMove, type Choice, type Level } from '../../scripts/fourInARowAI';
   import { Solver } from '../../scripts/fourInARow';
   import type { MoveRequest, MoveResponse } from '../../scripts/fourInARow.worker';
+  import type { CoachRequest, CoachResponse, Verdict } from '../../scripts/fourInARowCoach.worker';
+  import { gridOf, openLines, review, ruleOfThumb, square, threats, warnings, colName, type ThumbPick } from '../../scripts/fourInARowCoach';
 
   const W = 7;
   const H = 6;
@@ -339,6 +389,7 @@ const grain = Array.from({ length: 46 }, () => {
     const humanMoves = seq.filter((_, i) => !players[i % 2].computer).length;
     undoEl.disabled = thinking || seq.length === 0 || (vsComputer && humanMoves === 0);
     renderRecord(statsEl, vsComputer ? `four-in-a-row-${level}` : null);
+    coachUpdate();
   }
 
   function setStatus(text: string, coin?: Coin) {
@@ -458,6 +509,11 @@ const grain = Array.from({ length: 46 }, () => {
     const id = gameId;
     const who = toMove();
     clearHint();
+    if (coachOn) {
+      noteMove([...seq], c);
+      line = null;
+      branchAt = null;
+    }
     seq.push(c);
     const r = h[c];
     const el = placeCoin(c, r, who.coin);
@@ -493,6 +549,7 @@ const grain = Array.from({ length: 46 }, () => {
   function undo() {
     if (thinking || !seq.length) return;
     gameId++;
+    resetCoach();
     hinting = false;
     hintEl.textContent = 'Hint';
     clearHint();
@@ -512,6 +569,371 @@ const grain = Array.from({ length: 46 }, () => {
     turnStatus();
     render();
   }
+
+
+  // ---- Coach ----
+  // Marks threats and odd/even rows on the rack, shows how every column turns
+  // out under perfect play, plays out the rest of the game for any column, and
+  // comments on each move. Its solver runs in a worker of its own.
+  const coachEl = $<HTMLButtonElement>('coach');
+  const coachPanelEl = $('coach-panel');
+  const coachNotesEl = $('coach-notes');
+  const marksEl = $('coach-marks');
+  const verdictsEl = $('verdicts');
+  const verdictEls = [...verdictsEl.querySelectorAll<HTMLButtonElement>('.verdict')];
+  const lineBoxEl = $('line-box');
+  const lineStepsEl = $('line-steps');
+  const branchEl = $('branch');
+  const branchChipsEl = $('branch-chips');
+  const COIN_COLOUR: Record<Coin, string> = { brass: '#f0c75a', silver: '#e3e8ee' };
+
+  let coachOn = false;
+  let showCounts = true;
+  const showCountsEl = $<HTMLInputElement>('show-counts');
+  const thumbEl = $('thumb');
+  let coachWorker: Worker | null = null;
+  let coachBusy = false;
+  let coachId = 0;
+  const coachHandlers = new Map<number, (response: CoachResponse) => void>();
+  // Verdicts by position (the move sequence joined), so a position is solved once.
+  const verdictCache = new Map<string, (Verdict | null)[]>();
+  const verdictDone = new Set<string>();
+  let coachNotes: { who: string; notes: string[] }[] = [];
+  interface Line { base: number[]; moves: number[]; guessed: boolean[]; end: 'win' | 'draw' | 'open' | 'pending' }
+  let line: Line | null = null;
+  let lineStep = 0;
+  let branchAt: number | null = null;
+
+  const keyOf = (moves: readonly number[]) => moves.join('');
+
+  type CoachAsk = { kind: 'verdicts'; seq: number[] } | { kind: 'line'; seq: number[]; col: number };
+  // What the worker is busy with, so a repeat of the same question is not resent.
+  let coachAsking = '';
+
+  function askCoach(request: CoachAsk, onMessage: (response: CoachResponse) => void) {
+    const asking = `${request.kind}:${keyOf(request.seq)}:${request.kind === 'line' ? request.col : ''}`;
+    if (coachBusy && asking === coachAsking) return;
+    coachAsking = asking;
+    // A newer question replaces an unfinished one: the worker is restarted.
+    if (coachBusy && coachWorker) {
+      coachWorker.terminate();
+      coachWorker = null;
+      coachHandlers.clear();
+    }
+    if (!coachWorker) {
+      coachWorker = new Worker(new URL('../../scripts/fourInARowCoach.worker.ts', import.meta.url), { type: 'module' });
+      coachWorker.onmessage = (event: MessageEvent<CoachResponse>) => {
+        const { id, kind } = event.data;
+        if ((kind === 'line' || kind === 'verdicts-done') && id === coachId) coachBusy = false;
+        coachHandlers.get(id)?.(event.data);
+        if (kind === 'line' || kind === 'verdicts-done') coachHandlers.delete(id);
+      };
+    }
+    const id = ++coachId;
+    coachHandlers.set(id, onMessage);
+    coachBusy = true;
+    coachWorker.postMessage({ id, ...request } as CoachRequest);
+  }
+
+  function requestVerdicts(moves: number[], then?: () => void) {
+    const key = keyOf(moves);
+    if (verdictDone.has(key)) { then?.(); return; }
+    if (!verdictCache.has(key)) verdictCache.set(key, Array(W).fill(null));
+    askCoach({ kind: 'verdicts', seq: moves }, (response) => {
+      if (response.kind === 'verdict') verdictCache.get(key)![response.verdict.col] = response.verdict;
+      if (response.kind === 'verdicts-done') verdictDone.add(key);
+      then?.();
+      renderCoach();
+    });
+  }
+
+  // "Win in 3": the mover needs three more coins. "Lose in 5": the other side wins with its fifth coin from now.
+  function verdictText(v: Verdict | null | undefined, moves: readonly number[]): { text: string; title: string; cls: string } {
+    if (!v) return { text: '…', title: 'Working it out', cls: 'pending' };
+    if (v.outcome === null) return { text: '?', title: 'Too early to prove in the browser. Play a few more coins.', cls: 'unknown' };
+    const mover = moves.length % 2;
+    const mine = moves.filter((_, i) => i % 2 === mover).length;
+    const theirs = moves.length - mine;
+    const known = v.source === 'theory' ? ' (known result)' : v.source === 'book' ? ' (opening book)' : '';
+    if (v.outcome === 0) return { text: 'Draw', title: `Perfect play from both sides ends in a draw${known}.`, cls: 'draw' };
+    if (v.outcome > 0) {
+      const n = v.score === null ? null : 22 - v.score - mine;
+      return {
+        text: n === null ? 'Win' : n === 1 ? 'Wins now' : `Win in ${n}`,
+        title: n === null ? `Wins against any defence${known}.` : `Wins with the ${ordinal(n)} coin from now, whatever the other side does.`,
+        cls: 'win',
+      };
+    }
+    const n = v.score === null ? null : 22 + v.score - theirs;
+    return {
+      text: n === null ? 'Lose' : `Lose in ${n}`,
+      title: n === null ? `Loses against perfect play${known}.` : `Against perfect play the other side wins with its ${ordinal(n)} coin from now.`,
+      cls: 'lose',
+    };
+  }
+
+  const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+
+  // Who the coach is talking to: in a computer game, only your own turns.
+  const coachTurn = () => coachOn && started && !over && !thinking && !toMove().computer;
+
+  function fillVerdicts(container: HTMLElement, buttons: HTMLButtonElement[], moves: number[], active: boolean) {
+    const verdicts = verdictCache.get(keyOf(moves)) ?? [];
+    const { heights } = gridOf(moves);
+    const ranked = verdicts.filter((v): v is Verdict => !!v && v.outcome !== null);
+    const best = ranked.length ? Math.max(...ranked.map((v) => v.outcome! * 100 + (v.score ?? 0))) : null;
+    buttons.forEach((el, c) => {
+      const full = heights[c] >= H;
+      const v = verdicts[c];
+      const { text, title, cls } = full ? { text: '', title: 'Full', cls: 'full' } : verdictText(v, moves);
+      el.className = `verdict ${cls}`;
+      el.classList.toggle('best', !!v && v.outcome !== null && v.outcome * 100 + (v.score ?? 0) === best);
+      el.disabled = full || !active;
+      el.title = title;
+      el.querySelector('.v-text')!.textContent = text;
+    });
+    container.hidden = false;
+  }
+
+  function placements(base: readonly number[], moves: readonly number[]) {
+    const { heights } = gridOf(base);
+    return moves.map((c, i) => ({ c, r: heights[c]++, player: (base.length + i) % 2 }));
+  }
+
+  function renderMarks() {
+    const parts: string[] = [];
+    const x = (c: number) => 50 + c * 100;
+    const y = (r: number) => 550 - r * 100;
+    // Row numbers in the rack's left edge: odd rows in brass, even in silver.
+    for (let r = 0; r < H; r++) {
+      parts.push(`<text class="row-no ${r % 2 ? 'even' : 'odd'}" x="-27" y="${y(r) + 8}">${r + 1}</text>`);
+    }
+    const shown = line ? [...line.base, ...line.moves.slice(0, lineStep)] : seq;
+    const { grid, heights } = gridOf(shown);
+    // Open-line counts: a warm glow in every empty hole, brighter on more
+    // lines, with the number large in the holes the next coin can reach.
+    const pick = !line && coachTurn() ? ruleOfThumb(grid, heights, seq.length % 2) : null;
+    if (showCounts && !line && coachTurn()) {
+      parts.push('<defs><radialGradient id="heat"><stop offset="0" stop-color="#ffc56b" stop-opacity="0.95"/><stop offset="0.55" stop-color="#ff9a3c" stop-opacity="0.45"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient></defs>');
+      for (let c = 0; c < W; c++) {
+        for (let r = heights[c]; r < H; r++) {
+          const { open } = openLines(grid, c, r, seq.length % 2);
+          const reach = r === heights[c];
+          const glow = (reach ? 0.18 : 0.06) + (open / 13) * (reach ? 0.82 : 0.32);
+          if (open) parts.push(`<circle cx="${x(c)}" cy="${y(r)}" r="40" fill="url(#heat)" opacity="${glow.toFixed(2)}"/>`);
+          parts.push(`<text class="count ${reach ? 'reach' : ''}" x="${x(c)}" y="${y(r) + (reach ? 11 : 8)}">${open}</text>`);
+        }
+      }
+    }
+    if (pick) {
+      parts.push(`<circle class="thumb-ring" cx="${x(pick.col)}" cy="${y(pick.r)}" r="45"/>`);
+      parts.push(`<text class="thumb-star" x="${x(pick.col) + 30}" y="${y(pick.r) - 24}">★</text>`);
+    }
+    const all = threats(grid, heights);
+    const seen = new Map<string, number>();
+    for (const t of all) {
+      const k = `${t.c},${t.r}`;
+      const inner = seen.get(k) ?? 0;
+      seen.set(k, inner + 1);
+      parts.push(`<circle class="threat ${t.good ? 'good' : ''}" cx="${x(t.c)}" cy="${y(t.r)}" r="${36 - inner * 11}" stroke="${COIN_COLOUR[players[t.player].coin]}"/>`);
+    }
+    if (!line && coachTurn()) {
+      for (const w of warnings(grid, heights, seq.length % 2)) {
+        const cx = x(w.c);
+        const cy = y(w.r);
+        parts.push(`<g class="cross ${w.kind}"><line x1="${cx - 17}" y1="${cy - 17}" x2="${cx + 17}" y2="${cy + 17}"/><line x1="${cx + 17}" y1="${cy - 17}" x2="${cx - 17}" y2="${cy + 17}"/></g>`);
+      }
+    }
+    if (line) {
+      const placed = placements(line.base, line.moves).slice(0, lineStep);
+      placed.forEach(({ c, r, player }, i) => {
+        const last = i === placed.length - 1;
+        parts.push(`<g class="future ${last ? 'last' : ''}"><circle cx="${x(c)}" cy="${y(r)}" r="37" fill="${COIN_COLOUR[players[player].coin]}"/><text x="${x(c)}" y="${y(r) + 11}">${i + 1}</text></g>`);
+      });
+      if (line.end === 'win' && lineStep === line.moves.length && placed.length) {
+        const end = placed[placed.length - 1];
+        const four = fourAt(gridOf(shown).grid, end.c, end.r);
+        if (four) {
+          const [a, b] = [four[0], four[four.length - 1]];
+          parts.push(`<line class="future-four" x1="${x(a[0])}" y1="${y(a[1])}" x2="${x(b[0])}" y2="${y(b[1])}"/>`);
+        }
+      }
+    }
+    marksEl.innerHTML = parts.join('');
+  }
+
+  function renderLine() {
+    lineBoxEl.hidden = !line;
+    if (!line) return;
+    const names = [players[0].name, players[1].name];
+    const firstMover = line.base.length % 2;
+    const first = line.moves[0];
+    if (line.end === 'pending') {
+      $('line-title').textContent = `${names[firstMover]} in column ${colName(first)}…`;
+      $('line-sub').textContent = 'Working out the best play from both sides.';
+    } else {
+      const placed = placements(line.base, line.moves);
+      const lastPlayer = placed.at(-1)!.player;
+      $('line-title').textContent = `${names[firstMover]} in column ${colName(first)}`;
+      $('line-sub').textContent = line.end === 'win'
+        ? `Best play from both sides: ${names[lastPlayer]} completes four on coin ${line.moves.length} of this line.`
+        : line.end === 'draw' ? 'Best play from both sides fills the rack: a draw.'
+        : 'The line stops here: it took too long to work out the rest.';
+    }
+    $('line-step').textContent = `${lineStep} / ${line.moves.length}`;
+    $<HTMLButtonElement>('line-prev').disabled = lineStep === 0;
+    $<HTMLButtonElement>('line-next').disabled = lineStep >= line.moves.length;
+    const placed = placements(line.base, line.moves);
+    lineStepsEl.innerHTML = placed.map(({ c, r, player }, i) =>
+      `<li><button type="button" class="step ${i < lineStep ? 'shown' : ''} ${i === lineStep - 1 ? 'current' : ''} ${i === branchAt ? 'branching' : ''}" data-step="${i}" style="--coin:${COIN_COLOUR[players[player].coin]}">`
+      + `<span class="dot"></span>${i + 1}. ${names[player]}: ${square(c, r)}${line!.guessed[i] ? ' <em>estimate</em>' : ''}</button></li>`).join('');
+    branchEl.hidden = branchAt === null;
+    if (branchAt !== null) {
+      const at = [...line.base, ...line.moves.slice(0, branchAt)];
+      const name = names[at.length % 2];
+      $('branch-title').textContent = `What if ${name === 'You' ? 'you play' : `${name} plays`} somewhere else at step ${branchAt + 1}? Tap a column to follow that game instead.`;
+      if (!branchChipsEl.children.length) {
+        branchChipsEl.innerHTML = verdictEls.map((el) => el.outerHTML).join('');
+      }
+      fillVerdicts(branchEl, [...branchChipsEl.querySelectorAll<HTMLButtonElement>('.verdict')], at, true);
+    }
+  }
+
+  function renderNotes() {
+    coachNotesEl.innerHTML = coachNotes.length
+      ? coachNotes.map(({ who, notes }) => `<p><b>${who}:</b> ${notes.join(' ')}</p>`).join('')
+      : '<p class="muted">Notes on each move appear here as you play.</p>';
+  }
+
+  function renderCoach() {
+    coachEl.setAttribute('aria-pressed', String(coachOn));
+    coachEl.classList.toggle('on', coachOn);
+    coachPanelEl.hidden = !coachOn || !started;
+    boardEl.classList.toggle('coaching', coachOn);
+    if (!coachOn) {
+      marksEl.innerHTML = '';
+      verdictsEl.hidden = true;
+      return;
+    }
+    renderMarks();
+    if (coachTurn() || line) fillVerdicts(verdictsEl, verdictEls, seq, coachTurn());
+    else verdictsEl.hidden = true;
+    renderLine();
+    renderNotes();
+    renderThumb();
+  }
+
+  // The rule of thumb's choice, and whether perfect play agrees with it.
+  function renderThumb() {
+    const { grid, heights } = gridOf(seq);
+    const pick: ThumbPick | null = coachTurn() ? ruleOfThumb(grid, heights, seq.length % 2) : null;
+    thumbEl.hidden = !pick;
+    if (!pick) return;
+    const where = `column ${colName(pick.col)}`;
+    let text = pick.why === 'win' ? `<b>★ Rule of thumb:</b> ${where} wins right now.`
+      : pick.why === 'block' ? `<b>★ Rule of thumb:</b> block in ${where}, or they win next move.`
+      : `<b>★ Rule of thumb:</b> ${where}, ${pick.open} open lines through ${square(pick.col, pick.r)}${pick.trapdoors ? `, and it makes a trapdoor on your floor` : ''}.`;
+    if (pick.avoided.length) text += ` Skips ${pick.avoided.map(colName).join(' and ')}: ${pick.avoided.length > 1 ? 'they open' : 'it opens'} a trapdoor for the other side.`;
+    const verdicts = verdictCache.get(keyOf(seq)) ?? [];
+    const mine = verdicts[pick.col];
+    const known = verdicts.filter((v): v is Verdict => !!v && v.outcome !== null);
+    const rank = (v: Verdict) => v.outcome! * 100 + (v.score ?? 0);
+    if (!mine) text += ' <span class="muted">Checking it against perfect play…</span>';
+    else if (mine.outcome === null) text += ' <span class="muted">Too early for the solver to check.</span>';
+    else {
+      const best = known.reduce((a, b) => (rank(b) > rank(a) ? b : a), mine);
+      const label = (v: Verdict) => verdictText(v, seq).text;
+      if (best === mine || rank(best) === rank(mine)) text += ` <span class="agree">Perfect play agrees: ${label(mine)}.</span>`;
+      else if (best.outcome === mine.outcome) text += ` <span class="agree">Good enough: ${label(mine)}. Column ${colName(best.col)} is quicker (${label(best)}).</span>`;
+      else text += ` <span class="disagree">Perfect play disagrees: this is ${label(mine)}, but column ${colName(best.col)} is ${label(best)}.</span>`;
+    }
+    thumbEl.innerHTML = text;
+  }
+
+  // Ask for verdicts on your turn, or follow up a finished line's branch.
+  function coachUpdate() {
+    if (coachTurn() && !line) requestVerdicts([...seq]);
+    renderCoach();
+  }
+
+  function openLine(base: number[], prefix: number[], guessedPrefix: boolean[], col: number) {
+    line = { base, moves: [...prefix, col], guessed: [...guessedPrefix, false], end: 'pending' };
+    lineStep = prefix.length + 1;
+    branchAt = null;
+    renderCoach();
+    askCoach({ kind: 'line', seq: [...base, ...prefix], col }, (response) => {
+      if (response.kind !== 'line' || !line) return;
+      line = { base, moves: [...prefix, ...response.line], guessed: [...guessedPrefix, ...response.guessed], end: response.end };
+      renderCoach();
+    });
+  }
+
+  function resetCoach() {
+    line = null;
+    lineStep = 0;
+    branchAt = null;
+    coachNotes = [];
+  }
+
+  function closeLine() {
+    line = null;
+    lineStep = 0;
+    branchAt = null;
+    branchChipsEl.innerHTML = '';
+    coachUpdate();
+  }
+
+  // Notes on a move just made, with how it compared to the best available.
+  function noteMove(before: number[], col: number) {
+    if (!coachOn) return;
+    const names: [string, string] = [players[0].name, players[1].name];
+    const notes = review(before, col, names);
+    const verdicts = verdictCache.get(keyOf(before));
+    const played = verdicts?.[col];
+    const known = verdicts?.filter((v): v is Verdict => !!v && v.outcome !== null) ?? [];
+    if (played && played.outcome !== null && known.length) {
+      const top = known.reduce((a, b) => (b.outcome! > a.outcome! ? b : a));
+      const word = (o: number) => (o > 0 ? 'win' : o < 0 ? 'loss' : 'draw');
+      if (top.outcome! > played.outcome) {
+        notes.push(`That turned a ${word(top.outcome!)} into a ${word(played.outcome)}: column ${colName(top.col)} was the way to go.`);
+      } else if (played.outcome > 0) {
+        notes.push('Still a forced win.');
+      }
+    }
+    const { heights } = gridOf(before);
+    const who = `${players[before.length % 2].name}, ${square(col, heights[col])}`;
+    coachNotes = [{ who, notes: notes.length ? notes : ['A quiet move: no threat made, blocked or missed.'] }, ...coachNotes].slice(0, 2);
+  }
+
+  showCountsEl.addEventListener('change', () => { showCounts = showCountsEl.checked; renderCoach(); });
+  coachEl.addEventListener('click', () => {
+    coachOn = !coachOn;
+    if (!coachOn) { line = null; branchAt = null; }
+    coachUpdate();
+  });
+  verdictEls.forEach((el, c) => el.addEventListener('click', () => {
+    if (!coachTurn()) return;
+    openLine([...seq], [], [], c);
+  }));
+  branchChipsEl.addEventListener('click', (event) => {
+    const el = (event.target as HTMLElement).closest<HTMLButtonElement>('.verdict');
+    if (!el || !line || branchAt === null || el.disabled) return;
+    const at = branchAt;
+    openLine(line.base, line.moves.slice(0, at), line.guessed.slice(0, at), Number(el.dataset.col));
+  });
+  lineStepsEl.addEventListener('click', (event) => {
+    const el = (event.target as HTMLElement).closest<HTMLButtonElement>('.step');
+    if (!el || !line || line.end === 'pending') return;
+    const i = Number(el.dataset.step);
+    lineStep = i + 1;
+    branchAt = i;
+    branchChipsEl.innerHTML = '';
+    requestVerdicts([...line.base, ...line.moves.slice(0, i)]);
+    renderCoach();
+  });
+  $('line-prev').addEventListener('click', () => { if (line && lineStep > 0) { lineStep--; renderCoach(); } });
+  $('line-next').addEventListener('click', () => { if (line && lineStep < line.moves.length) { lineStep++; renderCoach(); } });
+  $('line-close').addEventListener('click', closeLine);
 
   // ---- Setup ----
   function readSetup() {
@@ -540,6 +962,7 @@ const grain = Array.from({ length: 46 }, () => {
 
   function newGame() {
     gameId++;
+    resetCoach();
     readSetup();
     seq = [];
     over = false;
@@ -1060,6 +1483,432 @@ const grain = Array.from({ length: 46 }, () => {
     display: none;
   }
 
+  /* ---- Coach ---- */
+  .btn.on {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  }
+
+  .btn.small {
+    padding: 0.15rem 0.55rem;
+    font-size: 0.8rem;
+  }
+
+  .coach-marks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .coach-marks :global(.row-no) {
+    font: 700 26px var(--font-sans, system-ui);
+    text-anchor: middle;
+    fill: #f0c75a;
+    opacity: 0.9;
+  }
+
+  .coach-marks :global(.row-no.even) {
+    fill: #dfe5ec;
+    opacity: 0.6;
+  }
+
+  .coach-marks :global(.count) {
+    font: 700 22px var(--font-sans, system-ui);
+    text-anchor: middle;
+    fill: #ffe9c4;
+    opacity: 0.4;
+  }
+
+  .coach-marks :global(.count.reach) {
+    font-size: 32px;
+    font-weight: 800;
+    fill: #fff6e4;
+    opacity: 1;
+    paint-order: stroke;
+    stroke: rgb(70 30 0 / 0.55);
+    stroke-width: 4px;
+  }
+
+  .coach-marks :global(.thumb-ring) {
+    fill: none;
+    stroke: #ffd36b;
+    stroke-width: 5;
+    stroke-dasharray: 14 10;
+    filter: drop-shadow(0 0 8px rgb(255 205 100 / 0.9));
+    animation: thumb-spin 6s linear infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .coach-marks :global(.thumb-star) {
+    font-size: 30px;
+    text-anchor: middle;
+    fill: #ffd36b;
+    filter: drop-shadow(0 0 4px rgb(0 0 0 / 0.6));
+  }
+
+  @keyframes thumb-spin {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  .thumb-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .thumb {
+    flex: 1 1 18rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .thumb[hidden] {
+    display: none;
+  }
+
+  .thumb :global(.agree) {
+    color: #3f9d6d;
+  }
+
+  .thumb :global(.disagree) {
+    color: #c9483d;
+  }
+
+  .switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .switch input {
+    position: absolute;
+    opacity: 0;
+  }
+
+  .switch span {
+    position: relative;
+    width: 2.1rem;
+    height: 1.2rem;
+    border-radius: 999px;
+    background: var(--line);
+    transition: background 0.2s;
+  }
+
+  .switch span::after {
+    content: '';
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 50%;
+    background: #fff;
+    transition: translate 0.2s;
+  }
+
+  .switch input:checked + span {
+    background: #e0a43a;
+  }
+
+  .switch input:checked + span::after {
+    translate: 0.9rem 0;
+  }
+
+  .switch input:focus-visible + span {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .key.star {
+    width: auto;
+    color: #e0a43a;
+  }
+
+  .coach-marks :global(.threat) {
+    fill: none;
+    stroke-width: 6;
+    stroke-dasharray: 11 9;
+    opacity: 0.85;
+  }
+
+  .coach-marks :global(.threat.good) {
+    stroke-width: 8;
+    stroke-dasharray: none;
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgb(255 230 160 / 0.7));
+  }
+
+  .coach-marks :global(.cross line) {
+    stroke: #ff6b5b;
+    stroke-width: 9;
+    stroke-linecap: round;
+  }
+
+  .coach-marks :global(.cross.wastes line) {
+    stroke: #ffb347;
+    stroke-width: 6;
+  }
+
+  .coach-marks :global(.future circle) {
+    opacity: 0.62;
+    stroke: rgb(0 0 0 / 0.4);
+    stroke-width: 2;
+  }
+
+  .coach-marks :global(.future.last circle) {
+    opacity: 0.85;
+    stroke: #fff;
+    stroke-width: 4;
+  }
+
+  .coach-marks :global(.future text) {
+    font: 800 32px var(--font-sans, system-ui);
+    text-anchor: middle;
+    fill: #2a1a05;
+  }
+
+  .coach-marks :global(.future-four) {
+    stroke: rgb(255 244 214 / 0.92);
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-dasharray: 2 22;
+  }
+
+  .verdicts {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    width: min(100%, 34rem);
+    padding-inline: 4.2%;
+    margin-top: 0.9rem;
+    box-sizing: border-box;
+  }
+
+  .verdicts[hidden],
+  .coach-panel[hidden],
+  .line-box[hidden],
+  .branch[hidden] {
+    display: none;
+  }
+
+  .verdicts.inline {
+    width: 100%;
+    padding: 0;
+    margin-top: 0.3rem;
+  }
+
+  .verdicts :global(.verdict) {
+    display: grid;
+    gap: 1px;
+    justify-items: center;
+    padding: 0.25rem 0.1rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: inherit;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+
+  .verdicts :global(.verdict:disabled) {
+    cursor: default;
+  }
+
+  .verdicts :global(.v-col) {
+    font-size: 0.7rem;
+    opacity: 0.6;
+  }
+
+  .verdicts :global(.v-text) {
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .verdicts :global(.verdict.win) {
+    border-color: #4fb37e;
+    background: color-mix(in srgb, #4fb37e 22%, var(--surface));
+  }
+
+  .verdicts :global(.verdict.lose) {
+    border-color: #d9584d;
+    background: color-mix(in srgb, #d9584d 18%, var(--surface));
+  }
+
+  .verdicts :global(.verdict.draw) {
+    border-color: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+
+  .verdicts :global(.verdict.unknown),
+  .verdicts :global(.verdict.pending) {
+    opacity: 0.7;
+  }
+
+  .verdicts :global(.verdict.full) {
+    visibility: hidden;
+  }
+
+  .verdicts :global(.verdict.best) {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .coach-panel {
+    width: min(100%, 34rem);
+    box-sizing: border-box;
+    margin-top: 0.8rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+  }
+
+  .coach-notes :global(p) {
+    margin: 0 0 0.45rem;
+  }
+
+  .line-box {
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .line-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .line-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .line-sub {
+    margin: 0.35rem 0;
+    font-size: 0.85rem;
+  }
+
+  .line-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    max-height: 11rem;
+    overflow: auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .line-steps :global(.step) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: inherit;
+    font-size: 0.76rem;
+    opacity: 0.55;
+    cursor: pointer;
+  }
+
+  .line-steps :global(.step.shown) {
+    opacity: 1;
+  }
+
+  .line-steps :global(.step.current),
+  .line-steps :global(.step.branching) {
+    border-color: var(--accent);
+  }
+
+  .line-steps :global(.dot) {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--coin);
+  }
+
+  .line-steps :global(em) {
+    font-size: 0.68rem;
+    opacity: 0.7;
+  }
+
+  .branch {
+    margin-top: 0.6rem;
+  }
+
+  .branch p {
+    margin: 0;
+    font-size: 0.85rem;
+  }
+
+  .coach-legend {
+    margin-top: 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .coach-legend summary {
+    cursor: pointer;
+    color: var(--muted);
+  }
+
+  .coach-legend ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    line-height: 1.5;
+  }
+
+  .key {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    margin-right: 0.3rem;
+    vertical-align: -0.1rem;
+  }
+
+  .key.ring {
+    border: 2px dashed #f0c75a;
+    border-radius: 50%;
+  }
+
+  .key.ring.good {
+    border: 3px solid #f0c75a;
+  }
+
+  .key.cross {
+    background:
+      linear-gradient(45deg, transparent 42%, #ff6b5b 42% 58%, transparent 58%),
+      linear-gradient(-45deg, transparent 42%, #ff6b5b 42% 58%, transparent 58%);
+  }
+
+  .key.cross.waste {
+    background:
+      linear-gradient(45deg, transparent 44%, #ffb347 44% 56%, transparent 56%),
+      linear-gradient(-45deg, transparent 44%, #ffb347 44% 56%, transparent 56%);
+  }
+
+  .game-area:global(.zen-on) .verdicts:not(.inline),
+  .game-area:global(.zen-on) .coach-panel {
+    width: min(100%, calc(100dvh - 14.5rem));
+  }
+
   .note {
     font-size: 0.85rem;
   }
@@ -1069,6 +1918,7 @@ const grain = Array.from({ length: 46 }, () => {
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .coach-marks :global(.thumb-ring),
     .board .ghost,
     .board :global(.coin.win .face),
     .status.thinking .status-coin {

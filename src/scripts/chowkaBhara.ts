@@ -218,8 +218,14 @@ interface Occupant extends Hit {
   paired: boolean;
 }
 
-// Who stands on each board square.
+// Who stands on each board square. The AI asks this of the same position many
+// times over (every throw value, for every player), so it is worked out once per
+// state. A state is never changed after moves have been asked of it: apply()
+// always builds a new one.
+const occupancyCache = new WeakMap<State, Map<number, Occupant[]>>();
 function occupancy(s: State) {
+  const cached = occupancyCache.get(s);
+  if (cached) return cached;
   const b = boardOf(s);
   const map = new Map<number, Occupant[]>();
   s.players.forEach((p, player) =>
@@ -230,6 +236,7 @@ function occupancy(s: State) {
       map.get(k)!.push({ player, pawn, paired: isPaired(s, player, pawn) });
     }),
   );
+  occupancyCache.set(s, map);
   return map;
 }
 

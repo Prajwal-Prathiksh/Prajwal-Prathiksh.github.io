@@ -202,9 +202,11 @@ function actionReason(s: State, action: Action, social: SocialState, nextPlayer:
   return `Use ${m.value} to move pawn ${m.pawns[0] + 1} forward.`;
 }
 
-function hardAction(s: State, player: number, t: Turn, style: Style, start: State, nextPlayer: number, social: SocialState, model: EvaluationModel | null, nodeBudget: number): Action | null {
+function hardAction(s: State, player: number, t: Turn, style: Style, start: State, nextPlayer: number, social: SocialState, model: EvaluationModel | null, nodeBudget: number, timeLimit: number): Action | null {
   const root = possibleActions(s, player, t);
   if (!root.length) return null;
+  // Nothing to weigh: with no throw held, the only thing to do is throw.
+  if (root.length === 1) return root[0];
   const throwBoard = boardOf(s);
   const odds = throwOdds(throwBoard);
   const memo = new Map<string, number>();
@@ -238,6 +240,7 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
     return scoreDuringTurn(after.state, after.turn, false);
   };
   const exhausted = Symbol('search budget exhausted');
+  const deadline = performance.now() + timeLimit;
   const search = (board: State, turn: Turn, depth: number, budget: { left: number }, broken: boolean): number => {
     if (stranded(board, player, turn)) return startScore - 1;
     if (turn.owed === 0 && turn.bank.length === 0) return terminal(board, broken);
@@ -245,7 +248,7 @@ function hardAction(s: State, player: number, t: Turn, style: Style, start: Stat
     const key = `${boardKey(board)}|${turn.bank.slice().sort((a, b) => a - b)}|${turn.owed}|${depth}|${+broken}`;
     const known = memo.get(key);
     if (known !== undefined) return known;
-    if (budget.left-- <= 0) throw exhausted;
+    if (budget.left-- <= 0 || performance.now() > deadline) throw exhausted;
     let best = -Infinity;
     for (const action of possibleActions(board, player, turn)) {
       let score: number;
@@ -323,13 +326,19 @@ function easyAction(s: State, player: number, t: Turn, style: Style, social: Soc
   return close[roll < 0.58 ? 0 : roll < 0.85 ? Math.min(1, close.length - 1) : Math.min(2, close.length - 1)].action;
 }
 
+// In the browser a Hard search stops after this long (ms) and plays the deepest
+// pass it finished. Fast devices rarely reach it; slow phones stay responsive.
+export const AI_TIME_LIMIT = 500;
+
 export function chooseAction(
   s: State, player: number, t: Turn, level: Level, style: Style, turnStart: State, nextPlayer: number, social: SocialState,
-  options: { model?: EvaluationModel | null; nodeBudget?: number } = {},
+  // timeLimit (ms) caps the search on slow devices; the deepest pass finished in
+  // time is played. Training leaves it unset so results stay reproducible.
+  options: { model?: EvaluationModel | null; nodeBudget?: number; timeLimit?: number } = {},
 ): { action: Action | null; reason: string } {
   const model = options.model === undefined ? modelFor(s) : options.model;
   const action = level === 'hard'
-    ? hardAction(s, player, t, style, turnStart, nextPlayer, social, model, options.nodeBudget ?? 96)
+    ? hardAction(s, player, t, style, turnStart, nextPlayer, social, model, options.nodeBudget ?? 96, options.timeLimit ?? Infinity)
     : easyAction(s, player, t, style, social, model);
   return { action, reason: action ? actionReason(s, action, social, nextPlayer) : 'No move is available.' };
 }

@@ -237,10 +237,12 @@ if (!isMainThread) {
       const single = legalMoves(crowd, 0, 1).find((move) => move.to === target);
       if (!single || apply(crowd, single).hits.length !== 2) throw new Error(`${n}x${n} a single did not hit every lone pawn on the square.`);
       if (theirs > board.pairSquare) {
-        crowd.players[1].partner[0] = 1;
-        crowd.players[1].partner[1] = 0;
-        const blocked = legalMoves(crowd, 0, 1).find((move) => move.to === target);
-        if (blocked && apply(crowd, blocked).hits.length) throw new Error(`${n}x${n} a single hit a committed pair.`);
+        // A fresh copy: move lookups are cached per state, so states are not edited after use.
+        const paired = structuredClone(crowd);
+        paired.players[1].partner[0] = 1;
+        paired.players[1].partner[1] = 0;
+        const blocked = legalMoves(paired, 0, 1).find((move) => move.to === target);
+        if (blocked && apply(paired, blocked).hits.length) throw new Error(`${n}x${n} a single hit a committed pair.`);
       }
     }
     // 7x7: diagonal entry onto the middle ring's crossed corner, both inner rings

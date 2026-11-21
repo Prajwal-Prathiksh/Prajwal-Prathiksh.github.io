@@ -358,7 +358,7 @@ const COLOURS = [
     type State,
     type EntryMode,
   } from '../../scripts/chowkaBhara';
-  import { chooseAction, type Level, type Style } from '../../scripts/chowkaBharaAI';
+  import { AI_TIME_LIMIT, chooseAction, type Level, type Style } from '../../scripts/chowkaBharaAI';
   import type { AIRequest, AIResponse } from '../../scripts/chowkaBharaAI.worker';
   import { observeAction, predictedAcceptance } from '../../scripts/chowkaBharaOpponent';
   import { acceptsOffer, advanceSocial, allyOf, canOffer, declineOffer, endPact, makePact, newSocial, pactFor, recordHit, relayAllowed, threat, type SocialState } from '../../scripts/chowkaBharaSocial';
@@ -586,7 +586,7 @@ const COLOURS = [
     } catch {
       // Older or restricted browsers can still play; only the UI-thread
       // responsiveness benefit is lost.
-      return chooseAction(state, current, turn, level, style, turnStartState, nextRival(current), social);
+      return chooseAction(state, current, turn, level, style, turnStartState, nextRival(current), social, { timeLimit: AI_TIME_LIMIT });
     }
   }
 
@@ -1456,9 +1456,10 @@ const COLOURS = [
     phase = 'busy';
     statusEl.textContent = `${me.name}'s turn.`;
     render();
-    await wait(DELAY.think);
-    if (id !== gameId) return;
-    const { action } = await chooseInWorker(me.level, me.style);
+    // The computer thinks during the pause rather than after it, so the search
+    // only adds time when it outlasts the pause. Starting a new game or undoing
+    // changes gameId, which drops this stale choice.
+    const [{ action }] = await Promise.all([chooseInWorker(me.level, me.style), wait(DELAY.think)]);
     if (id !== gameId) return;
     if (pausePromise) await pausePromise;
     if (id !== gameId) return;

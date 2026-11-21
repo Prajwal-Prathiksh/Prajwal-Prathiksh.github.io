@@ -1,4 +1,4 @@
-import { chooseAction, type Level, type Style } from './chowkaBharaAI';
+import { AI_TIME_LIMIT, chooseAction, type Level, type Style } from './chowkaBharaAI';
 import type { State, Turn } from './chowkaBhara';
 import type { SocialState } from './chowkaBharaSocial';
 
@@ -20,5 +20,5 @@ export interface AIResponse extends ReturnType<typeof chooseAction> {
 
 self.onmessage = (event: MessageEvent<AIRequest>) => {
   const { id, state, player, turn, level, style, turnStart, nextPlayer, social } = event.data;
-  self.postMessage({ id, ...chooseAction(state, player, turn, level, style, turnStart, nextPlayer, social) } satisfies AIResponse);
+  self.postMessage({ id, ...chooseAction(state, player, turn, level, style, turnStart, nextPlayer, social, { timeLimit: AI_TIME_LIMIT }) } satisfies AIResponse);
 };

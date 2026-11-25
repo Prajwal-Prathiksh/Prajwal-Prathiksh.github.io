@@ -15,7 +15,7 @@ export const games = [
     slug: 'chowka-bhara',
     name: 'Chowka Bhara',
     blurb: 'The cowrie-shell race game, chalked on a red-oxide floor. Classic 5×5 or the bigger 7×7 board.',
-    meta: '2 or 4 players · friends or computer',
+    meta: '2 or 4 players · online, nearby or vs computer',
   },
   {
     slug: 'ali-guli-mane',

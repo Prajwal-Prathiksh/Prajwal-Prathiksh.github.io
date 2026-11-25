@@ -54,63 +54,56 @@ const COLOURS = [
 
   <div class="game-area" data-zen>
     <form id="setup" class="setup">
-      <fieldset>
-        <legend>Human players</legend>
-        <div class="chips">
-          {[1, 2, 3, 4].map((n, i) => (
-            <label class="chip"><input type="radio" name="humans" value={n} checked={i === 0} />{n}</label>
-          ))}
+      <nav class="play-modes" aria-label="How are you playing?">
+        <span class="play-mode current" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+          <span><strong>This device</strong><small>Share one phone, or play the computer</small></span>
+        </span>
+        <a class="play-mode" href="/playroom/chowka-bhara/online/#online">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"/></svg>
+          <span><strong>Online</strong><small>Friends on their own phones, anywhere</small></span>
+        </a>
+        <a class="play-mode" href="/playroom/chowka-bhara/online/#nearby">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.2" r="1.3" class="dot"/></svg>
+          <span><strong>Nearby</strong><small>Same Wi-Fi or hotspot, no internet</small></span>
+        </a>
+      </nav>
+      <section class="setup-block" aria-labelledby="players-title">
+        <div class="block-head">
+          <h2 id="players-title">Players</h2>
+          <span id="player-count" class="count-pill" aria-live="polite"></span>
         </div>
-      </fieldset>
-      <fieldset>
-        <legend>Computer players</legend>
-        <div class="chips">
-          {[0, 1, 2, 3].map((n) => (
-            <label class="chip"><input type="radio" name="opponents" value={n} checked={n === 3} />{n}</label>
-          ))}
-        </div>
-        <p class="hint muted">Two or four players in all. Humans take turns on this device.</p>
-      </fieldset>
-      <fieldset>
-        <legend id="colour-legend">Your colour</legend>
-        <div id="human-rows" class="opponent-rows"></div>
-      </fieldset>
-      <fieldset>
-        <legend>Board</legend>
-        <div class="chips">
-          <label class="chip board-chip"><input type="radio" name="board" value="5" checked /><span class="mini-board" aria-hidden="true"><Fragment set:html={miniBoard(5)} /></span>5×5 · four pawns each</label>
-          <label class="chip board-chip"><input type="radio" name="board" value="7" /><span class="mini-board" aria-hidden="true"><Fragment set:html={miniBoard(7)} /></span>7×7 · six pawns each</label>
-        </div>
-        <p id="board-hint" class="hint muted">The classic board: an outer ring and one inner ring round the centre.</p>
-      </fieldset>
-      <fieldset>
-        <legend>Entering the board</legend>
-        <div class="chips">
-          <label class="chip"><input type="radio" name="entry" value="home" checked />Start on home squares</label>
-          <label class="chip"><input type="radio" name="entry" value="all" />Enter all with one <span class="bonus-pair">4 or 8</span></label>
-          <label class="chip"><input type="radio" name="entry" value="each" />Enter each with a <span class="bonus-pair">4 or 8</span></label>
-        </div>
-        <p id="entry-hint" class="hint muted">All four pawns begin on your home square.</p>
-      </fieldset>
-      <fieldset id="levels-set">
-        <legend>Computer difficulty</legend>
-        <div id="opponent-rows" class="opponent-rows"></div>
-        <details class="personality-options">
-          <summary>Computer personalities <span>Balanced by default</span></summary>
-          <p class="hint muted">Optional starting preferences. Computers still learn how everyone plays during the game.</p>
-          <div id="style-rows" class="opponent-rows style-rows"></div>
-          <details class="style-guide">
-            <summary>What do the personalities change?</summary>
-            <ul>
-              <li><strong>Balanced</strong> weighs a useful hit against a safer route home.</li>
-              <li><strong>Aggressive</strong> may take a hit instead of the shorter route to the centre.</li>
-              <li><strong>Cautious</strong> often stops on a crossed safe square to avoid being hit.</li>
-              <li><strong>Builder</strong> looks for pairs that can slow pawns coming behind.</li>
-              <li><strong>Racer</strong> pushes toward the centre, even when a hit is available.</li>
-            </ul>
-          </details>
+        <div id="seat-grid" class="seat-grid"></div>
+        <details id="style-guide" class="style-guide">
+          <summary>What do the computer personalities do?</summary>
+          <ul>
+            <li><strong>Balanced</strong> weighs a useful hit against a safer route home.</li>
+            <li><strong>Aggressive</strong> may take a hit instead of the shorter route to the centre.</li>
+            <li><strong>Cautious</strong> often stops on a crossed safe square to avoid being hit.</li>
+            <li><strong>Builder</strong> looks for pairs that can slow pawns coming behind.</li>
+            <li><strong>Racer</strong> pushes toward the centre, even when a hit is available.</li>
+          </ul>
+          <p class="hint muted">Computers also learn how everyone plays as the game goes on.</p>
         </details>
-      </fieldset>
+      </section>
+      <div class="setup-split">
+        <section class="setup-block" aria-labelledby="board-title">
+          <div class="block-head"><h2 id="board-title">Board</h2></div>
+          <div class="board-pick">
+            <label class="board-card"><input type="radio" name="board" value="5" checked /><span class="mini-board" aria-hidden="true"><Fragment set:html={miniBoard(5)} /></span><span class="board-text"><strong>5×5</strong><small>4 pawns</small></span></label>
+            <label class="board-card"><input type="radio" name="board" value="7" /><span class="mini-board" aria-hidden="true"><Fragment set:html={miniBoard(7)} /></span><span class="board-text"><strong>7×7</strong><small>6 pawns</small></span></label>
+          </div>
+        </section>
+        <section class="setup-block" aria-labelledby="entry-title">
+          <div class="block-head"><h2 id="entry-title">Entering the board</h2></div>
+          <div class="segmented" role="radiogroup" aria-labelledby="entry-title">
+            <label><input type="radio" name="entry" value="home" checked /><span>On home</span></label>
+            <label><input type="radio" name="entry" value="all" /><span>All on <b class="bonus-pair">4 or 8</b></span></label>
+            <label><input type="radio" name="entry" value="each" /><span>Each on <b class="bonus-pair">4 or 8</b></span></label>
+          </div>
+          <p id="entry-hint" class="hint muted">All four pawns begin on your home square.</p>
+        </section>
+      </div>
       <fieldset id="debug-row" hidden>
         <legend>Testing</legend>
         <label class="check"><input type="checkbox" name="pickThrows" /> Choose my own throws instead of throwing the cowries</label>
@@ -131,10 +124,9 @@ const COLOURS = [
         <p class="hint muted">The jump plays a quick game behind the scenes with one human, then resumes one finishing move before the end.</p>
       </fieldset>
       <div class="setup-actions">
-        <button type="submit" class="btn primary">Start game</button>
+        <button type="submit" class="btn primary start-button" id="start-button">Start game</button>
         <ZenToggle />
       </div>
-      <p class="hint muted"><a href="/playroom/chowka-bhara/online/">Play online with friends</a> · create a private room and fill the other seats with people or bots.</p>
     </form>
 
     <div id="matchbar" class="matchbar" hidden>
@@ -396,6 +388,7 @@ const COLOURS = [
     historyOffset: number;
     historyStates: State[];
     historyLabels: string[];
+    turnStartSocial?: SocialState;
   }
 
   // `rangoli` is the powder colour for the home-square borders and ring-entry
@@ -426,8 +419,6 @@ const COLOURS = [
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const setupEl = $<HTMLFormElement>('setup');
-  const rowsEl = $('opponent-rows');
-  const styleRowsEl = $('style-rows');
   const matchbarEl = $('matchbar');
   const speedEl = $<HTMLSelectElement>('speed');
   const pawnsEl = $('pawns');
@@ -525,7 +516,7 @@ const COLOURS = [
   function onlineSnapshot() {
     if (!onlineMode || !onlineHosting || !onlineReady || onlineEnded || phase === 'setup') return;
     const snapshot: OnlineSnapshot = {
-      state, current, turn, turnStartState, phase, placings, social, pendingOffers, watching,
+      state, current, turn, turnStartState, phase, placings, social, pendingOffers, watching, turnStartSocial,
       status: statusEl.textContent ?? '', last: lastEl.textContent ?? '', thrown: thrownEl.textContent ?? '',
       socialNotice: socialNoticeEl.textContent ?? '', shellsUp, hopping: [...hopping],
       historyOffset: onlineHistorySent,
@@ -601,121 +592,103 @@ const COLOURS = [
   }
 
   // ---- Setup ----
+  //
+  // One tile per colour. Each seat is a person, a computer, or empty, and the
+  // table needs two or four players with at least one person. Players sit in
+  // the order people first, then computers, each group in colour order.
 
-  const readLevels = () =>
-    [...rowsEl.querySelectorAll<HTMLInputElement>('input:checked')].map((i) => i.value as Level);
-  const readStyles = () =>
-    [...styleRowsEl.querySelectorAll<HTMLSelectElement>('select[name^="style-"]')].map((s) => s.value as Style);
+  type SeatKind = 'human' | 'computer' | 'off';
+  const seatKinds: Record<string, SeatKind> = { blue: 'human', red: 'computer', yellow: 'computer', green: 'computer' };
+  const seatLevels: Record<string, Level> = { blue: 'easy', red: 'easy', yellow: 'easy', green: 'easy' };
+  const seatStyles: Record<string, Style> = { blue: 'balanced', red: 'balanced', yellow: 'balanced', green: 'balanced' };
+  const humanNames: Record<string, string> = {};
+  const seatGridEl = $('seat-grid');
+  const startButtonEl = $<HTMLButtonElement>('start-button');
 
-  let humanColours: string[] = ['blue'];
-  const humanNames: string[] = [];
+  const humanColourIds = () => COLOURS.filter((c) => seatKinds[c.id] === 'human').map((c) => c.id);
+  const computerColourIds = () => COLOURS.filter((c) => seatKinds[c.id] === 'computer').map((c) => c.id);
   const defaultHumanName = (i: number, count: number) => count === 1 ? 'You' : `Player ${i + 1}`;
-  const humanName = (i: number, count: number) => humanNames[i]?.trim() || defaultHumanName(i, count);
+  const humanName = (colour: string) => {
+    const people = humanColourIds();
+    return humanNames[colour]?.trim() || defaultHumanName(people.indexOf(colour), people.length);
+  };
   const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[char]!);
 
   const chosenBoard = (f: FormData): BoardSize => f.get('board') === '7' ? 7 : 5;
-
   const evenTable = (players: number) => players === 2 || players === 4;
-  // The allowed computer count nearest the one asked for, the larger on a tie.
-  const fitComputers = (humans: number, wanted: number) => [3, 2, 1, 0]
-    .filter((n) => evenTable(humans + n))
-    .reduce((best, n) => Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best);
-
-  const setupCounts = () => {
-    const f = new FormData(setupEl);
-    return { humans: Number(f.get('humans')), computers: Number(f.get('opponents')) };
-  };
-
-  const chips = (name: string, options: [string, string][], checked: string, small = false) =>
-    options
-      .map(
-        ([value, label]) =>
-          `<label class="chip${small ? ' small' : ''}"><input type="radio" name="${name}" value="${value}" ${value === checked ? 'checked' : ''}/>${label}</label>`,
-      )
-      .join('');
+  const setupValid = () => humanColourIds().length >= 1 && evenTable(humanColourIds().length + computerColourIds().length);
 
   const pawnIcon = (id: string) => `<svg viewBox="0 0 40 40" aria-hidden="true"><use href="#pawn-${id}"/></svg>`;
+  const KIND_ICONS: Record<SeatKind, string> = {
+    human: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20c.8-3.9 3.6-6 7.2-6s6.4 2.1 7.2 6"/></svg>',
+    computer: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="3.5"/><path d="M12 3v3M9 11v1.5M15 11v1.5M9.5 15.2h5"/></svg>',
+    off: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5 17.5 6.5"/></svg>',
+  };
+  const SEAT_PAINT: Record<string, [string, string]> = {
+    blue: ['#3277cf', '#fff'], red: ['#e54e38', '#fff'], yellow: ['#f0b51e', '#2a1d00'], green: ['#38a65a', '#fff'],
+  };
+  const KIND_NAMES: Record<SeatKind, string> = { human: 'Person', computer: 'Computer', off: 'Empty' };
 
-  const renderSetupRows = () => {
-    const previous = readLevels();
-    const previousStyles = readStyles();
-    let { humans, computers } = setupCounts();
-
-    // Two or four players in all. Three would seat players on three sides of
-    // the board, so one of them would have a free side and the others not.
-    setupEl.querySelectorAll<HTMLInputElement>('input[name=opponents]').forEach((input) => {
-      // Hide counts that would make three players rather than offer them greyed out.
-      input.disabled = !evenTable(humans + Number(input.value));
-      input.closest('label')!.hidden = input.disabled;
-    });
-    if (!evenTable(humans + computers)) {
-      computers = fitComputers(humans, computers);
-      setupEl.querySelector<HTMLInputElement>(`input[name=opponents][value="${computers}"]`)!.checked = true;
+  function seatBody(c: (typeof COLOURS)[number]) {
+    const kind = seatKinds[c.id];
+    if (kind === 'human') {
+      return `<input class="seat-name" type="text" name="human-name-${c.id}" aria-label="${c.name} player's name" autocomplete="off" maxlength="24" value="${escapeHtml(humanName(c.id))}" />`;
     }
-
-    // Every human gets a different colour.
-    const fixed: string[] = [];
-    for (let i = 0; i < humans; i++) {
-      const wanted = humanColours[i];
-      fixed.push(wanted && !fixed.includes(wanted) ? wanted : COLOURS.find((c) => !fixed.includes(c.id))!.id);
+    if (kind === 'computer') {
+      const level = seatLevels[c.id];
+      return `<div class="mini-seg" role="radiogroup" aria-label="${c.name} computer difficulty">${(['easy', 'hard'] as Level[]).map((l) =>
+        `<label><input type="radio" name="level-${c.id}" value="${l}" ${l === level ? 'checked' : ''}/><span>${l === 'easy' ? 'Easy' : 'Hard'}</span></label>`).join('')}</div>
+        <select class="seat-style" name="style-${c.id}" aria-label="${c.name} computer personality">${STYLES.map((style) =>
+          `<option value="${style.id}"${style.id === seatStyles[c.id] ? ' selected' : ''}>${style.name}</option>`).join('')}</select>`;
     }
-    humanColours = fixed;
-    $('colour-legend').textContent = humans === 1 ? 'Your colour' : 'Colours';
-    $('human-rows').innerHTML = humanColours
-      .map(
-        (colour, i) => `<div class="opponent-row">
-          <label class="human-name"><span>Name</span><input type="text" name="human-name-${i}" aria-label="Player ${i + 1} name" autocomplete="off" maxlength="24" value="${escapeHtml(humanName(i, humans))}" /></label>
-          <div class="chips">${COLOURS.map((c) => `<label class="chip swatch small"><input type="radio" name="colour-${i}" value="${c.id}" ${c.id === colour ? 'checked' : ''}/>${pawnIcon(c.id)}${c.name}</label>`).join('')}</div>
-        </div>`,
-      )
-      .join('');
+    return `<span class="seat-empty">Empty seat</span>`;
+  }
 
-    const others = COLOURS.filter((c) => !humanColours.includes(c.id)).slice(0, computers);
-    $('levels-set').hidden = others.length === 0;
+  // Rebuilds the tiles. Only needed when a seat changes kind.
+  function renderSeatGrid() {
+    seatGridEl.innerHTML = COLOURS.map((c) => {
+      const kind = seatKinds[c.id];
+      const [paint, ink] = SEAT_PAINT[c.id];
+      return `<div class="seat-tile ${kind}" style="--seat: ${paint}; --seat-ink: ${ink}">
+        <div class="seat-top">
+          <span class="seat-pawn">${pawnIcon(c.id)}</span>
+          <div class="kind-switch" role="radiogroup" aria-label="${c.name} seat">${(['human', 'computer', 'off'] as SeatKind[]).map((k) =>
+            `<label title="${KIND_NAMES[k]}"><input type="radio" name="kind-${c.id}" value="${k}" ${k === kind ? 'checked' : ''} aria-label="${c.name}: ${KIND_NAMES[k]}"/>${KIND_ICONS[k]}</label>`).join('')}</div>
+        </div>
+        <div class="seat-body">${seatBody(c)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // The count badge, the start button, and the testing list of computers.
+  function refreshSetupStatus() {
+    const people = humanColourIds().length;
+    const total = people + computerColourIds().length;
+    const pill = $('player-count');
+    const valid = setupValid();
+    pill.textContent = !people ? 'Add a person' : valid ? `${total} players` : `${total} player${total === 1 ? '' : 's'} · need 2 or 4`;
+    pill.classList.toggle('warn', !valid);
+    startButtonEl.disabled = !valid;
+    $('style-guide').hidden = computerColourIds().length === 0;
     const pickForEl = document.getElementById('pick-for') as HTMLSelectElement;
     const chosen = pickForEl.value;
-    pickForEl.innerHTML =
-      '<option value="">no computer</option>' +
-      others
-        .map((c, i) => `<option value="${humans + i}"${chosen === String(humans + i) ? ' selected' : ''}>${c.name}</option>`)
-        .join('');
-    rowsEl.innerHTML = others
-      .map(
-        (c, i) => `<div class="opponent-row">
-          <span class="who">${pawnIcon(c.id)}${c.name}</span>
-          <div class="chips">${chips(`level-${i}`, [['easy', 'Easy'], ['hard', 'Hard']], previous[i] ?? 'easy', true)}</div>
-        </div>`,
-      )
+    pickForEl.innerHTML = '<option value="">no computer</option>' + computerColourIds()
+      .map((id, i) => `<option value="${people + i}"${chosen === String(people + i) ? ' selected' : ''}>${COLOURS.find((c) => c.id === id)!.name}</option>`)
       .join('');
-    styleRowsEl.innerHTML = others
-      .map(
-        (c, i) => `<label class="opponent-row style-choice">
-          <span class="who">${pawnIcon(c.id)}${c.name}</span>
-          <select name="style-${i}" aria-label="${c.name} computer personality">${STYLES.map((style) => `<option value="${style.id}"${style.id === (previousStyles[i] ?? 'balanced') ? ' selected' : ''}>${style.name}</option>`).join('')}</select>
-        </label>`,
-      )
-      .join('');
-  };
+  }
 
-  // Humans first (in seat order), then the computers in the colours left over.
+  // People first (in colour order), then the computers.
   const buildSeated = (): Seated[] => {
-    const { humans, computers } = setupCounts();
-    const levels = readLevels();
-    const styles = readStyles();
     const byId = (id: string) => COLOURS.find((c) => c.id === id)!;
-    const people = humanColours.slice(0, humans).map((id, i) => ({
-      name: humanName(i, humans),
-      colour: id,
-      colourName: byId(id).name,
-      level: null,
-      style: 'balanced' as Style,
+    const people = humanColourIds().map((id) => ({
+      name: humanName(id), colour: id, colourName: byId(id).name, level: null, style: 'balanced' as Style,
     }));
-    const others = COLOURS.filter((c) => !humanColours.includes(c.id))
-      .slice(0, computers)
-      .map((c, i) => ({ name: c.name, colour: c.id, colourName: c.name, level: levels[i] ?? ('easy' as Level), style: styles[i] ?? 'balanced' }));
-    return [...people, ...others];
+    const computers = computerColourIds().map((id) => ({
+      name: byId(id).name, colour: id, colourName: byId(id).name, level: seatLevels[id], style: seatStyles[id],
+    }));
+    return [...people, ...computers];
   };
 
   const humanCount = () => seated.filter((p) => p.level === null).length;
@@ -1836,7 +1809,8 @@ const COLOURS = [
     return true;
   }
 
-  function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[], size: BoardSize = 5) {
+  function startOnlineGame(players: { id: string; name: string; colour: string; level: Level | null; style: Style }[], size: BoardSize = 5,
+    restore: OnlineSnapshot | null = null) {
     if ((players.length !== 2 && players.length !== 4) || players.some((p) => !COLOURS.some((c) => c.id === p.colour))) return;
     onlineOwners = players.map((p) => p.id);
     onlineSeat = onlineOwners.indexOf(onlineSelf);
@@ -1871,8 +1845,43 @@ const COLOURS = [
     statsEl.hidden = true;
     boardEl.style.transform = `rotate(${state.players[onlineSeat].seat * 90}deg)`;
     buildPawns();
+    if (onlineHosting && restore && restoreOnlineGame(restore)) return;
     if (onlineHosting) startTurn();
     else { phase = 'busy'; statusEl.textContent = 'Waiting for the host to start…'; render(); }
+  }
+
+  // The host's tab was reloaded (iOS does this to background tabs). Pick the
+  // game up from the snapshot the lobby saved, rather than starting over.
+  function restoreOnlineGame(saved: OnlineSnapshot) {
+    if (!saved || !Array.isArray(saved.state?.players) || saved.state.players.length !== seated.length
+      || !Number.isInteger(saved.current) || saved.current < 0 || saved.current >= seated.length
+      || !Array.isArray(saved.historyStates) || !saved.historyStates.length) return false;
+    state = saved.state;
+    current = saved.current;
+    turn = saved.turn;
+    turnStartState = saved.turnStartState;
+    placings = saved.placings;
+    social = saved.social;
+    turnStartSocial = structuredClone(saved.turnStartSocial ?? saved.social);
+    pendingOffers = saved.pendingOffers;
+    watching = saved.watching;
+    positions = [...saved.historyStates];
+    historyDescriptions = [...saved.historyLabels];
+    lastEl.textContent = saved.last;
+    thrownEl.textContent = saved.thrown;
+    socialNoticeEl.textContent = saved.socialNotice;
+    shellsUp = saved.shellsUp;
+    [...shellsEl.querySelectorAll<SVGElement>('.cowrie')].forEach((shell, i) =>
+      shell.querySelector('use')?.setAttribute('href', shellsUp[i] ? '#cowrie-mouth' : '#cowrie-back'));
+    if (saved.phase === 'over') {
+      phase = 'over';
+      statusEl.textContent = saved.status;
+      render();
+    } else {
+      phase = 'busy';
+      next();
+    }
+    return true;
   }
 
   function applyOnlineSnapshot(snapshot: OnlineSnapshot) {
@@ -1965,8 +1974,13 @@ const COLOURS = [
     watching = false;
     watchEl.hidden = true;
     resetTrajectory();
-    renderSetupRows();
-    // Preview the table with the chosen seats.
+    renderSeatGrid();
+    previewSetup();
+  }
+
+  // Preview the table with the chosen seats and options.
+  function previewSetup() {
+    refreshSetupStatus();
     const f = new FormData(setupEl);
     const size = chosenBoard(f);
     const all = pawnWord(size - 1);
@@ -1978,9 +1992,8 @@ const COLOURS = [
       : f.get('entry') === 'each'
         ? `Spend a ${bonusPair} for each pawn you bring in.`
         : `All ${all} pawns begin on your home square.`;
-    $('board-hint').textContent = size === 7
-      ? 'The bigger board: three rings, six pawns, six cowries (throws 1 to 5, chowka 6, bhara 12), and eight more safe squares at the corners of the outer and middle rings.'
-      : 'The classic board: four cowries (throws 1 to 3, chowka 4, bhara 8), an outer ring and one inner ring round the centre.';
+    // Three players has no board layout; keep the last preview until it is fixed.
+    if (!evenTable(humanColourIds().length + computerColourIds().length)) return;
     seated = buildSeated();
     social = newSocial(seated.length);
     pendingOffers = [];
@@ -1997,25 +2010,28 @@ const COLOURS = [
   setupEl.addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement;
     const name = input.name;
-    if (name.startsWith('colour-')) {
-      // Taking another player's colour swaps the two.
-      const i = Number(name.slice(7));
-      const j = humanColours.indexOf(input.value);
-      if (j >= 0 && j !== i) humanColours[j] = humanColours[i];
-      humanColours[i] = input.value;
-      showSetup();
-    } else if (name === 'humans' || name === 'opponents' || name === 'entry' || name === 'board') showSetup();
-    else if (name.startsWith('human-name-') && !input.value.trim()) {
-      input.value = defaultHumanName(Number(name.slice(11)), setupCounts().humans);
+    const colour = name.slice(name.lastIndexOf('-') + 1);
+    if (name.startsWith('kind-')) {
+      seatKinds[colour] = input.value as SeatKind;
+      renderSeatGrid();
+      // Keep keyboard focus on the switch that was just used.
+      seatGridEl.querySelector<HTMLInputElement>(`input[name="${name}"][value="${input.value}"]`)?.focus();
+      previewSetup();
+    } else if (name.startsWith('level-')) { seatLevels[colour] = input.value as Level; previewSetup(); }
+    else if (name.startsWith('style-')) { seatStyles[colour] = input.value as Style; previewSetup(); }
+    else if (name === 'entry' || name === 'board') previewSetup();
+    else if (name.startsWith('human-name-')) {
+      if (!input.value.trim()) { delete humanNames[colour]; input.value = humanName(colour); }
+      previewSetup();
     }
   });
   setupEl.addEventListener('input', (e) => {
     const input = e.target as HTMLInputElement;
-    if (input.name.startsWith('human-name-')) humanNames[Number(input.name.slice(11))] = input.value;
+    if (input.name.startsWith('human-name-')) humanNames[input.name.slice(11)] = input.value;
   });
   setupEl.addEventListener('submit', (e) => {
     e.preventDefault();
-    startGame();
+    if (setupValid()) startGame();
   });
   $('newgame').addEventListener('click', showSetup);
   trajectoryOpenEl.addEventListener('click', openTrajectory);
@@ -2055,7 +2071,7 @@ const COLOURS = [
       if (event.data.type === 'init' && !onlineReady && Array.isArray(event.data.players)) {
         onlineHosting = event.data.hosting === true;
         onlineSelf = String(event.data.self);
-        startOnlineGame(event.data.players, event.data.board === 7 ? 7 : 5);
+        startOnlineGame(event.data.players, event.data.board === 7 ? 7 : 5, event.data.restore ?? null);
       } else if (event.data.type === 'snapshot') applyOnlineSnapshot(event.data.snapshot);
       else if (event.data.type === 'pause') pauseOnline();
       else if (event.data.type === 'resume') resumeOnline();
@@ -2105,6 +2121,95 @@ const COLOURS = [
     border-radius: var(--radius);
   }
 
+  .play-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .play-mode {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    color: var(--fg);
+    text-decoration: none;
+    background: var(--surface);
+    transition: border-color 0.15s, transform 0.15s;
+  }
+
+  .play-mode > span {
+    display: grid;
+    gap: 0.1rem;
+    line-height: 1.25;
+  }
+
+  .play-mode small {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .play-mode svg {
+    flex: none;
+    width: 1.6rem;
+    height: 1.6rem;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  .play-mode svg .dot {
+    fill: var(--accent);
+    stroke: none;
+  }
+
+  .play-mode.current {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  a.play-mode:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+
+  a.play-mode strong::after {
+    content: ' →';
+    color: var(--accent);
+  }
+
+  /* On phones the three ways to play shrink to one compact row. */
+  @media (max-width: 40rem) {
+    .play-modes {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem;
+    }
+
+    .play-mode {
+      flex-direction: column;
+      gap: 0.3rem;
+      padding: 0.6rem 0.3rem;
+      text-align: center;
+    }
+
+    .play-mode small {
+      display: none;
+    }
+
+    .play-mode strong {
+      font-size: 0.82rem;
+      font-weight: 650;
+    }
+
+    a.play-mode strong::after {
+      content: none;
+    }
+  }
+
   .setup[hidden],
   .matchbar[hidden] {
     display: none;
@@ -2122,50 +2227,328 @@ const COLOURS = [
     margin-bottom: 0.4rem;
   }
 
-  .personality-options {
-    max-width: 36rem;
-    margin-top: 0.7rem;
+  /* ---- Setup: seats, board and entry ---- */
+
+  .setup {
+    gap: 1.15rem;
+    padding: clamp(0.9rem, 3vw, 1.3rem);
+    background: var(--surface);
+    border-radius: 22px;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.05);
+  }
+
+  .setup-block {
+    display: grid;
+    gap: 0.65rem;
+    align-content: start;
+  }
+
+  .block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+
+  .block-head h2 {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .count-pill {
+    font-size: 0.8rem;
+    font-weight: 650;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+  }
+
+  .count-pill.warn {
+    background: light-dark(#fff1e0, #3a2a14);
+    color: light-dark(#9a5a08, #f2c47a);
+  }
+
+  .seat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  @media (max-width: 40rem) {
+    .seat-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .setup :global(.seat-tile) {
+    position: relative;
+    display: grid;
+    gap: 0.6rem;
+    align-content: start;
+    min-height: 7.6rem;
+    padding: 0.7rem;
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: 16px;
+    background: var(--bg);
+    overflow: hidden;
+    transition: border-color 0.15s, background-color 0.15s, opacity 0.15s;
+  }
+
+  .setup :global(.seat-tile::before) {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: var(--seat);
+  }
+
+  .setup :global(.seat-tile.human) {
+    border-color: color-mix(in srgb, var(--seat) 55%, var(--line));
+    background: color-mix(in srgb, var(--seat) 9%, var(--bg));
+  }
+
+  .setup :global(.seat-tile.off) {
+    background: transparent;
+    border-style: dashed;
+  }
+
+  .setup :global(.seat-tile.off::before) {
+    opacity: 0.25;
+  }
+
+  .setup :global(.seat-top) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+  }
+
+  .setup :global(.seat-pawn svg) {
+    display: block;
+    width: 2rem;
+    height: 2rem;
+    transition: opacity 0.15s, filter 0.15s;
+  }
+
+  .setup :global(.seat-tile.off .seat-pawn svg) {
+    opacity: 0.35;
+    filter: grayscale(0.7);
+  }
+
+  .setup :global(.kind-switch) {
+    display: flex;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
     background: var(--surface);
   }
 
-  .personality-options > summary,
+  .setup :global(.kind-switch label) {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 1.85rem;
+    height: 1.65rem;
+    border-radius: 999px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .setup :global(.kind-switch input),
+  .setup :global(.mini-seg input),
+  .setup :global(.segmented input),
+  .board-card input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .setup :global(.kind-switch svg) {
+    width: 1.05rem;
+    height: 1.05rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+  }
+
+  .setup :global(.kind-switch label:has(input:checked)) {
+    background: var(--seat);
+    color: var(--seat-ink);
+  }
+
+  .setup :global(.kind-switch label:has(input:focus-visible)),
+  .setup :global(.mini-seg label:has(input:focus-visible)),
+  .setup :global(.segmented label:has(input:focus-visible)),
+  .board-card:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .setup :global(.seat-body) {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .setup :global(.seat-name) {
+    width: 100%;
+    min-width: 0;
+    font: inherit;
+    font-weight: 650;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--seat) 35%, var(--line));
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--fg);
+  }
+
+  .setup :global(.seat-name:focus-visible) {
+    outline: 2px solid var(--seat);
+    outline-offset: 1px;
+  }
+
+  .setup :global(.mini-seg),
+  .segmented {
+    display: flex;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--surface);
+  }
+
+  .setup :global(.mini-seg label),
+  .segmented label {
+    flex: 1;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 0.32rem 0.4rem;
+    border-radius: 9px;
+    font-size: 0.85rem;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .setup :global(.mini-seg label:has(input:checked)),
+  .segmented label:has(input:checked) {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--fg);
+    font-weight: 650;
+  }
+
+  .setup :global(.seat-style) {
+    appearance: none;
+    width: 100%;
+    margin: 0;
+    padding-right: 1.6rem !important;
+    border: 1px solid var(--line);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.45rem center / 0.75rem;
+    color: var(--fg);
+    font-size: 0.85rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 9px;
+  }
+
+  .setup :global(.seat-empty) {
+    font-size: 0.85rem;
+    color: var(--muted);
+    padding: 0.35rem 0;
+  }
+
+  .setup-split {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1.15rem;
+  }
+
+  .board-pick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .board-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+
+  .board-card:has(input:checked) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .board-text {
+    display: grid;
+    line-height: 1.2;
+  }
+
+  .board-text strong {
+    font-size: 1.1rem;
+  }
+
+  .board-text small {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .setup .mini-board :global(svg) {
+    display: block;
+    width: 2.6rem;
+    height: 2.6rem;
+  }
+
+  .segmented {
+    padding: 3px;
+    border-radius: 13px;
+  }
+
+  .segmented label {
+    padding: 0.5rem 0.35rem;
+    font-size: 0.88rem;
+    line-height: 1.2;
+  }
+
+  .segmented b {
+    font-weight: inherit;
+    white-space: nowrap;
+  }
+
+  .start-button {
+    min-height: 2.9rem;
+    padding-inline: 1.5rem;
+    font-size: 1rem;
+  }
+
+  .start-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .style-guide > summary {
     cursor: pointer;
-    color: var(--fg);
-    font-size: 0.88rem;
   }
 
-  .personality-options > summary {
-    padding: 0.65rem 0.8rem;
-  }
-
-  .personality-options > summary span {
-    margin-left: 0.35rem;
-    color: var(--muted);
-    font-size: 0.8rem;
-    font-weight: 400;
-  }
-
-  .personality-options[open] {
-    padding-bottom: 0.75rem;
-  }
-
-  .personality-options[open] > summary {
-    margin-bottom: 0.65rem;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .personality-options > .hint,
-  .personality-options > .style-rows,
-  .personality-options > .style-guide {
-    margin-right: 0.8rem;
-    margin-left: 0.8rem;
+  .style-guide[hidden] {
+    display: none;
   }
 
   .style-guide {
-    margin-top: 0.65rem;
+    margin-top: 0.1rem;
     color: var(--muted);
     font-size: 0.82rem;
     line-height: 1.45;
@@ -2176,67 +2559,6 @@ const COLOURS = [
     padding-left: 1.15rem;
   }
 
-  .setup :global(.chips) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .setup :global(.chip[hidden]) {
-    display: none;
-  }
-
-  .setup :global(.chip) {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.9rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--surface);
-    cursor: pointer;
-    font-size: 0.95rem;
-  }
-
-  .setup :global(.chip.small) {
-    padding: 0.2rem 0.75rem;
-    font-size: 0.85rem;
-  }
-
-  .setup :global(.chip input) {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .setup :global(.chip:has(input:checked)) {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 20%, var(--surface));
-    font-weight: 600;
-  }
-
-  .setup :global(.chip:has(input:focus-visible)) {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-
-  .setup :global(.chip svg),
-  .opponent-rows :global(svg) {
-    width: 1.2rem;
-    height: 1.2rem;
-  }
-
-  .setup .board-chip {
-    padding-left: 0.45rem;
-  }
-
-  .setup .mini-board :global(svg) {
-    display: block;
-    width: 1.9rem;
-    height: 1.9rem;
-  }
-
   .mini-board :global(.mini-floor) { fill: #a74630; }
   .mini-board :global(.mini-grid),
   .mini-board :global(.mini-cross) {
@@ -2244,62 +2566,6 @@ const COLOURS = [
     stroke: #f4eee3;
     stroke-width: 0.09;
     stroke-linecap: round;
-  }
-
-  .opponent-rows {
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  .opponent-rows :global(.opponent-row) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem 1rem;
-  }
-
-  .opponent-rows :global(.who) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-width: 6rem;
-  }
-
-  .opponent-rows :global(.human-name) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    color: var(--muted);
-    font-size: 0.85rem;
-  }
-
-  .opponent-rows :global(.human-name input) {
-    width: 8.5rem;
-    min-width: 0;
-    padding: 0.3rem 0.45rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--fg);
-    font: inherit;
-    font-size: 0.95rem;
-  }
-
-  .opponent-rows :global(.human-name input:focus-visible) {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-
-  .opponent-rows :global(.style-choice) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    color: var(--muted);
-    font-size: 0.85rem;
-  }
-
-  .opponent-rows :global(.style-choice select) {
-    margin-left: 0;
   }
 
   .hint {
@@ -2759,7 +3025,6 @@ const COLOURS = [
     font-size: 0.95rem;
   }
 
-  #levels-set[hidden],
   #debug-row[hidden] {
     display: none;
   }

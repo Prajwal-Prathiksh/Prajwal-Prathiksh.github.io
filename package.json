@@ -30,7 +30,9 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.6",
-    "astro": "^7.4.13"
+    "astro": "^7.4.13",
+    "jsqr": "^1.4.0",
+    "lean-qr": "^2.7.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",

@@ -2,49 +2,164 @@
 import Base from '../../../layouts/Base.astro';
 ---
 
-<Base wide title="Chowka Bhara online lobby" description="Invite friends to a private Chowka Bhara room.">
+<Base title="Chowka Bhara with friends" description="Play Chowka Bhara with friends: online with a room code, or nearby on the same Wi-Fi or hotspot with no internet.">
   <p class="back"><a href="/playroom/chowka-bhara/">← Chowka Bhara</a></p>
-  <h1>Play together</h1>
-  <p class="muted intro">A small room for friends. Share the link, choose seats, and see when everyone connects.</p>
+  <h1>Play with friends</h1>
+  <p class="muted intro">Two or four players on separate phones. Fill any empty seats with computer players.</p>
 
-  <div class="lobby-card" id="lobby-card">
-    <div id="entry">
-      <label class="field">Your name <input id="name" maxlength="24" autocomplete="nickname" placeholder="Player" /></label>
-      <div class="actions">
-        <button class="btn primary" id="create" type="button">Create room</button>
-        <button class="btn" id="join" type="button" hidden>Join room</button>
-      </div>
+  <div class="lobby-card" id="entry">
+    <label class="field">Your name <input id="name" maxlength="24" autocomplete="nickname" placeholder="Player" /></label>
+    <div class="modes">
+      <section class="mode" id="mode-online" aria-labelledby="online-title">
+        <div class="mode-head">
+          <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"/></svg>
+          <h2 id="online-title">Online</h2>
+        </div>
+        <p class="muted">Friends anywhere. Each phone needs internet.</p>
+        <button class="btn primary big" id="create" type="button">Create a room</button>
+        <form id="join-form" class="code-join">
+          <label for="code-input">Have a room code?</label>
+          <div class="code-row">
+            <input id="code-input" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="7" placeholder="ABC123" aria-describedby="code-hint" />
+            <button class="btn" id="join" type="submit">Join</button>
+          </div>
+          <span id="code-hint" class="muted small">Six letters and numbers, from the host's screen.</span>
+        </form>
+      </section>
+      <section class="mode" id="mode-nearby" aria-labelledby="nearby-title">
+        <div class="mode-head">
+          <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.2" r="1.3" class="fill"/></svg>
+          <h2 id="nearby-title">Nearby</h2>
+          <span class="badge">No internet needed</span>
+        </div>
+        <p class="muted">Same Wi-Fi or a phone's hotspot. You swap QR codes once, then phones talk directly.</p>
+        <button class="btn primary big" id="nearby-host" type="button">Host a nearby game</button>
+        <button class="btn" id="scan-join" type="button">Join by scanning</button>
+        <p class="muted small">Or point your phone's Camera at the host's code.</p>
+        <p id="offline-ready" class="small offline-ready" hidden></p>
+      </section>
     </div>
-    <div id="room" hidden>
-      <p class="room-label">Invite link</p>
-      <div class="share"><input id="link" readonly aria-label="Invite link" /><button class="btn" id="copy" type="button">Copy</button></div>
-      <p class="muted note">Anyone with this link can ask to join. Close this tab to end the room.</p>
+    <p id="entry-status" class="status" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="lobby-card" id="room" hidden>
+    <div class="room-top">
+      <p class="room-kind" id="room-kind">Online room</p>
+      <span id="link-state" class="link-state" hidden></span>
+    </div>
+
+    <section id="online-invite" hidden>
+      <p class="code-label">Room code</p>
+      <p class="room-code" id="room-code" aria-live="polite"></p>
+      <div class="invite-actions">
+        <button class="btn primary" id="share" type="button">Share invite</button>
+        <button class="btn" id="copy" type="button">Copy link</button>
+        <button class="btn" id="show-qr" type="button" aria-expanded="false">Show QR</button>
+      </div>
+      <div id="invite-qr" class="qr-box" hidden></div>
+      <p class="muted note">It's fine to switch apps to send the invite. The room waits for you.</p>
+    </section>
+
+    <section id="nearby-invite" class="nearby-steps" hidden>
+      <ol>
+        <li>
+          <p><strong>A friend scans this</strong> with their phone's Camera.</p>
+          <div id="offer-qr" class="qr-box"><p class="muted">Making a code…</p></div>
+          <details class="paste">
+            <summary>Can't scan? Copy the link</summary>
+            <div class="code-row"><input id="offer-link" readonly aria-label="Invite link for one player" /><button class="btn" id="copy-offer" type="button">Copy</button></div>
+          </details>
+        </li>
+        <li>
+          <p><strong>Then scan the code</strong> that appears on their phone.</p>
+          <button class="btn primary" id="scan-reply" type="button">Scan their code</button>
+          <details class="paste">
+            <summary>Can't scan? Paste it</summary>
+            <form id="paste-reply"><textarea id="reply-text" rows="3" placeholder="CB2.…" aria-label="Their reply code"></textarea><button class="btn" type="submit">Connect</button></form>
+          </details>
+        </li>
+      </ol>
+      <p class="muted note">Each code adds one player. Everyone must be on the same Wi-Fi or hotspot.</p>
+    </section>
+
+    <section id="nearby-reply" class="nearby-reply" hidden>
+      <label class="field">Your name <input id="reply-name" maxlength="24" autocomplete="nickname" placeholder="Player" /></label>
+      <p><strong>Show this to <span id="reply-host">the host</span></strong> so they can scan it.</p>
+      <div id="reply-qr" class="qr-box"></div>
+      <details class="paste">
+        <summary>Can't scan? Copy it</summary>
+        <div class="code-row"><input id="reply-copy" readonly aria-label="Your reply code" /><button class="btn" id="copy-reply" type="button">Copy</button></div>
+      </details>
+    </section>
+
+    <section id="rescan" class="rescan" hidden>
+      <p id="rescan-text">Lost the connection to the host. Ask them for a new code, then scan it.</p>
+      <button class="btn primary" id="rescan-button" type="button">Scan the host's code</button>
+    </section>
+
+    <div id="requests" class="requests" aria-live="polite"></div>
+
+    <section id="seats-section">
       <h2>Seats</h2>
       <ol id="seats" class="seats"></ol>
-      <label id="bot-control" class="field">Computer players <select id="bots"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select></label>
-      <label class="field">Board <select id="board"><option value="5">5×5 · four pawns each</option><option value="7">7×7 · six pawns each</option></select></label>
+      <div class="settings">
+        <div id="bot-control" class="setting">
+          <span class="setting-label" id="bots-label">Computer players</span>
+          <div class="segmented" id="bots" role="radiogroup" aria-labelledby="bots-label">
+            {[0, 1, 2, 3].map((n) => <label><input type="radio" name="bots" value={n} checked={n === 3} /><span>{n}</span></label>)}
+          </div>
+        </div>
+        <div class="setting">
+          <span class="setting-label" id="board-label">Board</span>
+          <div class="segmented" id="board" role="radiogroup" aria-labelledby="board-label">
+            <label><input type="radio" name="board" value="5" checked /><span>5×5</span></label>
+            <label><input type="radio" name="board" value="7" /><span>7×7</span></label>
+          </div>
+        </div>
+      </div>
       <p id="board-note" class="muted note">The classic board, four pawns each.</p>
       <p id="guest-note" class="muted note" hidden>The host chooses the board and the computer seats.</p>
       <button class="btn primary" id="start-game" type="button" hidden>Start game</button>
-      <h2>Connections</h2>
-      <div id="requests"></div>
-      <ul id="connections" class="connections"></ul>
-      <p class="muted note">When everyone is connected, the host can start the game. Cowrie rolls, moves, bots, and history stay in sync.</p>
+    </section>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <div class="room-foot">
+      <button class="btn quiet" id="leave" type="button">Close room</button>
     </div>
-    <p id="status" class="status" role="status" aria-live="polite">Ready to make a room.</p>
   </div>
+
   <div id="match" hidden>
-    <p id="match-note" class="muted note">The host runs this match. Closing the host tab ends it for everyone.</p>
+    <p id="match-note" class="muted note"></p>
     <div id="match-alert" class="match-alert" role="status" aria-live="polite" hidden>
       <p id="match-alert-text"></p>
       <div id="host-recovery" class="recovery-actions" hidden>
         <button class="btn" id="continue-bot" type="button">Continue with bot</button>
         <button class="btn" id="restart-bot" type="button">Restart with bot</button>
       </div>
+      <div id="guest-recovery" class="recovery-actions" hidden>
+        <button class="btn" id="match-rescan" type="button">Scan the host's code</button>
+      </div>
+      <div id="nearby-recovery" class="recovery-actions" hidden>
+        <button class="btn" id="match-invite" type="button">Show a code to reconnect</button>
+      </div>
     </div>
-    <iframe id="game-frame" title="Chowka Bhara online match" allow="fullscreen" loading="eager"></iframe>
+    <iframe id="game-frame" title="Chowka Bhara match with friends" allow="fullscreen" loading="eager"></iframe>
   </div>
-  <p class="muted privacy">No account, cookies, or analytics. Guest browsers keep a private room key so they can reconnect after a refresh. The relay keeps guest seat keys only while the host's room is open; game moves and boards stay between players. People in the room share names and seat choices. Direct connections may reveal your network address to other players. Some networks need a TURN relay, which this first version does not have.</p>
+
+  <dialog id="scanner" class="scanner" aria-labelledby="scanner-title">
+    <p id="scanner-title" class="scanner-title">Point the camera at the code</p>
+    <div class="viewfinder"><video id="scanner-video" playsinline muted></video><span class="frame" aria-hidden="true"></span></div>
+    <p id="scanner-status" class="muted small" role="status"></p>
+    <button class="btn" id="scanner-close" type="button">Cancel</button>
+  </dialog>
+
+  <dialog id="match-reconnect" class="scanner" aria-labelledby="reconnect-title">
+    <p id="reconnect-title" class="scanner-title">Reconnect a player</p>
+    <div id="reconnect-body"></div>
+    <button class="btn" id="reconnect-close" type="button">Done</button>
+  </dialog>
+
+  <p class="muted privacy">No account, cookies, or analytics. Online rooms pass game messages through a small relay that forgets the room when it closes; each phone keeps a private key so it can rejoin its seat. Nearby games never leave your local network, though phones there can see each other's local network addresses. Names and seat choices are shared with the people in the room.</p>
 </Base>
 
 <script>
@@ -55,37 +170,101 @@ import Base from '../../../layouts/Base.astro';
   .back { margin-top: 1.5rem; }
   h1 { margin-bottom: .3rem; }
   .intro { margin-top: 0; max-width: 36rem; }
-  .lobby-card { max-width: 42rem; padding: clamp(1.2rem, 4vw, 2rem); margin: 1.5rem 0; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 12px 35px rgb(0 0 0 / .08); }
+  .lobby-card { max-width: 46rem; padding: clamp(1.1rem, 4vw, 2rem); margin: 1.5rem 0; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 12px 35px rgb(0 0 0 / .08); }
   .field { display: grid; gap: .4rem; max-width: 20rem; }
-  input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .85rem; }
-  input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .actions { display: flex; gap: .7rem; margin-top: 1rem; }
-  .room-label { font-weight: 600; margin-bottom: .5rem; }
-  .share { display: flex; gap: .5rem; }
-  .share input { min-width: 0; flex: 1; }
-  h2 { font-size: 1.1rem; margin: 1.7rem 0 .8rem; }
+  input, select, textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .85rem; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .small { font-size: .85rem; }
   .note, .privacy { font-size: .9rem; line-height: 1.55; }
-  .privacy { max-width: 42rem; }
-  .seats, .connections { padding: 0; list-style: none; display: grid; gap: .5rem; }
-  .seats :global(li), .connections :global(li) { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; border: 1px solid var(--line); border-radius: 14px; padding: .65rem .8rem; }
-  .seats :global(select) { margin-left: auto; padding: .35rem .6rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font: inherit; }
+  .privacy { max-width: 46rem; }
+  h2 { margin: 1.6rem 0 .8rem; }
+
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin-top: 1.3rem; }
+  .mode { display: flex; flex-direction: column; gap: .7rem; padding: 1.1rem 1.15rem 1.2rem; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); }
+  .mode:target, .mode.highlight { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .mode p { margin: 0; }
+  .mode-head { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+  .mode-head h2 { margin: 0; font-size: 1.2rem; text-transform: none; letter-spacing: 0; color: var(--fg); }
+  .mode-icon { width: 1.6rem; height: 1.6rem; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; }
+  .mode-icon .fill { fill: var(--accent); stroke: none; }
+  .badge { font-size: .75rem; font-weight: 650; padding: .2rem .55rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .btn.big { min-height: 3rem; font-size: 1rem; font-weight: 700; }
+  .btn.primary { border-color: var(--accent); background: var(--accent); color: light-dark(#fff, #10212c); font-weight: 650; }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn.quiet { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.quiet:hover { color: var(--fg); border-color: var(--line); }
+  .code-join { display: grid; gap: .35rem; margin-top: .3rem; }
+  .code-join label { font-weight: 600; font-size: .95rem; }
+  .code-row { display: flex; gap: .5rem; }
+  .code-row input { flex: 1 1 auto; width: 100%; min-width: 0; }
+  .code-row .btn { flex: none; }
+  #code-input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+  .offline-ready { margin: 0; padding: .5rem .7rem; border-radius: 12px; background: color-mix(in srgb, var(--line) 50%, transparent); }
+  .offline-ready.ok { color: light-dark(#1d7a47, #7fd6a2); background: light-dark(#ebf7f0, #17291f); }
+
+  .room-top { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+  .room-kind { margin: 0; font-weight: 700; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .link-state { font-size: .85rem; padding: .2rem .6rem; border-radius: 999px; border: 1px solid var(--line); }
+  .link-state.online { color: light-dark(#1d7a47, #7fd6a2); }
+  .link-state.reconnecting { color: light-dark(#9a6510, #f0c56e); }
+  .code-label { margin: 1rem 0 .2rem; color: var(--muted); font-size: .9rem; }
+  .room-code { margin: 0 0 .9rem; font: 700 clamp(2.2rem, 10vw, 3.2rem)/1.05 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
+  .invite-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+  .qr-box { width: min(17rem, 100%); margin: 1rem 0 .4rem; }
+  .qr-box :global(svg) { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
+
+  .nearby-steps ol { margin: 1rem 0 0; padding-left: 1.3rem; display: grid; gap: 1rem; }
+  .nearby-steps li p { margin: 0 0 .5rem; }
+  .paste { margin-top: .7rem; font-size: .9rem; }
+  .paste summary { cursor: pointer; color: var(--muted); }
+  .paste form { display: grid; gap: .5rem; margin-top: .5rem; max-width: 24rem; }
+  .paste .code-row { margin-top: .5rem; max-width: 24rem; }
+  .nearby-reply { margin-top: 1rem; }
+  .rescan { margin-top: 1rem; padding: 1rem; border: 1px solid var(--accent); border-radius: 16px; }
+  .rescan p { margin: 0 0 .7rem; }
+
+  .requests { display: grid; gap: .6rem; margin-top: 1rem; }
+  .requests :global(.request) { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; padding: .75rem .9rem; border: 1px solid var(--accent); border-radius: 14px; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .requests :global(.request span) { flex: 1 1 12rem; }
+  .seats { padding: 0; list-style: none; display: grid; gap: .5rem; }
+  .seats :global(li) { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; border: 1px solid var(--line); border-radius: 14px; padding: .65rem .8rem; }
+  .seats :global(select) { margin-left: auto; padding: .35rem .6rem; border-radius: 10px; }
   .seats :global(.colour) { width: 1rem; height: 1rem; border-radius: 50%; box-shadow: inset 0 -2px 3px rgb(0 0 0 / .3); }
-  .connections :global(.ready) { color: #2ca461; }
-  .connections :global(.waiting) { color: #c08b2a; }
-  #requests :global(.request) { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; padding: .6rem 0; }
+  .seats :global(.presence) { margin-left: auto; font-size: .85rem; }
+  .seats :global(select + .presence) { margin-left: 0; }
+  .seats :global(.presence.on) { color: light-dark(#1d7a47, #7fd6a2); }
+  .seats :global(.presence.off) { color: light-dark(#9a6510, #f0c56e); }
+  .seats :global(.bot) { color: var(--muted); }
+  .settings { display: flex; flex-wrap: wrap; gap: 1rem 1.4rem; margin-top: 1.1rem; }
+  .setting { display: grid; gap: .4rem; justify-items: start; }
+  .setting-label { font-size: .9rem; font-weight: 600; }
+  .segmented { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 13px; background: var(--bg); }
+  .segmented label { position: relative; min-width: 2.9rem; padding: .45rem .8rem; border-radius: 10px; text-align: center; color: var(--muted); cursor: pointer; }
+  .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+  .segmented label:has(input:checked) { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--fg); font-weight: 650; }
+  .segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .segmented label:has(input:disabled) { cursor: default; }
+  .nearby-reply .field { margin-bottom: 1rem; }
   .status { margin-bottom: 0; min-height: 1.5em; }
   .status.error { padding: .8rem 1rem; border: 1px solid light-dark(#dcaa9d, #8a554b); border-radius: 14px; background: light-dark(#fff1ec, #35231f); color: light-dark(#7d3527, #ffcfbf); }
-  #start-game { margin-top: 1rem; min-height: 3.2rem; min-width: 11rem; padding: .7rem 1.35rem; border-color: var(--accent); background: var(--accent); color: light-dark(#fff, #10212c); font-size: 1rem; font-weight: 700; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 22%, transparent); }
+  #start-game { margin-top: 1rem; min-height: 3.2rem; min-width: 11rem; padding: .7rem 1.35rem; font-size: 1rem; font-weight: 700; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 22%, transparent); }
   #start-game::after { content: '→'; margin-left: .55rem; }
-  #start-game:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
   #start-game:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
-  #start-game:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .room-foot { display: flex; justify-content: flex-end; margin-top: 1rem; }
+
   .match-alert { position: sticky; top: .75rem; z-index: 2; max-width: 42rem; margin: 1rem 0; padding: 1rem 1.2rem; border: 1px solid var(--accent); border-radius: 18px; background: var(--surface); box-shadow: 0 12px 32px rgb(0 0 0 / .18); }
-  .match-alert p { margin: 0 0 .7rem; }
-  .recovery-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .match-alert p { margin: 0; }
+  .recovery-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .7rem; }
   #continue-bot { border-color: var(--accent); color: var(--accent); font-weight: 650; }
-  #restart-bot { font-weight: 600; }
   #match { margin: 1rem 0; }
   #game-frame { display: block; width: 100%; height: 44rem; border: 0; border-radius: 18px; background: var(--bg); }
+
+  .scanner { width: min(26rem, calc(100vw - 2rem)); padding: 1.1rem; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--fg); }
+  .scanner::backdrop { background: rgb(0 0 0 / .6); }
+  .scanner-title { margin: 0 0 .8rem; font-weight: 700; }
+  .viewfinder { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 14px; background: #000; }
+  .viewfinder video { width: 100%; height: 100%; object-fit: cover; }
+  .viewfinder .frame { position: absolute; inset: 14%; border: 3px solid rgb(255 255 255 / .85); border-radius: 18px; box-shadow: 0 0 0 999px rgb(0 0 0 / .25); }
+  #reconnect-body .qr-box { margin: 0 auto .6rem; }
   [hidden] { display: none !important; }
 </style>

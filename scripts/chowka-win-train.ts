@@ -1,10 +1,10 @@
 import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
-import { writeFile } from 'node:fs/promises';
+import { CHECKPOINT_ROOT, fingerprint, readBinary, readJson, removeCheckpoint, writeBinaryAtomic, writeJsonAtomic } from './training-checkpoint';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
 import { BOARD_SIZES, boardFor, boardOf, finished, recordThrow, throwOdds, type BoardSize } from '../src/scripts/chowkaBhara';
 import { applyKnownAction, copyTurn, playMatch, possibleActions, seededRandom, type MatchPolicy } from '../src/scripts/chowkaBharaMatch';
-import { decisionScore } from '../src/scripts/chowkaBharaModel';
+import { CHOWKA_MODELS, decisionScore } from '../src/scripts/chowkaBharaModel';
 import { chooseAction, type Style } from '../src/scripts/chowkaBharaAI';
 import {
   CHOWKA_WIN_MODELS,
@@ -130,7 +130,11 @@ if (!isMainThread) {
   const games = numberArg('games', 1500);
   const validationGames = numberArg('validation-games', 300);
   const testGames = numberArg('test-games', 300);
-  const epochs = numberArg('epochs', 40);
+  // Training stops at --epochs, or sooner once calibration log loss has not
+  // improved for --patience epochs; the best epoch's weights are kept.
+  const epochs = numberArg('epochs', 100);
+  const patience = Math.max(1, numberArg('patience', 8));
+  const shardGames = Math.max(1, numberArg('shard-games', 25));
   const sampleEvery = Math.max(4, numberArg('sample-every', 14));
   const workers = Math.max(1, Math.min(numberArg('workers', Math.min(8, availableParallelism() - 1)), availableParallelism()));
   const featureCount = WIN_FEATURE_NAMES.length;
@@ -138,9 +142,46 @@ if (!isMainThread) {
   const size = numberArg('board', 5) as BoardSize;
   if (!BOARD_SIZES.includes(size)) throw new Error(`--board must be one of ${BOARD_SIZES.join(', ')}.`);
   const CHOWKA_WIN_MODEL = CHOWKA_WIN_MODELS[size];
+  const destination = resolve(args.get('output') ?? WIN_MODEL_FILES[size]);
 
-  const generateParallel = async (totalGames: number, baseSeed: number): Promise<DataResult[]> => {
-    const shards = Math.min(workers, totalGames);
+  // Generated games are cached shard by shard and the weights are saved after
+  // every epoch in .training/, so rerunning the same command carries on where
+  // it stopped. --fresh discards a saved run.
+  const checkpointDir = resolve(CHECKPOINT_ROOT, `chowka-win-${size}x${size}`);
+  const runPath = resolve(checkpointDir, 'run.json');
+  // The sampled games depend on the evaluator that plays them, so it is part of the key.
+  const key = fingerprint({ size, seed, games, validationGames, testGames, sampleEvery, shardGames, epochs, patience,
+    evaluator: CHOWKA_MODELS[size].weights, destination });
+  interface RunCheckpoint {
+    key: string;
+    epoch: number;
+    step: number;
+    weights: number[];
+    firstMoment: number[];
+    secondMoment: number[];
+    bestLogLoss: number;
+    bestWeights: number[];
+    bestEpoch: number;
+    stale: number;
+    done: boolean;
+  }
+  if (args.has('fresh')) await removeCheckpoint(checkpointDir);
+  // key.json guards the cached games too, which exist before the first epoch is saved.
+  const keyPath = resolve(checkpointDir, 'key.json');
+  const savedKey = await readJson<{ key: string }>(keyPath);
+  if (savedKey && savedKey.key !== key) {
+    throw new Error(`${checkpointDir} was made with different settings. Rerun with the same ones, or add --fresh to start over.`);
+  }
+  const saved = await readJson<RunCheckpoint>(runPath);
+  if (saved?.done) {
+    console.log(`The ${size}x${size} win-model run in ${checkpointDir} already finished. Add --fresh to train again.`);
+    process.exit(0);
+  }
+  await writeJsonAtomic(keyPath, { key });
+
+  let cachedShards = 0;
+  const generateParallel = async (split: string, totalGames: number, baseSeed: number): Promise<DataResult[]> => {
+    const shards = Math.ceil(totalGames / shardGames);
     const jobs = Array.from({ length: shards }, (_, id) => ({
       id,
       size,
@@ -153,12 +194,18 @@ if (!isMainThread) {
     const next = async (): Promise<void> => {
       const job = jobs[cursor++];
       if (!job) return;
-      const result = await new Promise<DataResult>((done, reject) => {
-        const worker = new Worker(new URL(import.meta.url), { workerData: job });
-        worker.once('message', done);
-        worker.once('error', reject);
-        worker.once('exit', (code) => { if (code) reject(new Error(`Win-model worker exited with ${code}.`)); });
-      });
+      const shardPath = resolve(checkpointDir, 'data', `${split}-${job.id}.bin`);
+      let result = await readBinary<DataResult>(shardPath);
+      if (result) cachedShards++;
+      else {
+        result = await new Promise<DataResult>((done, reject) => {
+          const worker = new Worker(new URL(import.meta.url), { workerData: job });
+          worker.once('message', done);
+          worker.once('error', reject);
+          worker.once('exit', (code) => { if (code) reject(new Error(`Win-model worker exited with ${code}.`)); });
+        });
+        await writeBinaryAtomic(shardPath, result);
+      }
       results.push(result);
       await next();
     };
@@ -167,9 +214,11 @@ if (!isMainThread) {
   };
 
   console.log(`Generating four-player home-entry ${size}x${size} positions from ${games} training, ${validationGames} calibration and ${testGames} test games on ${workers} workers.`);
-  const trainingParts = await generateParallel(games, seed);
-  const validationParts = await generateParallel(validationGames, seed ^ 0x5f3759df);
-  const testParts = await generateParallel(testGames, seed ^ 0x3c6ef372);
+  const generationStarted = performance.now();
+  const trainingParts = await generateParallel('training', games, seed);
+  const validationParts = await generateParallel('validation', validationGames, seed ^ 0x5f3759df);
+  const testParts = await generateParallel('test', testGames, seed ^ 0x3c6ef372);
+  console.log(`Game data ready in ${((performance.now() - generationStarted) / 1000).toFixed(0)} s (${cachedShards} shards reused from the checkpoint).`);
 
   const combine = (parts: DataResult[]) => {
     const samples = parts.reduce((sum, part) => sum + part.samples, 0);
@@ -202,8 +251,7 @@ if (!isMainThread) {
   const weights = new Float64Array(featureCount);
   const firstMoment = new Float64Array(featureCount);
   const secondMoment = new Float64Array(featureCount);
-  const random = seededRandom(seed ^ 0xa511e9b3);
-  const order = Uint32Array.from({ length: training.samples }, (_, index) => index);
+  const order = new Uint32Array(training.samples);
   let step = 0;
   const batchSize = 256;
   const learningRate = 0.025;
@@ -224,39 +272,6 @@ if (!isMainThread) {
     const total = exp.reduce((sum, value) => sum + value, 0);
     return exp.map((value) => value / total);
   };
-
-  for (let epoch = 0; epoch < epochs; epoch++) {
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    for (let start = 0; start < order.length; start += batchSize) {
-      const end = Math.min(order.length, start + batchSize);
-      const gradient = new Float64Array(featureCount);
-      for (let position = start; position < end; position++) {
-        const sample = order[position];
-        const probabilities = probabilitiesAt(training, sample, 1);
-        const base = sample * 4 * featureCount;
-        for (let player = 0; player < 4; player++) {
-          const error = probabilities[player] - Number(training.winners[sample] === player);
-          const offset = base + player * featureCount;
-          for (let feature = 0; feature < featureCount; feature++) {
-            gradient[feature] += error * training.features[offset + feature] * stageWeights[training.stages[sample]];
-          }
-        }
-      }
-      step++;
-      for (let feature = 0; feature < featureCount; feature++) {
-        const value = gradient[feature] / (end - start) + weights[feature] * 0.0004;
-        firstMoment[feature] = 0.9 * firstMoment[feature] + 0.1 * value;
-        secondMoment[feature] = 0.999 * secondMoment[feature] + 0.001 * value * value;
-        const correctedFirst = firstMoment[feature] / (1 - 0.9 ** step);
-        const correctedSecond = secondMoment[feature] / (1 - 0.999 ** step);
-        weights[feature] -= learningRate * correctedFirst / (Math.sqrt(correctedSecond) + 1e-8);
-      }
-    }
-    if ((epoch + 1) % 10 === 0 || epoch === 0) console.log(`Epoch ${epoch + 1}/${epochs}`);
-  }
 
   const metricsAt = (
     data: typeof validation, temperature: number, heldFilter?: number,
@@ -308,6 +323,70 @@ if (!isMainThread) {
     };
   };
 
+  let bestLogLoss = Infinity;
+  let bestWeights = Array.from(weights);
+  let bestEpoch = 0;
+  let stale = 0;
+  let epoch = 0;
+  if (saved) {
+    weights.set(saved.weights);
+    firstMoment.set(saved.firstMoment);
+    secondMoment.set(saved.secondMoment);
+    ({ step, bestLogLoss, bestWeights, bestEpoch, stale, epoch } = saved);
+    console.log(`Resuming after epoch ${epoch} (best calibration log loss ${bestLogLoss.toFixed(4)} at epoch ${bestEpoch}).`);
+  }
+  while (epoch < epochs && stale < patience) {
+    // Each epoch shuffles with its own seed, so a resumed run matches an uninterrupted one.
+    const random = seededRandom((seed ^ 0xa511e9b3) + epoch * 0x9e3779b1);
+    for (let i = 0; i < order.length; i++) order[i] = i;
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    for (let start = 0; start < order.length; start += batchSize) {
+      const end = Math.min(order.length, start + batchSize);
+      const gradient = new Float64Array(featureCount);
+      for (let position = start; position < end; position++) {
+        const sample = order[position];
+        const probabilities = probabilitiesAt(training, sample, 1);
+        const base = sample * 4 * featureCount;
+        for (let player = 0; player < 4; player++) {
+          const error = probabilities[player] - Number(training.winners[sample] === player);
+          const offset = base + player * featureCount;
+          for (let feature = 0; feature < featureCount; feature++) {
+            gradient[feature] += error * training.features[offset + feature] * stageWeights[training.stages[sample]];
+          }
+        }
+      }
+      step++;
+      for (let feature = 0; feature < featureCount; feature++) {
+        const value = gradient[feature] / (end - start) + weights[feature] * 0.0004;
+        firstMoment[feature] = 0.9 * firstMoment[feature] + 0.1 * value;
+        secondMoment[feature] = 0.999 * secondMoment[feature] + 0.001 * value * value;
+        const correctedFirst = firstMoment[feature] / (1 - 0.9 ** step);
+        const correctedSecond = secondMoment[feature] / (1 - 0.999 ** step);
+        weights[feature] -= learningRate * correctedFirst / (Math.sqrt(correctedSecond) + 1e-8);
+      }
+    }
+    epoch++;
+    const logLoss = metricsAt(validation, 1).logLoss;
+    if (logLoss < bestLogLoss - 1e-4) {
+      bestLogLoss = logLoss;
+      bestWeights = Array.from(weights);
+      bestEpoch = epoch;
+      stale = 0;
+    } else stale++;
+    await writeJsonAtomic(runPath, {
+      key, epoch, step, weights: Array.from(weights), firstMoment: Array.from(firstMoment),
+      secondMoment: Array.from(secondMoment), bestLogLoss, bestWeights, bestEpoch, stale, done: false,
+    } satisfies RunCheckpoint);
+    if (epoch % 5 === 0 || epoch === 1) console.log(`Epoch ${epoch}/${epochs}: calibration log loss ${logLoss.toFixed(4)} (best ${bestLogLoss.toFixed(4)} at epoch ${bestEpoch}).`);
+  }
+  console.log(stale >= patience
+    ? `Plateau: no calibration gain for ${patience} epochs; keeping epoch ${bestEpoch}.`
+    : `Reached ${epochs} epochs; keeping epoch ${bestEpoch}.`);
+  weights.set(bestWeights);
+
   let temperature = 1;
   let validationMetrics = metricsAt(validation, temperature);
   for (let candidate = 0.55; candidate <= 2.5; candidate += 0.025) {
@@ -337,8 +416,9 @@ if (!isMainThread) {
     testByPlace,
   };
   if (!validateWinModel(model)) throw new Error('Training produced an invalid win model.');
-  const destination = resolve(WIN_MODEL_FILES[size]);
-  await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
+  await writeJsonAtomic(destination, model);
+  const lastEpoch = await readJson<RunCheckpoint>(runPath);
+  if (lastEpoch) await writeJsonAtomic(runPath, { ...lastEpoch, done: true });
   console.log(`Saved win model to ${destination}.`);
   console.log(`Validation: log loss ${validationMetrics.logLoss.toFixed(4)} (uniform ${validationMetrics.uniformLogLoss.toFixed(4)}), Brier ${validationMetrics.brier.toFixed(4)}, accuracy ${(validationMetrics.accuracy * 100).toFixed(1)}%, calibration error ${(validationMetrics.calibrationError * 100).toFixed(1)}%.`);
   console.log(`Untouched test: log loss ${testMetrics.logLoss.toFixed(4)}, Brier ${testMetrics.brier.toFixed(4)}, accuracy ${(testMetrics.accuracy * 100).toFixed(1)}%, player calibration error ${(testMetrics.calibrationError * 100).toFixed(1)}%.`);

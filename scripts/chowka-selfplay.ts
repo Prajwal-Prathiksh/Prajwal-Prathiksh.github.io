@@ -1,6 +1,6 @@
 import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
-import { writeFile } from 'node:fs/promises';
+import { CHECKPOINT_ROOT, fingerprint, readJson, removeCheckpoint, writeJsonAtomic } from './training-checkpoint';
 import { isMainThread, parentPort, workerData, Worker } from 'node:worker_threads';
 import { chooseAction } from '../src/scripts/chowkaBharaAI';
 import { chooseOriginalHardAction } from '../src/scripts/chowkaBharaOriginalAI';
@@ -448,47 +448,96 @@ if (!isMainThread) {
     console.log(`Learned evaluator vs initial evaluator: ${(score * 100).toFixed(1)}% placement score, ${wins}/${totalGames} wins.`);
     console.log(`Seed ${seed}; ${size}x${size}; ${players} players; ${entry} entry; ${turns} turns; ${shards} workers.`);
   } else {
-    const generations = numberArg('generations', 6);
+    // Each finished generation is saved to .training/, so a rerun of the same
+    // command carries on from there. --fresh discards a saved run.
+    // Training stops at --generations, or sooner once --patience generations
+    // in a row fail to beat the incumbent.
+    const generations = numberArg('generations', 24);
+    const patience = Math.max(1, numberArg('patience', 5));
     const population = Math.max(4, numberArg('population', Math.min(16, workers * 2)));
-    let sigma = numberArg('sigma', 18);
-    let model: EvaluationModel = { ...CHOWKA_MODEL, weights: [...CHOWKA_MODEL.weights], seed };
-    let trainedGames = model.trainedGames;
-    const random = seededRandom(seed);
+    const startSigma = numberArg('sigma', 18);
+    const destination = resolve(args.get('output') ?? MODEL_FILES[size]);
+    const checkpointPath = resolve(CHECKPOINT_ROOT, `chowka-selfplay-${size}x${size}.json`);
+    // The starting model is left out: a finished run replaces it, and a rerun
+    // must still recognise that run as its own.
+    const settings = { size, seed, games, population, startSigma, budget, generations, patience, destination };
+    const key = fingerprint(settings);
+    interface Checkpoint {
+      key: string;
+      generation: number;
+      model: EvaluationModel;
+      sigma: number;
+      trainedGames: number;
+      stale: number;
+      done: boolean;
+      history: { generation: number; trainingWins: number; holdoutWins: number; holdoutGames: number; accepted: boolean }[];
+    }
+    if (args.has('fresh')) await removeCheckpoint(checkpointPath);
+    let saved = await readJson<Checkpoint>(checkpointPath);
+    if (saved && saved.key !== key) {
+      throw new Error(`${checkpointPath} was made with different settings. Rerun with the same ones, or add --fresh to start over.`);
+    }
+    if (saved?.done) {
+      console.log(`The ${size}x${size} evaluator run in ${checkpointPath} already finished after ${saved.generation} generations. Add --fresh to train again.`);
+      process.exit(0);
+    }
+    const state: Checkpoint = saved ?? {
+      key, generation: 0, model: { ...CHOWKA_MODEL, weights: [...CHOWKA_MODEL.weights], seed },
+      sigma: startSigma, trainedGames: CHOWKA_MODEL.trainedGames, stale: 0, done: false, history: [],
+    };
+    saved = null;
 
-    console.log(`Training ${FEATURE_NAMES.length} weights for the ${size}x${size} board with ${workers} workers (${population} candidates × ${generations} generations).`);
-    for (let generation = 0; generation < generations; generation++) {
-      const candidates = [model, ...Array.from({ length: population - 1 }, () => randomModel(model, random, sigma))];
+    console.log(`Training ${FEATURE_NAMES.length} weights for the ${size}x${size} board with ${workers} workers (${population} candidates, up to ${generations} generations, patience ${patience}).`);
+    if (state.generation) console.log(`Resuming after generation ${state.generation} from ${checkpointPath}.`);
+    const finish = async (reason: string) => {
+      if (!validateModel(state.model)) throw new Error('Training produced an invalid model.');
+      // A borrowed model stays marked as borrowed until a candidate trained on this board replaces it.
+      await writeJsonAtomic(destination, state.model);
+      state.done = true;
+      await writeJsonAtomic(checkpointPath, state);
+      console.log(`${reason} Saved evaluator with ${state.model.trainedGames} recorded training games to ${destination}; ${state.trainedGames - CHOWKA_MODEL.trainedGames} candidate games evaluated in this run.`);
+      FEATURE_NAMES.forEach((name, index) => console.log(`  ${name.padEnd(18)} ${state.model.weights[index].toFixed(3)}`));
+    };
+
+    while (state.generation < generations && state.stale < patience) {
+      const generation = state.generation;
+      const started = performance.now();
+      // Each generation draws from its own seed, so a resumed run makes the
+      // same candidates it would have made without the interruption.
+      const random = seededRandom(seed + (generation + 1) * 0x2545f491);
+      const incumbent = state.model;
+      const candidates = [incumbent, ...Array.from({ length: population - 1 }, () => randomModel(incumbent, random, state.sigma))];
       const trials = candidates.map((candidate, id) => ({
-        id, model: candidate, opponent: model, games, players, entry, size, seed: seed + generation * 100003, budget,
+        id, model: candidate, opponent: incumbent, games, players, entry, size, seed: seed + generation * 100003, budget,
       }));
       const results = await runParallel(trials);
-      trainedGames += population * games;
+      state.trainedGames += population * games;
       const ranked = results.map((result) => ({ result, model: candidates[result.id] }))
         .sort((a, b) => b.result.score - a.result.score);
       const champion = ranked[0];
       const holdout = runTrial({
-        id: 0, model: champion.model, opponent: model,
+        id: 0, model: champion.model, opponent: incumbent,
         games: Math.max(96, games * 2), players: 4, entry: 'home', size,
         seed: seed ^ (generation + 1) * 0x5f3759df, budget: 0,
       });
-      const accepted = champion.model !== model && holdout.wins / holdout.games > 0.34;
-      if (accepted) model = {
+      const accepted = champion.model !== incumbent && holdout.wins / holdout.games > 0.34;
+      if (accepted) state.model = {
         version: 2,
         board: size,
         weights: [...champion.model.weights],
-        trainedGames,
+        trainedGames: state.trainedGames,
         seed,
       };
-      sigma *= 0.78;
+      state.stale = accepted ? 0 : state.stale + 1;
+      state.sigma *= 0.78;
+      state.generation++;
+      state.history.push({ generation: state.generation, trainingWins: champion.result.wins, holdoutWins: holdout.wins, holdoutGames: holdout.games, accepted });
+      await writeJsonAtomic(checkpointPath, state);
       const best = champion.result;
-      console.log(`Generation ${generation + 1}: best ${best.wins}/${best.games} training wins; holdout ${holdout.wins}/${holdout.games}; ${accepted ? 'accepted' : 'kept incumbent'}; sigma ${sigma.toFixed(2)}.`);
+      console.log(`Generation ${state.generation}: best ${best.wins}/${best.games} training wins; holdout ${holdout.wins}/${holdout.games}; ${accepted ? 'accepted' : 'kept incumbent'}; sigma ${state.sigma.toFixed(2)}; ${((performance.now() - started) / 1000).toFixed(0)} s.`);
     }
-
-    if (!validateModel(model)) throw new Error('Training produced an invalid model.');
-    // A borrowed model stays marked as borrowed until a candidate trained on this board replaces it.
-    const destination = resolve(MODEL_FILES[size]);
-    await writeFile(destination, `${JSON.stringify(model, null, 2)}\n`);
-    console.log(`Saved evaluator with ${model.trainedGames} recorded training games to ${destination}; ${trainedGames - CHOWKA_MODEL.trainedGames} candidate games evaluated this run.`);
-    FEATURE_NAMES.forEach((name, index) => console.log(`  ${name.padEnd(18)} ${model.weights[index].toFixed(3)}`));
+    await finish(state.stale >= patience
+      ? `Plateau: no improvement in the last ${patience} generations.`
+      : `Reached ${generations} generations.`);
   }
 }
